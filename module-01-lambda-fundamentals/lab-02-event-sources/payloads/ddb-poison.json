@@ -1,0 +1,7 @@
+{
+  "Item": {
+    "pk":    {"S": "poison"},
+    "value": {"N": "-1"},
+    "note":  {"S": "value < 0 makes the consumer raise — bisect should isolate it"}
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "orderId": "ord-1003",
+  "amount": -10,
+  "currency": "USD",
+  "customer": "carol@example.com"
+}

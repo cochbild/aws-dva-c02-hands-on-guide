@@ -1,0 +1,22 @@
+{
+  "name": "dva-lab-08-07-cdk",
+  "version": "1.0.0",
+  "private": true,
+  "bin": {
+    "dva-lab-08-07": "bin/app.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/node": "20.11.0",
+    "aws-cdk": "2.140.0",
+    "typescript": "5.3.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.140.0",
+    "constructs": "10.3.0"
+  }
+}

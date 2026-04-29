@@ -1,0 +1,7 @@
+{
+  "Item": {
+    "pk":    {"S": "order-2"},
+    "value": {"N": "12"},
+    "note":  {"S": "good record 2 — value > 0"}
+  }
+}

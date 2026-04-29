@@ -1,0 +1,2 @@
+# No external dependencies for this lab.
+# boto3 and botocore are pre-installed in the Lambda runtime.

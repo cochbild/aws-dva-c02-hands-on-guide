@@ -1,0 +1,6 @@
+{
+  "FunctionName": "dva-lab-03-02-presigned-urls-presigner",
+  "Payload": "{\"key\":\"uploads/test.txt\",\"expires_in\":300}",
+  "InvocationType": "RequestResponse",
+  "LogType": "None"
+}

@@ -1,0 +1,11 @@
+{
+  "_comment": "This file documents the test file spec used by the lab scripts.",
+  "size_bytes": 12582912,
+  "size_mb": 12,
+  "expected_parts_at_5mb_each": 3,
+  "expected_part_layout": [
+    {"part_number": 1, "size_mb": 5},
+    {"part_number": 2, "size_mb": 5},
+    {"part_number": 3, "size_mb": 2, "note": "last part may be smaller than 5MB"}
+  ]
+}

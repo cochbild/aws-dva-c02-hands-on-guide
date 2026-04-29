@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# SAM
+.aws-sam/
+samconfig.toml
+
+# CDK
+cdk.out/
+cdk.context.json
+
+# AWS
+.aws/
+*.pem
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Claude Code (local config)
+.claude/
+
+# Local env files
+.env
+.env.local
+*.local
+
+# Build artifacts
+dist/
+build/
+*.zip
+
+# Local audit reports / status
+AUDIT-*.md
+STATUS.md
+
+# CloudFormation package output
+packaged.yaml
+
+# Lambda invoke responses (labs scatter these — names vary per lab)
+*.response.json
+out.json
+resp.json
+/tmp/*.json
+
+# Bundled Lambda dependencies (labs use `pip install -r src/requirements.txt -t src/`
+# to bake packages into the deployment artifact; those installed dirs should not be committed.
+# Every src/ in this repo is flat — only handler.py + requirements.txt — so ignoring
+# subdirs is safe.)
+**/src/*/
+**/layer/python/*/
+
+# Tooling
+.python-version
+*.tsbuildinfo
+*.bak
+
+# Logs
+*.log
+logs/
+
+# Windows
+Thumbs.db
+ehthumbs.db

@@ -1,0 +1,5 @@
+{
+  "FunctionName": "dva-lab-09-01-emitter",
+  "InvocationType": "RequestResponse",
+  "Payload": "{\"items\":[1,2,3,4,5],\"error_rate\":0.2}"
+}

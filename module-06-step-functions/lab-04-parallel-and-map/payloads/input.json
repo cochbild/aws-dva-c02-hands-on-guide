@@ -1,0 +1,13 @@
+{
+  "tenantId": "tenant-42",
+  "orders": [
+    { "id": "ord-1", "amount": 25 },
+    { "id": "ord-2", "amount": 75 },
+    { "id": "ord-3", "amount": 10 },
+    { "id": "ord-4", "amount": 200 },
+    { "id": "ord-5", "amount": 50 },
+    { "id": "ord-6", "amount": 33 },
+    { "id": "ord-7", "amount": 1 },
+    { "id": "ord-8", "amount": 999 }
+  ]
+}

@@ -1,0 +1,2 @@
+# requests is provided by the shared layer
+# do NOT add it here, or it'll bloat the function package

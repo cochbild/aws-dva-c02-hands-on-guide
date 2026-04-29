@@ -1,0 +1,147 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Lab 6.5 — Step Functions integration patterns: request/response + waitForTaskToken via SQS
+
+Resources:
+  PreprocessFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: dva-lab-06-05-preprocess
+      Runtime: python3.12
+      Handler: handler.preprocess
+      CodeUri: src/
+
+  FinalizeFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: dva-lab-06-05-finalize
+      Runtime: python3.12
+      Handler: handler.finalize
+      CodeUri: src/
+
+  CallbackQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: dva-lab-06-05-callback-queue
+      VisibilityTimeout: 60
+
+  CallbackWorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: poll-and-callback
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt CallbackQueue.Arn
+              - Effect: Allow
+                Action:
+                  - states:SendTaskSuccess
+                  - states:SendTaskFailure
+                Resource: "*"
+
+  CallbackWorker:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: dva-lab-06-05-callback-worker
+      Runtime: python3.12
+      Handler: handler.callback_worker
+      CodeUri: src/
+      Role: !GetAtt CallbackWorkerRole.Arn
+      Timeout: 30
+
+  CallbackEsm:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt CallbackQueue.Arn
+      FunctionName: !Ref CallbackWorker
+      BatchSize: 1
+      Enabled: true
+
+  SfnRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: states.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: invoke-and-sqs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt PreprocessFn.Arn
+                  - !GetAtt FinalizeFn.Arn
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt CallbackQueue.Arn
+
+  StateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: dva-lab-06-05-integration-patterns
+      RoleArn: !GetAtt SfnRole.Arn
+      DefinitionSubstitutions:
+        PreprocessArn: !GetAtt PreprocessFn.Arn
+        FinalizeArn: !GetAtt FinalizeFn.Arn
+        QueueUrl: !Ref CallbackQueue
+      DefinitionString: |-
+        {
+          "StartAt": "Preprocess",
+          "States": {
+            "Preprocess": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": { "FunctionName": "${PreprocessArn}", "Payload.$": "$" },
+              "ResultSelector": { "preprocessed.$": "$.Payload" },
+              "ResultPath": "$.preprocess",
+              "Next": "WaitForApproval"
+            },
+            "WaitForApproval": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+              "TimeoutSeconds": 600,
+              "Parameters": {
+                "QueueUrl": "${QueueUrl}",
+                "MessageBody": {
+                  "taskToken.$": "$$.Task.Token",
+                  "input.$": "$"
+                }
+              },
+              "ResultPath": "$.approval",
+              "Next": "Finalize"
+            },
+            "Finalize": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": { "FunctionName": "${FinalizeArn}", "Payload.$": "$" },
+              "ResultSelector": { "result.$": "$.Payload" },
+              "ResultPath": "$.final",
+              "End": true
+            }
+          }
+        }
+
+Outputs:
+  StateMachineArn:
+    Value: !Ref StateMachine
+  QueueUrl:
+    Value: !Ref CallbackQueue
