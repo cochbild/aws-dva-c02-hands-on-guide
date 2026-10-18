@@ -46,6 +46,7 @@
     <li>An object has a key, data, and metadata. User-defined metadata uses the <code>x-amz-meta-</code> prefix.</li>
     <li>All buckets and objects are private by default. Block Public Access is on by default for new buckets.</li>
     <li>Use <code>ListObjectsV2</code> for new code. Use <code>HeadObject</code> to read metadata without the body.</li>
+    <li><code>ListObjectsV2</code> returns up to 1,000 keys in each response. If <code>IsTruncated</code> is true, send the <code>NextContinuationToken</code> value as <code>ContinuationToken</code> in the next request.</li>
     <li>Amazon S3 Select (<code>SelectObjectContent</code>) is no longer available to new customers. Do not choose it for a new design. Older study material shows it as the way to query part of an object.</li>
   </ul>
   <h3>Consistency</h3>
@@ -77,7 +78,7 @@
       <li>"Do not overwrite the object if the key exists" → conditional write.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html#ConsistencyModel">S3 consistency model</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html">Optimizing S3 performance</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/upload-objects.html">Uploading objects (conditional writes)</a>. Lab: <a href="../../../module-03-s3-patterns/lab-01-bucket-basics/README.md">Lab 3.1 Bucket basics</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html#ConsistencyModel">S3 consistency model</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html">Optimizing S3 performance</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/upload-objects.html">Uploading objects (conditional writes)</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html">ListObjectsV2</a>. Lab: <a href="../../../module-03-s3-patterns/lab-01-bucket-basics/README.md">Lab 3.1 Bucket basics</a>.</p>
 </section>
 
 <section id="s3-storage-classes">
@@ -168,6 +169,7 @@
   <ul>
     <li>A bucket is in one of three states: unversioned (default), versioning-enabled, or versioning-suspended.</li>
     <li>After you enable versioning, the bucket can never return to unversioned. You can only suspend versioning.</li>
+    <li>In a versioning-suspended bucket, each new PUT, POST, or copy gets the version ID <code>null</code>. It overwrites an existing <code>null</code> version of the key. Older versions with real version IDs stay.</li>
     <li>Objects that existed before you enabled versioning have the version ID <code>null</code>.</li>
     <li>Each version is a full object. You pay for the storage of every version.</li>
     <li>A DELETE without a version ID adds a <strong>delete marker</strong>. The delete marker becomes the current version. The data stays.</li>
@@ -202,7 +204,7 @@
       <li>"Protect until the audit ends, end date unknown" → legal hold.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html">Versioning</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/MultiFactorAuthenticationDelete.html">MFA Delete</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html">Object Lock</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock-configure.html">Configuring Object Lock</a>. Lab: <a href="../../../module-03-s3-patterns/lab-05-versioning-lifecycle/README.md">Lab 3.5 Versioning and lifecycle</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html">Versioning</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/AddingObjectstoVersionSuspendedBuckets.html">Versioning-suspended buckets</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/MultiFactorAuthenticationDelete.html">MFA Delete</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html">Object Lock</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock-configure.html">Configuring Object Lock</a>. Lab: <a href="../../../module-03-s3-patterns/lab-05-versioning-lifecycle/README.md">Lab 3.5 Versioning and lifecycle</a>.</p>
 </section>
 
 <section id="s3-replication">
@@ -343,7 +345,7 @@
     <tr><td>SSE-S3 (<code>AES256</code>)</td><td>Amazon S3</td><td>Default for all new uploads since January 5, 2023. No extra cost.</td></tr>
     <tr><td>SSE-KMS (<code>aws:kms</code>)</td><td>AWS KMS: AWS managed key <code>aws/s3</code> or a customer managed key</td><td>Key policy control, CloudTrail record of key use, KMS request charges. See the SSE-KMS topic.</td></tr>
     <tr><td>DSSE-KMS (<code>aws:kms:dsse</code>)</td><td>AWS KMS</td><td>Two layers of encryption. S3 Bucket Keys are not supported.</td></tr>
-    <tr><td>SSE-C</td><td>You. You send the key with each request.</td><td>S3 never stores the key. Disabled by default for new buckets since April 2026.</td></tr>
+    <tr><td>SSE-C</td><td>You. You send the key with each request.</td><td>S3 never stores the key. Since April 2026, disabled by default for new general purpose buckets and for existing buckets in accounts with no SSE-C objects.</td></tr>
     <tr><td>Client-side encryption</td><td>You</td><td>Encrypt before upload, for example with the Amazon S3 Encryption Client. S3 never sees plaintext.</td></tr>
   </table>
   <h3>Key facts</h3>
@@ -358,7 +360,7 @@
     <li>Send the algorithm (AES256), the base64 key, and the base64 MD5 of the key with each PUT and GET.</li>
     <li>You must use HTTPS. S3 rejects SSE-C requests over HTTP.</li>
     <li>If you lose the key, you lose the object. The console does not support SSE-C uploads.</li>
-    <li>Since April 2026, S3 blocks SSE-C on new general purpose buckets. A blocked request gets HTTP 403 <code>AccessDenied</code>. To allow it, set <code>BlockedEncryptionTypes</code> to <code>NONE</code> with <code>PutBucketEncryption</code>.</li>
+    <li>Since April 2026, S3 blocks SSE-C on new general purpose buckets and on existing buckets in accounts with no SSE-C objects. Older study material does not have this rule. A blocked request gets HTTP 403 <code>AccessDenied</code>. To allow it, set <code>BlockedEncryptionTypes</code> to <code>NONE</code> with <code>PutBucketEncryption</code>.</li>
   </ul>
   <h3>Enforce encryption with a bucket policy</h3>
   <ul>

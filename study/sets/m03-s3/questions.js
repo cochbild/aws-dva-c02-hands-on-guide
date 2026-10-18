@@ -334,18 +334,18 @@ window.QUESTION_BANKS.push({ setId: "m03-s3", questions: [
     explanation: "Client-side encryption encrypts data before upload, so AWS never sees plaintext. Server-side options encrypt data after S3 receives it." },
 
   { id: "m03-024", topic: "s3-encryption", domain: 4,
-    stem: "In 2026, a developer creates a new general purpose bucket for a legacy application that must use SSE-C. Every PutObject request that sends the SSE-C headers over HTTPS fails with HTTP 403 AccessDenied. The IAM permissions are correct. Which solution will meet these requirements?",
+    stem: "A legacy application on an internal network encrypts objects with SSE-C. The bucket is configured to accept SSE-C. The application sends PutObject requests to an http:// S3 endpoint with the x-amz-server-side-encryption-customer-algorithm, -key, and -key-MD5 headers. S3 rejects every request. The IAM permissions are correct. Which solution will meet these requirements?",
     options: [
-      { text: "Call PutBucketEncryption and set BlockedEncryptionTypes to NONE in the default encryption configuration.", correct: true,
-        why: "Since April 2026, S3 blocks SSE-C on new general purpose buckets and returns 403 AccessDenied. You must allow SSE-C explicitly." },
-      { text: "Send the SSE-C requests over HTTP instead of HTTPS.", correct: false,
-        why: "S3 rejects SSE-C requests over HTTP. HTTPS is required." },
+      { text: "Send the SSE-C requests to the https:// endpoint.", correct: true,
+        why: "S3 rejects SSE-C requests over HTTP, because the request carries the encryption key. HTTPS is required." },
+      { text: "Remove the key-MD5 header from each request.", correct: false,
+        why: "SSE-C requests need all three headers: algorithm, key, and key MD5. Removing one does not fix the HTTP problem and adds another error." },
       { text: "Add kms:GenerateDataKey permission for the application role.", correct: false,
         why: "SSE-C does not use AWS KMS. KMS permissions do not affect SSE-C requests." },
       { text: "Turn off Block Public Access on the bucket.", correct: false,
-        why: "Block Public Access controls public access. It does not block SSE-C, and turning it off reduces security." }
+        why: "Block Public Access controls public access. It does not affect SSE-C, and turning it off reduces security." }
     ],
-    explanation: "Since April 2026, SSE-C is disabled by default for new general purpose buckets. Set BlockedEncryptionTypes to NONE with PutBucketEncryption to allow it." },
+    explanation: "SSE-C requests must use HTTPS and must send the algorithm, the key, and the key MD5 headers on each PUT and GET. S3 does not store the key." },
 
   { id: "m03-025", topic: "s3-encryption", domain: 2,
     stem: "A security team sets two rules for a bucket. First, S3 must reject every request that does not use HTTPS. Second, objects that clients upload without any encryption header must still be encrypted with SSE-KMS and a specific customer managed key, with no client changes. Which actions will meet these requirements? (Choose two.)",
@@ -447,7 +447,7 @@ window.QUESTION_BANKS.push({ setId: "m03-s3", questions: [
       { text: "Enable ACLs and grant each application access with object ACLs.", correct: false,
         why: "ACLs are coarse, are disabled by default, and AWS recommends policies. This adds overhead and risk." },
       { text: "Create an S3 Object Lambda Access Point for each application.", correct: false,
-        why: "Object Lambda transforms data with a function, and new customers cannot use it. It is not a way to manage permissions." }
+        why: "Object Lambda transforms data with a function. It is not a way to manage permissions for many applications." }
     ],
     explanation: "S3 access points give each application its own endpoint and policy. They simplify access management for shared datasets." },
 
@@ -465,7 +465,7 @@ window.QUESTION_BANKS.push({ setId: "m03-s3", questions: [
     ],
     explanation: "The S3 website endpoint serves only publicly readable content. Turn off Block Public Access for the bucket and add a public-read bucket policy." },
 
-  { id: "m03-033", topic: "s3-website-cors", domain: 1,
+  { id: "m03-033", topic: "s3-website-cors", domain: 4,
     stem: "A single-page application is served from https://app.example.com. Its JavaScript uploads files directly to the S3 REST endpoint of a bucket with presigned PUT URLs. The browser blocks the requests with a CORS error. Which solution will meet these requirements?",
     options: [
       { text: "Add a CORS configuration to the bucket that allows the https://app.example.com origin, the PUT method, and the required headers.", correct: true,
@@ -503,7 +503,7 @@ window.QUESTION_BANKS.push({ setId: "m03-s3", questions: [
       { text: "Add an s3:ObjectCreated:* notification with a suffix filter of .fifo.", correct: false,
         why: "Key filters select objects. They do not change which destination types are supported." },
       { text: "Configure the bucket to invoke a Lambda function synchronously that sends to the FIFO queue.", correct: false,
-        why: "S3 invokes Lambda asynchronously. It also adds code to maintain when EventBridge supports the FIFO target." }
+        why: "S3 invokes Lambda asynchronously, not synchronously, and asynchronous invocations do not keep the upload order. This fails the ordered-processing requirement." }
     ],
     explanation: "SQS FIFO queues are not supported as direct S3 event notification destinations. Use EventBridge to route S3 events to a FIFO queue." },
 
