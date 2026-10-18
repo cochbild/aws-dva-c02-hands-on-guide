@@ -245,7 +245,7 @@ window.QUESTION_BANKS.push({ setId: "m04-api-cognito", questions: [
     ],
     explanation: "A Cognito user pool authorizer validates user pool tokens with no custom code. Without OAuth scopes on the method, it treats the token as an ID token." },
 
-  { id: "m04-018", topic: "apigw-auth", domain: 2,
+  { id: "m04-018", topic: "apigw-auth", domain: 4,
     stem: "A REST API uses a Cognito user pool authorizer. A new method must allow only clients whose access token includes the custom scope orders/read. The client sends a valid access token, but API Gateway returns 401. No authorization scopes are set on the method. Which solution will meet these requirements?",
     options: [
       { text: "Add orders/read as an authorization scope on the method, and redeploy the API.", correct: true,
@@ -273,7 +273,7 @@ window.QUESTION_BANKS.push({ setId: "m04-api-cognito", questions: [
     ],
     explanation: "REQUEST Lambda authorizers can use several identity sources (headers, query strings, stage variables, context). TOKEN authorizers use one header token." },
 
-  { id: "m04-020", topic: "apigw-auth", domain: 2,
+  { id: "m04-020", topic: "apigw-auth", domain: 4,
     stem: "A REST API uses a Lambda authorizer with authorization caching (TTL 300 seconds). The authorizer returns an Allow policy for the exact methodArn of each request. A user calls GET /reports successfully. Within the next minute, the same user calls GET /reports/summary, which the user is allowed to use, and receives 403. Which actions will resolve the issue? (Choose two.)",
     options: [
       { text: "Change the authorizer to return a policy that allows every method that the user may call.", correct: true,
@@ -285,7 +285,7 @@ window.QUESTION_BANKS.push({ setId: "m04-api-cognito", questions: [
       { text: "Turn on stage caching for GET methods.", correct: false,
         why: "Stage caching stores backend responses. It does not change the cached authorizer policy." },
       { text: "Add the user to a usage plan with a higher quota.", correct: false,
-        why: "A quota problem returns 429. The 403 comes from the cached Deny result for the second method." }
+        why: "A quota problem returns 429. The 403 comes from the cached policy, which allows only the first method, so the second method is implicitly denied." }
     ],
     explanation: "A cached Lambda authorizer policy applies to all methods for the same identity until the TTL ends. Return a policy for every allowed method, or turn off caching." },
 
@@ -339,7 +339,7 @@ window.QUESTION_BANKS.push({ setId: "m04-api-cognito", questions: [
       { text: "Configure CORS on the HTTP API with https://app.example.com as an allowed origin and Authorization as an allowed header.", correct: true,
         why: "With CORS configured, API Gateway answers preflight OPTIONS requests itself and adds the CORS headers to responses." },
       { text: "Add CORS headers to the responses of the Lambda functions only.", correct: false,
-        why: "The preflight OPTIONS request has no route or answer, so the browser blocks the call. Function headers alone are not enough." },
+        why: "Without a CORS configuration, API Gateway does not answer preflight OPTIONS requests automatically. You must also add a route and code to answer OPTIONS, which takes more effort." },
       { text: "Add an OPTIONS route for each path with a Lambda integration that returns CORS headers.", correct: false,
         why: "This can work, but it adds routes and functions to maintain. It fails the least-effort requirement." },
       { text: "Put an Amazon CloudFront distribution in front of the API with a response headers policy.", correct: false,

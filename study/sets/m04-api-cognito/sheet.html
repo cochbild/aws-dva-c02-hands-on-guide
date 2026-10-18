@@ -118,6 +118,12 @@
     <li>Use <code>{proxy+}</code> and the <code>ANY</code> method to send all paths and methods to one integration.</li>
     <li>API Gateway needs permission to invoke the function (Lambda resource-based policy or an IAM role).</li>
   </ul>
+  <h3>Private integrations (VPC links)</h3>
+  <ul>
+    <li>A private integration lets the API reach resources in a VPC that are not public.</li>
+    <li>REST API: a VPC link to a Network Load Balancer.</li>
+    <li>HTTP API: a VPC link to an Application Load Balancer, a Network Load Balancer, or an AWS Cloud Map service.</li>
+  </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
@@ -127,7 +133,7 @@
       <li>"Front-end team must test against the API before the backend exists" → mock integration.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html">Lambda proxy integrations</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-execution-service-limits-table.html">REST API quotas</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-quotas.html">HTTP API quotas</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-integration-async.html">Asynchronous Lambda invocation</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/how-to-mock-integration.html">Mock integrations</a>. Lab: <a href="../../../module-04-api-gateway-cognito/lab-01-rest-vs-http-api/README.md">Lab 4.1 REST vs HTTP API</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html">Lambda proxy integrations</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-execution-service-limits-table.html">REST API quotas</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-quotas.html">HTTP API quotas</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-integration-async.html">Asynchronous Lambda invocation</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/how-to-mock-integration.html">Mock integrations</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vs-rest.html">Private integrations (comparison)</a>. Lab: <a href="../../../module-04-api-gateway-cognito/lab-01-rest-vs-http-api/README.md">Lab 4.1 REST vs HTTP API</a>.</p>
 </section>
 
 <section id="apigw-stages">
@@ -301,7 +307,8 @@
   <h3>Lambda authorizer</h3>
   <ul>
     <li>Returns <code>principalId</code>, an IAM policy (<code>policyDocument</code>), and an optional <code>context</code> map. HTTP APIs can also use a simple response: <code>{"isAuthorized": true}</code>.</li>
-    <li>Deny policy: 403. Missing identity source, or the function returns "Unauthorized": 401.</li>
+    <li>Deny policy: 403. The function returns "Unauthorized": 401.</li>
+    <li><code>REQUEST</code> authorizer with caching on: if an identity source is missing, null, or empty, API Gateway returns 401 and does not call the function.</li>
     <li>AWS recommends <code>REQUEST</code> authorizers: several identity sources and finer cache keys.</li>
     <li>Result caching: default TTL 300 seconds, maximum 3,600. TTL 0 turns caching off.</li>
     <li>With caching, the cached policy applies to other methods for the same identity. Return a policy that covers every method the caller can use, or turn off caching.</li>
@@ -403,7 +410,7 @@
   <table>
     <tr><th>Token</th><th>Contents</th><th>Default validity</th></tr>
     <tr><td>ID token</td><td>Identity claims: <code>sub</code>, <code>email</code>, custom attributes, <code>cognito:groups</code></td><td>1 hour (maximum 1 day)</td></tr>
-    <tr><td>Access token</td><td><code>scope</code>, <code>client_id</code>, <code>cognito:groups</code>. No <code>aud</code> claim.</td><td>1 hour (maximum 1 day)</td></tr>
+    <tr><td>Access token</td><td><code>scope</code>, <code>client_id</code>, <code>cognito:groups</code>. No <code>aud</code> claim by default.</td><td>1 hour (maximum 1 day)</td></tr>
     <tr><td>Refresh token</td><td>Encrypted. Gets new ID and access tokens.</td><td>30 days (60 minutes to 10 years)</td></tr>
   </table>
   <ul>
@@ -427,8 +434,6 @@
     <tr><td>Implicit</td><td>Returns tokens in the redirect URL. Older flow. Use authorization code with PKCE instead.</td></tr>
     <tr><td>Client credentials</td><td>Machine-to-machine. An app client with a client secret gets an access token with custom scopes. No user and no ID token.</td></tr>
   </table>
-  <ul>
-  </ul>
   <h3>Lambda triggers</h3>
   <table>
     <tr><th>Trigger</th><th>Use</th></tr>
@@ -530,7 +535,7 @@
     <tr><th>Item</th><th>CloudFront Functions</th><th>Lambda@Edge</th></tr>
     <tr><td>Language</td><td>JavaScript</td><td>Node.js and Python</td></tr>
     <tr><td>Events</td><td>Viewer request, viewer response</td><td>Viewer and origin request and response</td></tr>
-    <tr><td>Duration</td><td>Submillisecond</td><td>Seconds</td></tr>
+    <tr><td>Duration</td><td>Submillisecond</td><td>Up to 30 seconds</td></tr>
     <tr><td>Network access, request body</td><td>No</td><td>Yes</td></tr>
     <tr><td>Use</td><td>Header changes, redirects, cache key normalization, simple token checks</td><td>Calls to other services, third-party libraries, body access</td></tr>
   </table>
