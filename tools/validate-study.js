@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { DOMAIN_WEIGHTS, domainQuotas } = require("../study/assets/quiz.js");
 
 const CHOOSE_WORDS = { 2: "(Choose two.)", 3: "(Choose three.)" };
 
@@ -53,7 +54,15 @@ function checkQuestion(errors, q) {
   }
 }
 
-function validateStudy(studyDir) {
+// Opt-in (--exam): the bank must fill every domain quota of a 65-question exam.
+function examCapacityErrors(byDomain, count = 65, weights = DOMAIN_WEIGHTS) {
+  const quotas = domainQuotas(count, weights);
+  return Object.keys(quotas)
+    .filter((d) => (byDomain[d] || 0) < quotas[d])
+    .map((d) => `Domain ${d}: has ${byDomain[d] || 0} questions, needs ${quotas[d]} for a ${count}-question exam`);
+}
+
+function validateStudy(studyDir, options = {}) {
   const errors = [];
   const { sets, banks } = loadData(studyDir);
   const setsById = new Map(sets.map((s) => [s.id, s]));
@@ -97,14 +106,17 @@ function validateStudy(studyDir) {
     }
   }
 
+  if (options.exam) errors.push(...examCapacityErrors(byDomain));
+
   return { errors, stats: { sets: sets.length, questions: questions.length, byDomain } };
 }
 
-module.exports = { validateStudy };
+module.exports = { validateStudy, examCapacityErrors };
 
 if (require.main === module) {
-  const studyDir = process.argv[2] || "study";
-  const { errors, stats } = validateStudy(studyDir);
+  const args = process.argv.slice(2);
+  const studyDir = args.find((a) => !a.startsWith("--")) || "study";
+  const { errors, stats } = validateStudy(studyDir, { exam: args.includes("--exam") });
   for (const e of errors) console.error(e);
   console.log(`Sets: ${stats.sets}, questions: ${stats.questions}, by domain: ${JSON.stringify(stats.byDomain)}`);
   if (errors.length) {

@@ -339,3 +339,33 @@ test("latestSetScore ignores weak-quiz entries and counts entries without src", 
   assert.deepStrictEqual(Q.latestSetScore(history, "s01"), { correct: 1, total: 2, t: 1 });
   assert.strictEqual(Q.latestSetScore([history[2]], "s01"), null);
 });
+
+test("remainingMs counts down from the start time and never goes below 0", () => {
+  assert.strictEqual(Q.remainingMs(0, 1000, 400), 600);
+  assert.strictEqual(Q.remainingMs(0, 1000, 5000), 0);
+  assert.strictEqual(Q.remainingMs(1000, 1000, 1000), 1000);
+});
+
+test("examMinutes reads a positive minutes parameter and defaults to 130", () => {
+  assert.strictEqual(Q.examMinutes(""), 130);
+  assert.strictEqual(Q.examMinutes("?minutes=1"), 1);
+  assert.strictEqual(Q.examMinutes("?minutes=0"), 130);
+  assert.strictEqual(Q.examMinutes("?minutes=-5"), 130);
+  assert.strictEqual(Q.examMinutes("?minutes=abc"), 130);
+});
+
+test("examShortfall lists domains with fewer questions than their quota", () => {
+  const qs = [];
+  for (let i = 0; i < 30; i++) qs.push(makeQuestion("a" + i, "t", 1));
+  for (let i = 0; i < 17; i++) qs.push(makeQuestion("b" + i, "t", 2));
+  for (let i = 0; i < 15; i++) qs.push(makeQuestion("c" + i, "t", 3));
+  for (let i = 0; i < 5; i++) qs.push(makeQuestion("d" + i, "t", 4));
+  assert.deepStrictEqual(Q.examShortfall(qs), { total: 67, short: [{ domain: "4", have: 5, need: 12 }] });
+  assert.deepStrictEqual(Q.domainQuotas(65, Q.DOMAIN_WEIGHTS), { 1: 21, 2: 17, 3: 15, 4: 12 });
+});
+
+test("reviewStatus lists answered, unanswered and flagged question numbers", () => {
+  const qs = [makeQuestion("x1", "t", 1), makeQuestion("x2", "t", 1), makeQuestion("x3", "t", 1)];
+  const status = Q.reviewStatus(qs, { x1: [0], x2: [] }, new Set(["x3", "x1"]));
+  assert.deepStrictEqual(status, { answered: [1], unanswered: [2, 3], flagged: [1, 3] });
+});

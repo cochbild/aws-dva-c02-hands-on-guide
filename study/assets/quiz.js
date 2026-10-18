@@ -120,6 +120,27 @@
     return picked;
   }
 
+  function examShortfall(questions, count = 65, weights = DOMAIN_WEIGHTS) {
+    const quotas = domainQuotas(count, weights);
+    const short = [];
+    for (const d of Object.keys(quotas)) {
+      const have = questions.filter((q) => String(q.domain) === d).length;
+      if (have < quotas[d]) short.push({ domain: d, have, need: quotas[d] });
+    }
+    return { total: questions.length, short };
+  }
+
+  // Time comes from the start timestamp, so a sleeping tab or laptop cannot stretch it.
+  function remainingMs(startedAt, durationMs, now) {
+    return Math.max(0, startedAt + durationMs - now);
+  }
+
+  // ?minutes=N shortens the exam for testing.
+  function examMinutes(search) {
+    const minutes = Number(new URLSearchParams(search).get("minutes"));
+    return minutes > 0 ? minutes : 130;
+  }
+
   function storage() {
     return globalThis.localStorage;
   }
@@ -197,6 +218,16 @@
     return out;
   }
 
+  function reviewStatus(questions, answers, flagged) {
+    const unanswered = unansweredNumbers(questions, answers);
+    const status = { answered: [], unanswered, flagged: [] };
+    questions.forEach((q, i) => {
+      if (!unanswered.includes(i + 1)) status.answered.push(i + 1);
+      if (flagged.has(q.id)) status.flagged.push(i + 1);
+    });
+    return status;
+  }
+
   function latestSetScore(history, setId) {
     const entries = history.filter((e) => e.set === setId && (e.src === undefined || e.src === "set"));
     if (!entries.length) return null;
@@ -223,7 +254,7 @@
   }
 
   function show(container, ...nodes) {
-    container.replaceChildren(...nodes);
+    container.replaceChildren(...nodes.filter((node) => node != null));
     window.scrollTo(0, 0);
     container.tabIndex = -1;
     container.focus();
@@ -249,8 +280,13 @@
       el("tbody", {}, ...rows.map((cells) => el("tr", {}, ...cells.map((c) => el("td", {}, c))))));
   }
 
+  // opts.header: a node shown above the questions. opts.flags: a "Flag for review" toggle on each card.
+  // opts.review: the submit button opens a review screen instead of the unanswered-questions check.
+  // Returns { submit } to submit the current answers at once.
   function renderQuiz(container, questions, opts) {
     const form = el("form", { className: "quiz", noValidate: true });
+    const cards = [];
+    const flagged = new Set();
     questions.forEach((q, n) => {
       const correctCount = q.options.filter((o) => o.correct).length;
       const multi = correctCount > 1;
@@ -263,20 +299,76 @@
           el("input", { type: multi ? "checkbox" : "radio", name: q.id, value: String(i) }),
           el("span", {}, q.options[i].text)));
       }
+      if (opts.flags) {
+        const flag = el("button", { type: "button", className: "flag" }, "Flag for review");
+        flag.setAttribute("aria-pressed", "false");
+        flag.onclick = () => {
+          const on = !flagged.has(q.id);
+          if (on) flagged.add(q.id);
+          else flagged.delete(q.id);
+          flag.setAttribute("aria-pressed", String(on));
+          flag.textContent = on ? "Flagged for review" : "Flag for review";
+          card.classList.toggle("flagged", on);
+        };
+        card.append(flag);
+      }
+      cards.push(card);
       form.append(card);
     });
     const notice = el("p", { className: "notice", hidden: true });
     notice.setAttribute("role", "status");
-    const submit = el("button", { type: "submit" }, "Submit");
+    const submit = el("button", { type: "submit" }, opts.review ? "Review answers" : "Submit");
     form.append(notice, submit);
+    const review = el("section", { className: "review", hidden: true });
 
-    let pending = null;
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
+    function currentAnswers() {
       const answers = {};
       for (const input of form.querySelectorAll("input:checked")) {
         (answers[input.name] = answers[input.name] || []).push(Number(input.value));
       }
+      return answers;
+    }
+
+    let done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      opts.onSubmit(currentAnswers());
+    }
+
+    function showQuestions(card) {
+      review.hidden = true;
+      form.hidden = false;
+      if (card) {
+        card.scrollIntoView();
+        card.querySelector("input").focus();
+      }
+    }
+
+    function showReview() {
+      const status = reviewStatus(questions, currentAnswers(), flagged);
+      const row = (label, numbers) => el("p", {}, label + " (" + numbers.length + "): ",
+        ...(numbers.length
+          ? numbers.map((n) => el("button", { type: "button", className: "jump", onclick: () => showQuestions(cards[n - 1]) }, String(n)))
+          : ["none"]));
+      review.replaceChildren(
+        el("h2", {}, "Review"),
+        el("p", {}, "Select a question number to go back to that question."),
+        row("Answered", status.answered),
+        row("Unanswered", status.unanswered),
+        row("Flagged for review", status.flagged),
+        status.unanswered.length ? el("p", { className: "notice" }, "Unanswered questions count as wrong.") : "",
+        el("p", { className: "actions" }, button("Submit", finish), button("Back to questions", () => showQuestions())));
+      form.hidden = true;
+      review.hidden = false;
+      window.scrollTo(0, 0);
+    }
+
+    let pending = null;
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (opts.review) return showReview();
+      const answers = currentAnswers();
       const missing = unansweredNumbers(questions, answers);
       if (missing.length && pending !== missing.join(",")) {
         pending = missing.join(",");
@@ -286,9 +378,10 @@
         submit.textContent = "Submit anyway";
         return;
       }
-      opts.onSubmit(answers);
+      finish();
     });
-    show(container, el("h1", {}, opts.title), form);
+    show(container, el("h1", {}, opts.title), opts.header, form, review);
+    return { submit: finish };
   }
 
   function renderResults(container, score, opts) {
@@ -343,8 +436,11 @@
   // Asks the questions, scores them, saves the attempt and shows the results.
   function runQuiz(container, picked, opts) {
     const questions = shuffle(picked);
-    renderQuiz(container, questions, {
+    return renderQuiz(container, questions, {
       title: opts.title,
+      header: opts.header,
+      flags: opts.flags,
+      review: opts.review,
       onSubmit(answers) {
         const score = scoreAttempt(questions, answers);
         const setIdOf = (id) => questions.find((q) => q.id === id).setId;
@@ -353,6 +449,7 @@
           title: opts.resultsTitle,
           notice: saved ? "" : "Progress is not saved in this browser.",
           onRetake: opts.onRetake,
+          showDomains: opts.showDomains,
         });
       },
     });
@@ -404,6 +501,54 @@
           src: "weak",
           onRetake: () => mountWeakQuiz(container),
         }))),
+      el("p", {}, homeLink()));
+  }
+
+  function mountExam(container) {
+    const bank = allQuestions();
+    if (!bank.length) return message(container, "No questions yet.");
+    const minutes = examMinutes(location.search);
+    const { short } = examShortfall(bank);
+
+    function start() {
+      const timer = el("p", { className: "timer" });
+      timer.setAttribute("role", "timer");
+      const startedAt = Date.now();
+      const quiz = runQuiz(container, pickExam(bank), {
+        title: "Final practice exam",
+        resultsTitle: "Final exam results",
+        src: "exam",
+        header: timer,
+        flags: true,
+        review: true,
+        showDomains: true,
+        onRetake: () => mountExam(container),
+      });
+      function tick() {
+        if (!timer.isConnected) return clearInterval(interval);
+        const left = remainingMs(startedAt, minutes * 60 * 1000, Date.now());
+        const seconds = Math.ceil(left / 1000);
+        timer.textContent = "Time left: " + Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+        if (left === 0) {
+          clearInterval(interval);
+          quiz.submit();
+        }
+      }
+      const interval = setInterval(tick, 1000);
+      tick();
+    }
+
+    show(container,
+      el("h1", {}, "Final practice exam"),
+      el("p", {}, "The exam has " + Math.min(65, bank.length) + " questions and a time limit of " + minutes +
+        " minutes. You get no feedback until you submit. When the time is up, the exam submits automatically."),
+      el("p", {}, "The question bank has " + bank.length + " questions."),
+      bank.length < 65 ? el("p", { className: "notice" },
+        "The bank has fewer than 65 questions, so the exam uses all " + bank.length + ".") : null,
+      short.length ? el("p", { className: "notice" },
+        "Some domains have fewer questions than the exam needs. Questions from other domains fill the gap. " +
+        short.map((s) => "Domain " + s.domain + ": " + s.have + " of " + s.need + ".").join(" ")) : null,
+      el("p", { className: "actions" }, button("Start exam", start)),
       el("p", {}, homeLink()));
   }
 
@@ -460,6 +605,8 @@
       weakList,
       weak.length ? el("p", {}, el("a", { href: "#weak" }, "Take a weak-topics quiz")) : null,
       el("p", {}, notTested + " of " + topicIds.length + " topics not tested."),
+      el("h2", {}, "Final practice exam"),
+      el("p", {}, el("a", { href: "#exam" }, "Take the final practice exam"), " — 65 questions, 130 minutes."),
       el("h2", {}, "Progress"),
       resetArea);
   }
@@ -490,6 +637,10 @@
     weakTopics,
     pickWeak,
     pickExam,
+    domainQuotas,
+    examShortfall,
+    remainingMs,
+    examMinutes,
     loadHistory,
     appendHistory,
     resetHistory,
@@ -499,11 +650,13 @@
     topicById,
     optionOrder,
     unansweredNumbers,
+    reviewStatus,
     latestSetScore,
     renderQuiz,
     renderResults,
     mountSetQuiz,
     mountWeakQuiz,
+    mountExam,
     mountHome,
     mountApp,
   };

@@ -22,7 +22,7 @@ function withStudy(edit, check) {
         fs.rmSync(path.join(dir, file));
       },
     });
-    check(validateStudy(dir));
+    check(validateStudy(dir), dir);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -180,5 +180,40 @@ test("one correct option with a Choose phrase is reported", () => {
   withStudy(
     (s) => s.replace("sets/s01-alpha/questions.js", 'stem: "Which solution will meet these requirements?",\n      options: [\n      { text: "Option 0", correct: true', 'stem: "Which solution will meet these requirements? (Choose two.)",\n      options: [\n      { text: "Option 0", correct: true'),
     (r) => assertError(r, "s01-001", "Choose")
+  );
+});
+
+const { examCapacityErrors } = require("../validate-study.js");
+
+test("exam capacity check reports a domain with 5 of 12 questions", () => {
+  const errors = examCapacityErrors({ 1: 30, 2: 20, 3: 20, 4: 5 });
+  assert.strictEqual(errors.length, 1);
+  assert.ok(errors[0].includes("Domain 4") && errors[0].includes("5") && errors[0].includes("12"), errors[0]);
+  assert.deepStrictEqual(examCapacityErrors({ 1: 21, 2: 17, 3: 15, 4: 12 }), []);
+});
+
+test("exam capacity check reports a fixture with 5 domain-4 questions only with the exam option", () => {
+  withStudy(
+    (s) => {
+      for (let n = 5; n <= 7; n++) {
+        const id = "s01-" + String(n).padStart(3, "0");
+        s.replace("sets/s01-alpha/questions.js", "\n] });", `
+    { id: "${id}", topic: "alpha-two", domain: 4,
+      stem: "Which solution will meet these requirements?",
+      options: [
+      { text: "Option 0", correct: true, why: "Reason 0." },
+      { text: "Option 1", correct: false, why: "Reason 1." },
+      { text: "Option 2", correct: false, why: "Reason 2." },
+      { text: "Option 3", correct: false, why: "Reason 3." },
+      ],
+      explanation: "Rule tested by ${id}." },
+] });`);
+      }
+    },
+    (r, dir) => {
+      assert.deepStrictEqual(r.errors, []);
+      assert.strictEqual(r.stats.byDomain[4], 5);
+      assertError(validateStudy(dir, { exam: true }), "Domain 4", "5", "12");
+    }
   );
 });
