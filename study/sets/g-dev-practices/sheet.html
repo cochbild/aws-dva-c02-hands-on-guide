@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SDK, CLI, testing, and Amazon Q Developer: study sheet</title>
+<link rel="stylesheet" href="../../assets/study.css">
+</head>
+<body>
+<header>
+  <h1>SDK, CLI, testing, and Amazon Q Developer</h1>
+  <p>Gap study sheet for the AWS Certified Developer – Associate (DVA-C02) exam. The lab modules do not teach these skills. Facts checked against AWS documentation in October 2026.</p>
+  <nav class="links">
+    <a href="../../index.html">Home</a>
+    <a href="../../index.html#quiz/g-dev-practices">Take the quiz</a>
+  </nav>
+</header>
+
+<nav class="toc">
+  <h2>Topics</h2>
+  <ol>
+    <li><a href="#dev-sdk-retries">SDK retries and backoff</a></li>
+    <li><a href="#dev-sdk-errors">HTTP status codes and SDK exceptions</a></li>
+    <li><a href="#dev-sdk-pagination">Pagination and batch calls</a></li>
+    <li><a href="#dev-idempotency">Idempotency</a></li>
+    <li><a href="#dev-resilience">Resilient calls to other services</a></li>
+    <li><a href="#dev-cli-cloudshell">AWS CLI and CloudShell</a></li>
+    <li><a href="#dev-unit-testing">Unit tests and mocks</a></li>
+    <li><a href="#dev-integration-testing">Integration tests and event-driven tests</a></li>
+    <li><a href="#dev-debugging">Debugging defects and integration problems</a></li>
+    <li><a href="#dev-amazon-q">Amazon Q Developer</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="dev-sdk-retries">
+  <h2>SDK retries and backoff</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>The AWS SDKs and the AWS CLI retry failed requests automatically. You do not write a retry loop for single SDK calls.</li>
+    <li>The SDK retries <strong>transient errors</strong> (timeouts, connection errors, HTTP 500, 502, 503, 504) and <strong>throttling errors</strong> (for example <code>ThrottlingException</code>, <code>TooManyRequestsException</code>, <code>ProvisionedThroughputExceededException</code>, <code>SlowDown</code>).</li>
+    <li>The SDK does not retry most client errors, for example <code>AccessDeniedException</code>, <code>ValidationException</code>, and <code>ResourceNotFoundException</code>. Fix the request instead.</li>
+    <li><strong>Exponential backoff</strong>: each retry waits longer than the last one.</li>
+    <li><strong>Jitter</strong> adds a random part to each wait. Without jitter, many clients that fail at the same time also retry at the same time. Jitter spreads the retries.</li>
+    <li>"Max attempts" counts the first request too. A value of 3 means one request and up to two retries. A value of 1 turns off retries.</li>
+  </ul>
+  <h3>Retry modes</h3>
+  <table>
+    <tr><th>Mode</th><th>Behavior</th></tr>
+    <tr><td><code>standard</code></td><td>The same rules in all SDKs. Exponential backoff with jitter. A retry quota (token bucket) stops retries during a long outage. Default 3 attempts. Default mode in AWS CLI version 2. AWS recommends this mode.</td></tr>
+    <tr><td><code>adaptive</code></td><td>Standard mode plus a <strong>client-side rate limiter</strong>. After throttling responses, it can delay the first attempt of new requests, not only retries. Use it for a client that calls one resource and gets frequent throttling.</td></tr>
+    <tr><td><code>legacy</code></td><td>The older behavior of each SDK. It differs between languages. Default mode in AWS CLI version 1 (5 attempts in total).</td></tr>
+  </table>
+  <h3>Settings</h3>
+  <table>
+    <tr><th>Setting</th><th>Environment variable</th><th>Config file key</th></tr>
+    <tr><td>Retry mode</td><td><code>AWS_RETRY_MODE</code></td><td><code>retry_mode</code></td></tr>
+    <tr><td>Max attempts</td><td><code>AWS_MAX_ATTEMPTS</code></td><td><code>max_attempts</code></td></tr>
+  </table>
+  <ul>
+    <li>Precedence: client configuration in code, then environment variable, then <code>~/.aws/config</code>, then the SDK default.</li>
+    <li>In standard mode, the maximum wait between two attempts is 20 seconds.</li>
+    <li>AWS published updated retry defaults in 2026 (opt-in with <code>AWS_NEW_RETRIES_2026</code> until they become the default). Older study material and the exam use the values above.</li>
+    <li>With the AWS CLI, add <code>--debug</code> and search the output for "retry" to see retry attempts.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Many clients retry at the same moment and overload the service" → exponential backoff with jitter.</li>
+      <li>"Change retry behavior without a code change" → <code>AWS_MAX_ATTEMPTS</code> or <code>AWS_RETRY_MODE</code>, or the config file.</li>
+      <li>"Client sends to one table and gets throttled often, slow down automatically" → adaptive retry mode.</li>
+      <li>"Retry an <code>AccessDeniedException</code>" → wrong. Fix the permissions.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/sdkref/latest/guide/feature-retry-behavior.html">Retry behavior (AWS SDKs and Tools Reference Guide)</a>, <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-retries.html">AWS CLI retries</a>.</p>
+</section>
+
+<section id="dev-sdk-errors">
+  <h2>HTTP status codes and SDK exceptions</h2>
+  <h3>Status code classes</h3>
+  <table>
+    <tr><th>Code</th><th>Meaning</th><th>Retry?</th></tr>
+    <tr><td>400</td><td>Bad request: validation error, missing parameter. Some services also send throttling and condition failures as 400 (see the DynamoDB list).</td><td>The SDK retries it only if the error code is a throttling or transient code (for example <code>RequestTimeout</code>)</td></tr>
+    <tr><td>403</td><td>Access denied: the caller has no permission, or the signature or credentials are not valid.</td><td>No. Fix the policy or the credentials.</td></tr>
+    <tr><td>404</td><td>The resource does not exist.</td><td>No</td></tr>
+    <tr><td>429</td><td>Too many requests (throttling). For example, Lambda <code>TooManyRequestsException</code> and API Gateway throttling.</td><td>Yes, with backoff</td></tr>
+    <tr><td>500</td><td>Internal server error.</td><td>Yes</td></tr>
+    <tr><td>502</td><td>Bad gateway. For API Gateway, often a bad response from the backend.</td><td>Yes for AWS API calls. For your own API, fix the backend.</td></tr>
+    <tr><td>503</td><td>Service unavailable. Amazon S3 sends <code>SlowDown</code> with 503.</td><td>Yes, with backoff</td></tr>
+    <tr><td>504</td><td>Gateway timeout.</td><td>Yes</td></tr>
+  </table>
+  <h3>Common exceptions</h3>
+  <table>
+    <tr><th>Exception</th><th>Cause</th><th>Retry?</th></tr>
+    <tr><td><code>ProvisionedThroughputExceededException</code> (DynamoDB, 400)</td><td>The request rate is above the provisioned capacity of a table or index.</td><td>Yes. The SDK retries it.</td></tr>
+    <tr><td><code>ThrottlingException</code> (DynamoDB, 400)</td><td>Control plane calls too fast, or on-demand request rate too high.</td><td>Yes</td></tr>
+    <tr><td><code>RequestLimitExceeded</code> (DynamoDB, 400)</td><td>Throughput is above the account limit.</td><td>Yes</td></tr>
+    <tr><td><code>ConditionalCheckFailedException</code> (DynamoDB, 400)</td><td>A condition expression is false.</td><td>No. It is an expected result. Handle it in code.</td></tr>
+    <tr><td><code>AccessDeniedException</code></td><td>No permission for the action.</td><td>No</td></tr>
+    <tr><td><code>ValidationException</code></td><td>A parameter is missing, out of range, or the wrong type.</td><td>No</td></tr>
+    <tr><td><code>ResourceNotFoundException</code></td><td>The table, function, or other resource does not exist (or is still in creation).</td><td>No</td></tr>
+    <tr><td><code>TooManyRequestsException</code> (Lambda, 429)</td><td>The function or account has no concurrency left.</td><td>Yes, with backoff</td></tr>
+  </table>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Decide by the <strong>error code</strong>, not only by the HTTP status. The SDK matches the error code first.</li>
+    <li>A 500 on a single-item DynamoDB write can mean that the write succeeded. Read the item, or use a condition expression, before you retry.</li>
+    <li>Log the request ID from the error. AWS Support uses it to find the request.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"<code>ProvisionedThroughputExceededException</code> at peaks" → retries with exponential backoff (SDK default), then more capacity or on-demand mode.</li>
+      <li>"<code>ConditionalCheckFailedException</code> on a duplicate write" → expected for an idempotent write. Catch it and continue.</li>
+      <li>"Lambda Invoke returns 429" → concurrency limit. Retry with backoff, or raise the concurrency.</li>
+      <li>"S3 returns 503 Slow Down" → back off and retry; spread requests across prefixes.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Programming.Errors.html">Error handling with DynamoDB</a>, <a href="https://docs.aws.amazon.com/sdkref/latest/guide/feature-retry-behavior.html">Which errors are retried</a>.</p>
+</section>
+
+<section id="dev-sdk-pagination">
+  <h2>Pagination and batch calls</h2>
+  <h3>Pagination tokens</h3>
+  <table>
+    <tr><th>API</th><th>Response field</th><th>Send it back as</th></tr>
+    <tr><td>Most list APIs</td><td><code>NextToken</code></td><td><code>NextToken</code></td></tr>
+    <tr><td>DynamoDB <code>Query</code> and <code>Scan</code></td><td><code>LastEvaluatedKey</code></td><td><code>ExclusiveStartKey</code></td></tr>
+    <tr><td>Amazon S3 <code>ListObjectsV2</code></td><td><code>NextContinuationToken</code> (with <code>IsTruncated</code>)</td><td><code>ContinuationToken</code></td></tr>
+  </table>
+  <ul>
+    <li>A list call returns one page. Code that reads only the first response misses data.</li>
+    <li>SDK <strong>paginators</strong> follow the tokens for you. Use them instead of a manual loop.</li>
+    <li>A DynamoDB page stops at 1 MB of data. A filter expression runs after the read, so a page can have zero items and still have a <code>LastEvaluatedKey</code>.</li>
+  </ul>
+  <h3>AWS CLI pagination options</h3>
+  <table>
+    <tr><th>Option</th><th>Effect</th></tr>
+    <tr><td>(default)</td><td>The CLI makes as many calls as necessary and returns all items.</td></tr>
+    <tr><td><code>--page-size</code></td><td>Fewer items in each API call. The CLI still returns the full list. Use it when calls time out.</td></tr>
+    <tr><td><code>--max-items</code></td><td>The CLI prints only this number of items and returns a <code>NextToken</code>.</td></tr>
+    <tr><td><code>--starting-token</code></td><td>Continue from the <code>NextToken</code> of a previous command.</td></tr>
+    <tr><td><code>--no-paginate</code></td><td>The CLI makes only one call and returns only the first page.</td></tr>
+  </table>
+  <h3>Batch calls</h3>
+  <ul>
+    <li>A batch call can partly fail. The call returns success, but the response lists the failed items.</li>
+    <li>DynamoDB <code>BatchWriteItem</code> returns <code>UnprocessedItems</code>. <code>BatchGetItem</code> returns <code>UnprocessedKeys</code>. The most likely cause is throttling.</li>
+    <li>Retry only the unprocessed items, with exponential backoff. An immediate retry is likely to be throttled again.</li>
+    <li>Some SDK high-level clients retry unprocessed items for you, for example the boto3 <code>batch_writer</code> and the DynamoDB Enhanced Client for Java.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"The function returns only some of the items" → the code ignores the pagination token. Use a paginator.</li>
+      <li>"<code>list-objects</code> on a large bucket times out in the CLI" → <code>--page-size</code>.</li>
+      <li>"<code>BatchWriteItem</code> succeeds but some items are missing" → retry <code>UnprocessedItems</code> with exponential backoff.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-pagination.html">AWS CLI pagination</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Programming.Errors.html#Programming.Errors.BatchOperations">DynamoDB batch operations and error handling</a>.</p>
+</section>
+
+<section id="dev-idempotency">
+  <h2>Idempotency</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>An idempotent operation gives the same result when it runs one time or many times.</li>
+    <li>Many event sources deliver <strong>at least once</strong>: SQS standard queues, Lambda asynchronous invocation, EventBridge, and SDK retries after a timeout. A handler can run two times for one event.</li>
+    <li>An <strong>idempotency key</strong> identifies one logical request, for example an order ID or a hash of the payload.</li>
+    <li>Record "already done" with a conditional write, for example DynamoDB <code>PutItem</code> with <code>attribute_not_exists(pk)</code>. A <code>ConditionalCheckFailedException</code> then means "duplicate".</li>
+    <li>Some APIs take a <strong>client token</strong>. Amazon EC2 <code>RunInstances</code> takes <code>ClientToken</code> (up to 64 ASCII characters). DynamoDB <code>TransactWriteItems</code> takes <code>ClientRequestToken</code>.</li>
+    <li>EC2: the same client token with different parameters fails with <code>IdempotentParameterMismatch</code>.</li>
+  </ul>
+  <h3>Powertools for AWS Lambda idempotency utility</h3>
+  <ul>
+    <li>Stores a record for each idempotency key in a DynamoDB table (partition key attribute <code>id</code> by default).</li>
+    <li>A repeated event returns the saved result. The function code does not run again.</li>
+    <li>Records expire after 1 hour (3,600 seconds) by default. Change it with <code>expires_after_seconds</code>.</li>
+    <li><code>event_key_jmespath</code> selects the part of the event that makes the key.</li>
+    <li>A duplicate that arrives while the first run is in progress raises <code>IdempotencyAlreadyInProgressError</code>.</li>
+    <li>If the function raises an unhandled exception, the utility deletes the record, so a retry can run.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Customers are charged two times when the queue delivers a message again" → idempotency key and a conditional write (or the Powertools idempotency utility).</li>
+      <li>"Retry a launch request after a timeout without a second instance" → <code>ClientToken</code>.</li>
+      <li>"Duplicates with no errors in the logs" → at-least-once delivery. Make the handler idempotent.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/powertools/python/latest/utilities/idempotency/">Powertools for AWS Lambda (Python) idempotency</a>, <a href="https://docs.aws.amazon.com/ec2/latest/devguide/ec2-api-idempotency.html">Idempotency in Amazon EC2 API requests</a>.</p>
+</section>
+
+<section id="dev-resilience">
+  <h2>Resilient calls to other services</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Set a <strong>timeout</strong> on every network call. A call without a timeout can wait until the Lambda function times out.</li>
+    <li>Retry transient failures a limited number of times, with exponential backoff and jitter.</li>
+    <li>Retry only operations that are safe to repeat, or make them idempotent first.</li>
+    <li>A <strong>fallback</strong> returns a default or cached answer when a dependency fails (graceful degradation).</li>
+    <li>Send work that fails many times to a <strong>dead-letter queue</strong> for later analysis.</li>
+  </ul>
+  <h3>Circuit breaker</h3>
+  <table>
+    <tr><th>State</th><th>Behavior</th></tr>
+    <tr><td>Closed</td><td>Calls go to the dependency. The breaker counts failures.</td></tr>
+    <tr><td>Open</td><td>After failures pass a threshold, the breaker trips. Calls fail at once and do not go to the dependency.</td></tr>
+    <tr><td>Half-open</td><td>After a wait, the breaker lets a test call go through. Success closes the circuit. Failure opens it again.</td></tr>
+  </table>
+  <ul>
+    <li>A circuit breaker stops retries that are unlikely to succeed. It protects the caller and the failing service.</li>
+    <li>AWS sample: a Step Functions workflow keeps the circuit status in a DynamoDB table. A TTL removes expired "open" records.</li>
+  </ul>
+  <h3>Where to put retries</h3>
+  <ul>
+    <li>One SDK call: the SDK retry settings.</li>
+    <li>A step in a workflow: a Step Functions <code>Retry</code> field (<code>IntervalSeconds</code>, <code>MaxAttempts</code>, <code>BackoffRate</code>) and a <code>Catch</code> field. No retry code in the function.</li>
+    <li>Queue consumers: the visibility timeout, <code>maxReceiveCount</code>, and a dead-letter queue.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"A third-party API is down for long periods; stop calling it and fail fast" → circuit breaker.</li>
+      <li>"Show cached data when the recommendation service fails" → fallback.</li>
+      <li>"Retry one workflow step with backoff without code" → Step Functions <code>Retry</code>.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/circuit-breaker.html">Circuit breaker pattern</a>, <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/retry-backoff.html">Retry with backoff pattern</a>.</p>
+</section>
+
+<section id="dev-cli-cloudshell">
+  <h2>AWS CLI and CloudShell</h2>
+  <h3>Profiles and options</h3>
+  <ul>
+    <li>Files: <code>~/.aws/credentials</code> (access keys) and <code>~/.aws/config</code> (Region, output, roles, IAM Identity Center).</li>
+    <li>In <code>config</code>, a named profile section is <code>[profile dev]</code>. In <code>credentials</code>, it is <code>[dev]</code>.</li>
+    <li>Global options: <code>--profile</code>, <code>--region</code>, <code>--output</code> (<code>json</code>, <code>yaml</code>, <code>yaml-stream</code>, <code>text</code>, <code>table</code>), <code>--debug</code>.</li>
+    <li><code>--cli-input-json</code> reads all parameters from a JSON file. <code>--generate-cli-skeleton</code> makes a template for that file.</li>
+  </ul>
+  <h3>Credential precedence (AWS CLI)</h3>
+  <ol>
+    <li>Command line options</li>
+    <li>Environment variables (<code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_SESSION_TOKEN</code>, <code>AWS_PROFILE</code>)</li>
+    <li>Assume role, then assume role with web identity</li>
+    <li>IAM Identity Center (<code>aws configure sso</code>, then <code>aws sso login</code>)</li>
+    <li>Credentials file</li>
+    <li>Custom process</li>
+    <li>Config file</li>
+    <li>Container credentials (Amazon ECS task role)</li>
+    <li>Amazon EC2 instance profile credentials (from the instance metadata service)</li>
+  </ol>
+  <h3>Credentials in code</h3>
+  <ul>
+    <li>Do not put access keys in code or in environment variables of a function. Create the SDK client without keys. The default credential chain finds the role credentials.</li>
+    <li>On AWS compute, use a role: Lambda execution role, ECS task role, EC2 instance profile.</li>
+    <li>On a developer machine, use IAM Identity Center (<code>aws sso login</code>) for short-term credentials.</li>
+  </ul>
+  <h3>IMDSv2</h3>
+  <ul>
+    <li>IMDSv2 is session-oriented. First send <code>PUT http://169.254.169.254/latest/api/token</code> with the header <code>X-aws-ec2-metadata-token-ttl-seconds</code>.</li>
+    <li>The token lives from 1 second to 6 hours (21,600 seconds). Send it in the <code>X-aws-ec2-metadata-token</code> header on each <code>GET</code>.</li>
+    <li>When IMDSv2 is required (<code>HttpTokens</code> = <code>required</code>), a request without a valid token gets <code>401 - Unauthorized</code>.</li>
+    <li>The default hop limit for the <code>PUT</code> response is 1, or 2 for AMIs registered with <code>ImdsSupport</code> <code>v2.0</code>. Containers on the instance can need a hop limit of 2.</li>
+    <li>Current SDK and CLI versions use IMDSv2 automatically. Old versions must be upgraded before you require IMDSv2.</li>
+  </ul>
+  <h3>Filtering and checks</h3>
+  <table>
+    <tr><th>Feature</th><th>Where it runs</th><th>Notes</th></tr>
+    <tr><td><code>--filter</code>, <code>--filters</code>, <code>--filter-expression</code></td><td>Server side</td><td>The service returns only matching records. Less data comes over the network.</td></tr>
+    <tr><td><code>--query</code> (JMESPath)</td><td>Client side</td><td>The full response comes to the client first. Runs after server-side filters.</td></tr>
+    <tr><td><code>--dry-run</code> (Amazon EC2)</td><td>Server side</td><td>Checks permissions without a change. Returns <code>DryRunOperation</code> if allowed, <code>UnauthorizedOperation</code> if not.</td></tr>
+  </table>
+  <h3>AWS CloudShell</h3>
+  <ul>
+    <li>A browser-based shell in the console. It uses the credentials of the console user. The AWS CLI is pre-installed.</li>
+    <li>1 GB of persistent storage in <code>$HOME</code> for each Region, at no cost.</li>
+    <li>If you do not use CloudShell in a Region for 120 days, AWS deletes the home directory data of that Region.</li>
+    <li>A session ends after 20–30 minutes without keyboard or pointer input.</li>
+    <li>Outbound internet access only. No inbound ports and no public IP address.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Run CLI commands from the browser with no local install or keys" → CloudShell.</li>
+      <li>"Check permissions to launch an instance without launching it" → <code>--dry-run</code>.</li>
+      <li>"Reduce the data returned for a large list" → server-side filter, not <code>--query</code>.</li>
+      <li>"Developer needs short-term credentials on a laptop" → IAM Identity Center and <code>aws sso login</code>.</li>
+      <li>"Protect instance credentials from SSRF" → require IMDSv2.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html">CLI configuration and credentials precedence</a>, <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-filter.html">CLI filtering</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html">IMDSv2</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-new-instances.html">IMDS options for new instances (hop limit)</a>, <a href="https://docs.aws.amazon.com/cloudshell/latest/userguide/limits.html">CloudShell quotas</a>.</p>
+</section>
+
+<section id="dev-unit-testing">
+  <h2>Unit tests and mocks</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>A unit test checks your code without calls to real AWS services. It is fast and costs nothing.</li>
+    <li>Keep business logic out of the handler. The handler parses the event and calls plain functions that you can test.</li>
+    <li><strong>Inject</strong> the SDK client (pass it in as a parameter). A test can then pass a fake client.</li>
+    <li>Mock AWS calls with a stub library, for example <code>moto</code> or the botocore <code>Stubber</code> (Python), or <code>aws-sdk-client-mock</code> (JavaScript SDK v3).</li>
+    <li>Test the error paths too: throttling, <code>ConditionalCheckFailedException</code>, and timeouts.</li>
+  </ul>
+  <h3>Test events</h3>
+  <ul>
+    <li>A test event is a JSON payload in the same shape as the real event: API Gateway proxy event, SQS batch, S3 notification, and others.</li>
+    <li><code>sam local generate-event &lt;service&gt; &lt;event&gt;</code> prints a sample event, for example <code>sam local generate-event s3 put</code>.</li>
+    <li><code>sam local invoke -e event.json</code> runs the function locally in a container with that event. Docker (or a compatible container runtime) must be installed.</li>
+    <li><code>sam local start-api</code> runs the API locally for HTTP tests.</li>
+    <li>The Lambda console has private test events and <strong>shareable</strong> test events. Users in the same account can use shareable events.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Test the handler without calls to DynamoDB" → inject the client and use a mock or stub.</li>
+      <li>"Create a sample SQS event for a local test" → <code>sam local generate-event sqs receive-message</code>.</li>
+      <li>"Run the function locally with an event file" → <code>sam local invoke -e</code>.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-local-generate-event.html">sam local generate-event</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-local-invoke.html">sam local invoke</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/testing-functions.html">Testing Lambda functions in the console</a>.</p>
+</section>
+
+<section id="dev-integration-testing">
+  <h2>Integration tests and event-driven tests</h2>
+  <h3>Test deployed code</h3>
+  <ul>
+    <li>Deploy to a separate test stack. Test against real services there.</li>
+    <li><code>sam remote invoke</code> sends an event to a deployed resource: a Lambda function, a Step Functions state machine, an SQS queue, or a Kinesis data stream.</li>
+    <li><code>sam remote test-event</code> (<code>put</code>, <code>get</code>, <code>list</code>, <code>delete</code>) manages shareable test events. They are stored in the Amazon EventBridge schema registry.</li>
+    <li><code>sam remote invoke --test-event-name</code> uses a shareable test event.</li>
+    <li>The API Gateway console <strong>Test</strong> feature calls a REST API method before you deploy the API.</li>
+  </ul>
+  <h3>Mock APIs</h3>
+  <ul>
+    <li>An API Gateway <strong>mock integration</strong> (REST API) returns a response from API Gateway. No backend is called.</li>
+    <li>The integration request mapping template selects the status code, for example <code>{"statusCode": 200}</code>. The integration response template sets the body.</li>
+    <li>Use it to let front-end teams work before the backend is ready.</li>
+    <li>For your own code, replace an external HTTP dependency with a stub server or a mock in tests.</li>
+  </ul>
+  <h3>Event-driven tests</h3>
+  <ul>
+    <li>Asynchronous flows do not return a result to the caller. Send an event, then poll the result store (for example a DynamoDB table) until the result appears or a timeout ends.</li>
+    <li><strong>EventBridge archive and replay</strong>: an archive keeps events from one event bus (indefinitely by default, or for a set number of days). A replay sends them again to the same bus.</li>
+    <li>Replayed events have a <code>replay-name</code> field.</li>
+    <li><strong>Step Functions <code>TestState</code></strong> API tests one state without a deployed state machine. Inspection levels: <code>INFO</code> (default), <code>DEBUG</code> (input and output processing), <code>TRACE</code> (HTTP Task only).</li>
+    <li><code>TestState</code> can mock service integration results. With a mock, the IAM role is optional.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Front-end team needs the API before the backend exists" → API Gateway mock integration.</li>
+      <li>"Share a test event with the team for a deployed function" → shareable test events (<code>sam remote test-event</code>).</li>
+      <li>"Re-process last week's events with the fixed consumer" → EventBridge archive and replay.</li>
+      <li>"Check a <code>ResultPath</code> without running the whole workflow" → <code>TestState</code> with <code>DEBUG</code>.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-remote-invoke.html">sam remote invoke</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-remote-test-event.html">sam remote test-event</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/how-to-mock-integration.html">API Gateway mock integrations</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-archive.html">EventBridge archive and replay</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/test-state-isolation.html">Step Functions TestState</a>.</p>
+</section>
+
+<section id="dev-debugging">
+  <h2>Debugging defects and integration problems</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Start with the CloudWatch Logs of the function. Read the stack trace and the request ID.</li>
+    <li>Reproduce the failure with the same event: copy it from the log into a local test (<code>sam local invoke -e</code>) or a console test event.</li>
+    <li>Use AWS X-Ray to find which downstream call fails or is slow.</li>
+  </ul>
+  <h3>Common integration problems</h3>
+  <table>
+    <tr><th>Symptom</th><th>Likely cause</th></tr>
+    <tr><td><code>AccessDeniedException</code> or 403 from an AWS service</td><td>The execution role has no permission for the action or the resource ARN. A KMS key policy can also block access.</td></tr>
+    <tr><td><code>ResourceNotFoundException</code> for a resource that exists</td><td>Wrong Region in the client, or wrong name or ARN (for example a different stage or environment).</td></tr>
+    <tr><td>Function times out on a call to another service</td><td>Function timeout too short, no SDK timeout, or no network route (a Lambda function in a VPC without a NAT gateway or VPC endpoint).</td></tr>
+    <tr><td>API Gateway returns 502 with a Lambda proxy integration</td><td>The function returned a response that is not in the proxy format. It must return <code>statusCode</code> and a string <code>body</code>.</td></tr>
+    <tr><td>API Gateway returns 504</td><td>The integration took longer than the API Gateway integration timeout.</td></tr>
+    <tr><td>Messages fail again and again</td><td>A "poison" message. Look in the dead-letter queue and log the payload.</td></tr>
+  </table>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Lambda proxy integration, 502 Bad Gateway, function logs show success" → the response format is wrong.</li>
+      <li>"Works in us-east-1, <code>ResourceNotFoundException</code> in eu-west-1" → the client Region or the resource name.</li>
+      <li>"Find which of five downstream calls adds the delay" → X-Ray.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-output-format">Lambda proxy output format</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-troubleshooting.html">Troubleshooting Lambda</a>.</p>
+</section>
+
+<section id="dev-amazon-q">
+  <h2>Amazon Q Developer</h2>
+  <h3>In the IDE</h3>
+  <ul>
+    <li><strong>Inline suggestions</strong>: code completions while you type.</li>
+    <li><strong>Chat</strong>: questions about code and AWS. Amazon Q uses the open file as context. You can add files, folders, or the workspace.</li>
+    <li><strong>Agentic coding</strong>: Amazon Q changes your files directly. You see a diff and can undo the change.</li>
+    <li><strong>Unit test generation</strong> (formerly <code>/test</code>): Amazon Q generates unit tests for your code.</li>
+    <li><strong>Documentation generation</strong> (formerly <code>/doc</code>): READMEs and other documentation.</li>
+    <li><strong>Code reviews</strong> (formerly <code>/review</code>): SAST security scanning, secrets detection (for example hardcoded passwords), infrastructure as code issues, and code quality issues.</li>
+    <li><strong>Code transformation</strong>: language and OS-level upgrades, for example Java version upgrades and .NET porting.</li>
+  </ul>
+  <h3>Code references</h3>
+  <ul>
+    <li>A suggestion can be similar to open-source code. Amazon Q then shows a code reference with the license and the source repository.</li>
+    <li>The reference log lists accepted suggestions that have references.</li>
+    <li>A Pro tier administrator can block suggestions with code references for the whole organization.</li>
+  </ul>
+  <h3>In the console and tiers</h3>
+  <ul>
+    <li>In the AWS Management Console, <strong>Diagnose with Amazon Q</strong> explains common errors (for example missing IAM permissions) and gives steps to fix them.</li>
+    <li>Free tier: monthly limits. Sign in to the IDE with an AWS Builder ID (no AWS account necessary).</li>
+    <li>Pro tier (Amazon Q Developer Pro): paid, higher limits, and advanced features. An organization subscribes its IAM Identity Center users. Administrators manage settings in the Amazon Q Developer console.</li>
+    <li>AWS plans to end support for the Amazon Q Developer IDE plugins on April 30, 2027. AWS names Kiro as the replacement for the IDE plugins. The exam guide still lists Amazon Q Developer.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Generate unit tests for existing code with the least effort" → Amazon Q Developer unit test generation.</li>
+      <li>"Find hardcoded secrets and vulnerabilities before commit" → Amazon Q Developer code review.</li>
+      <li>"Know the license of suggested code that is similar to open source" → code references.</li>
+      <li>"Upgrade a Java 8 application to a newer Java version" → Amazon Q Developer transformation.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/q-in-IDE-chat.html">Chatting with Amazon Q Developer about code</a>, <a href="https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/code-reviews.html">Code reviews</a>, <a href="https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/code-reference.html">Code references</a>, <a href="https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/q-tiers.html">Tiers of service</a>, <a href="https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/diagnose-console-errors.html">Diagnosing console errors</a>.</p>
+</section>
+
+</main>
+
+<footer>
+  <a href="../../index.html#quiz/g-dev-practices">Take the quiz</a>
+</footer>
+</body>
+</html>
