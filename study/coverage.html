@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exam Guide Coverage</title>
+<link rel="stylesheet" href="assets/study.css">
+<style>
+  :root { --fg: #1b1f24; --bg: #ffffff; --muted: #59636e; --line: #ccd2da; --head: #f2f4f7;
+          --gap: #9a2a1a; --gap-bg: #fdecea; --part: #7a5200; --part-bg: #fff4d6; --ok: #1d6b35; --ok-bg: #e6f4ea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #e6e8eb; --bg: #16181c; --muted: #9aa4b0; --line: #3a3f48; --head: #22252b;
+            --gap: #ff9b8a; --gap-bg: #3a1d19; --part: #f0c060; --part-bg: #352a10; --ok: #7fd49a; --ok-bg: #16311f; }
+  }
+  body { font-family: system-ui, sans-serif; color: var(--fg); background: var(--bg); line-height: 1.5;
+         max-width: 72rem; margin: 2rem auto; padding: 0 1rem; }
+  h1, h2, h3 { line-height: 1.25; }
+  table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1.5rem; font-size: 0.93rem; }
+  th, td { border: 1px solid var(--line); padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+  th { background: var(--head); }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 0.9em; }
+  .muted { color: var(--muted); }
+  .gap { color: var(--gap); background: var(--gap-bg); font-weight: 600; }
+  .partial { color: var(--part); background: var(--part-bg); font-weight: 600; }
+  .covered { color: var(--ok); background: var(--ok-bg); font-weight: 600; }
+  .topic { margin: 0.4rem 0 0.8rem; }
+  .topic ul { margin: 0.2rem 0 0; }
+  section.set { border-top: 2px solid var(--line); margin-top: 1.5rem; }
+</style>
+</head>
+<body>
+<p><a href="index.html">Home</a></p>
+<h1>Exam guide coverage</h1>
+
+<h2 id="source">Source</h2>
+<ul>
+  <li>Guide: AWS Certified Developer - Associate (DVA-C02) exam guide, <strong>version 2.1, published December 12, 2024</strong>.
+    Location: <a href="https://docs.aws.amazon.com/aws-certification/latest/developer-associate-02/developer-associate-02.html">docs.aws.amazon.com/aws-certification/latest/developer-associate-02</a>.
+    Checked on 2026-10-18.</li>
+  <li>The PDF guide (<code>AWS-Certified-Developer-Associate_Exam-Guide_C02.pdf</code>) has the footer "Version 1.0" and separate knowledge and skills lists. The revisions page compares 2.1 with a 2.0 that has this layout. Version 2.1 replaces it. This page uses version 2.1.</li>
+  <li>Exam change: the AWS certification page says DVA-C03 registration opens October 27, 2026. DVA-C02 is available until November 30, 2026. An exam on or near 2026-11-01 is DVA-C02, so this page uses the DVA-C02 guide.</li>
+  <li>Domain weights (scored content): Domain 1 Development with AWS Services 32%, Domain 2 Security 26%, Domain 3 Deployment 24%, Domain 4 Troubleshooting and Optimization 18%. These weights match <code>assets/quiz.js</code>.</li>
+  <li>Version 2.1 has one list of skills for each task. It has 101 skills in total. The table below has one row for each skill.</li>
+  <li>Emerging topics: the guide lists AI-assisted development skills as unscored pretest items. This page does not make topics for them. The scored skills 1.1.11 and 3.3.6 (Amazon Q Developer) are in the gap set <code>g-dev-practices</code>.</li>
+</ul>
+
+<h2 id="how">How to read the tables</h2>
+<ul>
+  <li><strong>Sets</strong>: the planned set IDs that must teach the skill. Module sets: <code>m01-lambda</code>, <code>m02-databases</code>, <code>m03-s3</code>, <code>m04-api-cognito</code>, <code>m05-messaging</code>, <code>m06-step-functions</code>, <code>m07-secrets-kms</code>, <code>m08-cicd</code>, <code>m09-observability</code>. Gap sets start with <code>g-</code>.</li>
+  <li><strong>Status</strong>: <span class="covered">Covered</span> = the module README teaches the skill. <span class="partial">Partial</span> = the module README teaches part of the skill. The set author must add the rest (see <a href="#must-also">Must also cover</a>), or a gap set adds it. <span class="gap">Gap</span> = a gap set is the main owner of the skill. A module can touch the skill, but the module README does not teach it enough for the exam.</li>
+  <li><strong>Topics</strong>: empty for now. Fill this column with topic IDs after the set content exists.</li>
+</ul>
+
+<h2 id="skills">Task statements and skills</h2>
+
+<h3>Domain 1: Development with AWS Services (32%)</h3>
+<table>
+<thead><tr><th>Skill</th><th>Text (from the guide)</th><th>Modules</th><th>Sets</th><th>Status</th><th>Topics</th></tr></thead>
+<tbody>
+<tr><th colspan="6">Task 1.1: Develop code for applications hosted on AWS</th></tr>
+<tr><td>1.1.1</td><td>Describe architectural patterns (for example, event-driven, microservices, monolithic, choreography, orchestration, fanout)</td><td>05, 06</td><td>m05-messaging, m06-step-functions, g-architecture</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>1.1.2</td><td>Describe differences between stateful and stateless concepts</td><td>01</td><td>g-architecture, m01-lambda</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>1.1.3</td><td>Describe differences between tightly coupled and loosely coupled components</td><td>05</td><td>g-architecture, m05-messaging</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>1.1.4</td><td>Describe differences between synchronous and asynchronous patterns</td><td>01, 05</td><td>g-architecture, m01-lambda, m05-messaging</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>1.1.5</td><td>Create fault-tolerant and resilient applications in a programming language</td><td>05, 06</td><td>g-dev-practices, m05-messaging, m06-step-functions</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>1.1.6</td><td>Create, extend, and maintain APIs (for example, response/request transformations, enforcing validation rules, overriding status codes)</td><td>04</td><td>m04-api-cognito</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.1.7</td><td>Write and run unit tests in development environments (for example, using AWS SAM)</td><td>01</td><td>g-dev-practices, g-iac, m01-lambda</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>1.1.8</td><td>Write code to use messaging services</td><td>05</td><td>m05-messaging</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.1.9</td><td>Write code that interacts with AWS services by using APIs and AWS SDKs</td><td>all</td><td>g-dev-practices, all module sets</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>1.1.10</td><td>Handle streaming data using AWS services</td><td>05</td><td>m05-messaging</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.1.11</td><td>Use Amazon Q Developer to assist with development</td><td>none</td><td>g-dev-practices</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>1.1.12</td><td>Use Amazon EventBridge to implement event-driven patterns</td><td>05</td><td>m05-messaging, g-architecture</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.1.13</td><td>Implement resilient application code for third-party service integrations (for example, retry logic, circuit breakers, error handling patterns)</td><td>none</td><td>g-dev-practices</td><td class="gap">Gap</td><td></td></tr>
+<tr><th colspan="6">Task 1.2: Develop code for AWS Lambda</th></tr>
+<tr><td>1.2.1</td><td>Describe the access of private resources in VPCs from Lambda code</td><td>01</td><td>m01-lambda</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.2.2</td><td>Configure Lambda functions by defining environment variables and parameters (for example, memory, concurrency, timeout, runtime, handler, layers, extensions, triggers, destinations)</td><td>01</td><td>m01-lambda</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.2.3</td><td>Handle the event lifecycle and errors by using code (for example, Lambda Destinations, dead-letter queues)</td><td>01, 05</td><td>m01-lambda, m05-messaging</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.2.4</td><td>Write and run test code by using AWS services and tools</td><td>01</td><td>m01-lambda, g-dev-practices</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>1.2.5</td><td>Integrate Lambda functions with AWS services</td><td>01, 03, 05</td><td>m01-lambda, m03-s3, m05-messaging</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.2.6</td><td>Tune Lambda functions for optimal performance</td><td>01</td><td>m01-lambda</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.2.7</td><td>Use Lambda functions to process and transform data in near real time</td><td>05</td><td>m05-messaging, m01-lambda</td><td class="partial">Partial</td><td></td></tr>
+<tr><th colspan="6">Task 1.3: Use data stores in application development</th></tr>
+<tr><td>1.3.1</td><td>Describe high-cardinality partition keys for balanced partition access</td><td>02</td><td>m02-databases</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.3.2</td><td>Describe database consistency models (for example, strongly consistent, eventually consistent)</td><td>02, 03</td><td>m02-databases, m03-s3</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.3.3</td><td>Describe differences between query and scan operations</td><td>02</td><td>m02-databases</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.3.4</td><td>Define Amazon DynamoDB keys and indexing</td><td>02</td><td>m02-databases</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.3.5</td><td>Serialize and deserialize data to provide persistence to a data store</td><td>02, 03</td><td>m02-databases, m03-s3</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>1.3.6</td><td>Use, manage, and maintain data stores</td><td>02, 03</td><td>m02-databases, m03-s3, g-architecture</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.3.7</td><td>Manage data lifecycles</td><td>02, 03</td><td>m03-s3, m02-databases</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.3.8</td><td>Use data caching services</td><td>02</td><td>m02-databases</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>1.3.9</td><td>Use specialized data stores based on access patterns (for example, Amazon OpenSearch Service)</td><td>none</td><td>g-architecture</td><td class="gap">Gap</td><td></td></tr>
+</tbody>
+</table>
+
+<h3>Domain 2: Security (26%)</h3>
+<table>
+<thead><tr><th>Skill</th><th>Text (from the guide)</th><th>Modules</th><th>Sets</th><th>Status</th><th>Topics</th></tr></thead>
+<tbody>
+<tr><th colspan="6">Task 2.1: Implement authentication and/or authorization for applications and AWS services</th></tr>
+<tr><td>2.1.1</td><td>Use an identity provider to implement federated access (for example, Amazon Cognito, IAM)</td><td>04</td><td>m04-api-cognito, g-iam-sts</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>2.1.2</td><td>Secure applications by using bearer tokens</td><td>04</td><td>m04-api-cognito, g-app-security</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>2.1.3</td><td>Configure programmatic access to AWS</td><td>none</td><td>g-iam-sts, g-dev-practices</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>2.1.4</td><td>Make authenticated calls to AWS services</td><td>04</td><td>g-iam-sts, m04-api-cognito</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>2.1.5</td><td>Assume an IAM role</td><td>04 (identity pool only)</td><td>g-iam-sts</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>2.1.6</td><td>Define permissions for IAM principals</td><td>07 (key policies only)</td><td>g-iam-sts, m07-secrets-kms</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>2.1.7</td><td>Implement application-level authorization for fine-grained access control</td><td>04 (authorizers)</td><td>g-app-security, m04-api-cognito</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>2.1.8</td><td>Handle cross-service authentication in microservice architectures</td><td>none</td><td>g-app-security</td><td class="gap">Gap</td><td></td></tr>
+<tr><th colspan="6">Task 2.2: Implement encryption by using AWS services</th></tr>
+<tr><td>2.2.1</td><td>Define encryption at rest and in transit</td><td>03, 07</td><td>m03-s3, m07-secrets-kms, g-app-security</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>2.2.2</td><td>Describe certificate management (for example, AWS Private CA)</td><td>07</td><td>m07-secrets-kms</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>2.2.3</td><td>Describe differences between client-side encryption and server-side encryption</td><td>03, 07</td><td>m03-s3, m07-secrets-kms</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>2.2.4</td><td>Use encryption keys to encrypt or decrypt data</td><td>07</td><td>m07-secrets-kms</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>2.2.5</td><td>Generate certificates and SSH keys for development purposes</td><td>none</td><td>g-app-security</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>2.2.6</td><td>Use encryption across account boundaries</td><td>07</td><td>m07-secrets-kms, g-iam-sts</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>2.2.7</td><td>Enable and disable key rotation</td><td>07</td><td>m07-secrets-kms</td><td class="partial">Partial</td><td></td></tr>
+<tr><th colspan="6">Task 2.3: Manage sensitive data in application code</th></tr>
+<tr><td>2.3.1</td><td>Describe data classification (for example, personally identifiable information [PII], protected health information [PHI])</td><td>none</td><td>g-app-security</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>2.3.2</td><td>Encrypt environment variables that contain sensitive data</td><td>07 (one line)</td><td>m07-secrets-kms, m01-lambda</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>2.3.3</td><td>Use secret management services to secure sensitive data</td><td>07</td><td>m07-secrets-kms</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>2.3.4</td><td>Sanitize sensitive data</td><td>03 (Object Lambda)</td><td>g-app-security, m03-s3</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>2.3.5</td><td>Implement application-level data masking and sanitization</td><td>03 (Object Lambda)</td><td>g-app-security, m09-observability</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>2.3.6</td><td>Implement data access patterns for multi-tenant applications</td><td>none</td><td>g-app-security</td><td class="gap">Gap</td><td></td></tr>
+</tbody>
+</table>
+
+<h3>Domain 3: Deployment (24%)</h3>
+<table>
+<thead><tr><th>Skill</th><th>Text (from the guide)</th><th>Modules</th><th>Sets</th><th>Status</th><th>Topics</th></tr></thead>
+<tbody>
+<tr><th colspan="6">Task 3.1: Prepare application artifacts to be deployed to AWS</th></tr>
+<tr><td>3.1.1</td><td>Manage the dependencies of the code module (for example, environment variables, configuration files, container images) within the package</td><td>01, 08</td><td>m01-lambda, m08-cicd, g-iac, g-compute</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>3.1.2</td><td>Organize files and a directory structure for application deployment</td><td>none</td><td>g-iac</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>3.1.3</td><td>Use code repositories in deployment environments</td><td>08</td><td>m08-cicd</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>3.1.4</td><td>Apply application requirements for resources (for example, memory, cores)</td><td>01</td><td>m01-lambda, g-compute</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>3.1.5</td><td>Prepare application configurations for specific environments (for example, by using AWS AppConfig)</td><td>07</td><td>m07-secrets-kms, g-iac</td><td class="covered">Covered</td><td></td></tr>
+<tr><th colspan="6">Task 3.2: Test applications in development environments</th></tr>
+<tr><td>3.2.1</td><td>Test deployed code by using AWS services and tools</td><td>01</td><td>g-dev-practices, m01-lambda</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>3.2.2</td><td>Write integration tests and mock APIs for external dependencies</td><td>04 (mock in table only)</td><td>g-dev-practices, m04-api-cognito</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>3.2.3</td><td>Test applications by using development endpoints (for example, configuring stages in Amazon API Gateway)</td><td>04</td><td>m04-api-cognito</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>3.2.4</td><td>Deploy application stack updates to existing environments (for example, deploying an AWS SAM template to a different staging environment)</td><td>01 (samconfig)</td><td>g-iac</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>3.2.5</td><td>Test event-driven applications</td><td>none</td><td>g-dev-practices, m05-messaging</td><td class="gap">Gap</td><td></td></tr>
+<tr><th colspan="6">Task 3.3: Automate deployment testing</th></tr>
+<tr><td>3.3.1</td><td>Create application test events (for example, JSON payloads for testing AWS Lambda, API Gateway, AWS SAM resources)</td><td>none</td><td>g-dev-practices, g-iac</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>3.3.2</td><td>Deploy API resources to various environments</td><td>04</td><td>m04-api-cognito</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>3.3.3</td><td>Create application environments that use approved versions for integration testing (for example, Lambda aliases, container image tags, AWS Amplify branches, AWS Copilot environments)</td><td>01, 08</td><td>m01-lambda, m08-cicd</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>3.3.4</td><td>Implement and deploy infrastructure as code (IaC) templates (for example, AWS SAM templates, AWS CloudFormation templates)</td><td>01, 08 (SAM basics, CDK)</td><td>g-iac, m08-cicd</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>3.3.5</td><td>Manage environments in individual AWS services (for example, differentiating between development, test, and production in API Gateway)</td><td>04</td><td>m04-api-cognito</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>3.3.6</td><td>Use Amazon Q Developer to generate automated tests</td><td>none</td><td>g-dev-practices</td><td class="gap">Gap</td><td></td></tr>
+<tr><th colspan="6">Task 3.4: Deploy code by using AWS CI/CD services</th></tr>
+<tr><td>3.4.1</td><td>Describe Lambda deployment packaging options</td><td>01</td><td>m01-lambda</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>3.4.2</td><td>Describe API Gateway stages and custom domains</td><td>04</td><td>m04-api-cognito</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>3.4.3</td><td>Update existing IaC templates (for example, AWS SAM templates, CloudFormation templates)</td><td>none</td><td>g-iac</td><td class="gap">Gap</td><td></td></tr>
+<tr><td>3.4.4</td><td>Manage application environments by using AWS services</td><td>08</td><td>m08-cicd, g-iac</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>3.4.5</td><td>Deploy an application version by using deployment strategies</td><td>08</td><td>m08-cicd</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>3.4.6</td><td>Commit code to a repository to invoke build, test, and deployment actions</td><td>08</td><td>m08-cicd</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>3.4.7</td><td>Use orchestrated workflows to deploy code to different environments</td><td>08</td><td>m08-cicd</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>3.4.8</td><td>Perform application rollbacks by using existing deployment strategies</td><td>08</td><td>m08-cicd</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>3.4.9</td><td>Use labels and branches for version and release management</td><td>01, 08</td><td>m08-cicd, m01-lambda</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>3.4.10</td><td>Use existing runtime configurations to create dynamic deployments (for example, using staging variables from API Gateway in Lambda functions)</td><td>04</td><td>m04-api-cognito</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>3.4.11</td><td>Configure deployment strategies (for example, blue/green, canary, rolling) for application releases</td><td>07, 08</td><td>m08-cicd, g-iac, m07-secrets-kms</td><td class="covered">Covered</td><td></td></tr>
+</tbody>
+</table>
+
+<h3>Domain 4: Troubleshooting and Optimization (18%)</h3>
+<table>
+<thead><tr><th>Skill</th><th>Text (from the guide)</th><th>Modules</th><th>Sets</th><th>Status</th><th>Topics</th></tr></thead>
+<tbody>
+<tr><th colspan="6">Task 4.1: Assist in a root cause analysis</th></tr>
+<tr><td>4.1.1</td><td>Debug code to identify defects</td><td>09</td><td>g-dev-practices, m09-observability</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>4.1.2</td><td>Interpret application metrics, logs, and traces</td><td>09</td><td>m09-observability</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>4.1.3</td><td>Query logs to find relevant data</td><td>09</td><td>m09-observability</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>4.1.4</td><td>Implement custom metrics (for example, Amazon CloudWatch embedded metric format [EMF])</td><td>09</td><td>m09-observability</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>4.1.5</td><td>Review application health by using dashboards and insights</td><td>09 (one lab mention)</td><td>m09-observability</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>4.1.6</td><td>Troubleshoot deployment failures by using service output logs</td><td>08</td><td>m08-cicd, g-iac</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>4.1.7</td><td>Debug service integration issues in applications</td><td>none</td><td>g-dev-practices, m09-observability</td><td class="gap">Gap</td><td></td></tr>
+<tr><th colspan="6">Task 4.2: Instrument code for observability</th></tr>
+<tr><td>4.2.1</td><td>Describe differences between logging, monitoring, and observability</td><td>09</td><td>m09-observability</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>4.2.2</td><td>Implement an effective logging strategy to record application behavior and state</td><td>09</td><td>m09-observability</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>4.2.3</td><td>Implement code that emits custom metrics</td><td>09</td><td>m09-observability</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>4.2.4</td><td>Add annotations for tracing services</td><td>09</td><td>m09-observability</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>4.2.5</td><td>Implement notification alerts for specific actions (for example, notifications about quota limits or deployment completions)</td><td>09</td><td>m09-observability</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>4.2.6</td><td>Implement tracing by using AWS services and tools</td><td>09</td><td>m09-observability</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>4.2.7</td><td>Implement structured logging for application events and user actions</td><td>09 (EMF only)</td><td>m09-observability</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>4.2.8</td><td>Configure application health checks and readiness probes</td><td>none</td><td>g-compute</td><td class="gap">Gap</td><td></td></tr>
+<tr><th colspan="6">Task 4.3: Optimize applications by using AWS services and features</th></tr>
+<tr><td>4.3.1</td><td>Define concurrency</td><td>01, 05</td><td>m01-lambda, m05-messaging</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>4.3.2</td><td>Profile application performance</td><td>01</td><td>m01-lambda, m09-observability</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>4.3.3</td><td>Determine minimum memory and compute power for an application</td><td>01</td><td>m01-lambda, g-compute</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>4.3.4</td><td>Use subscription filter policies to optimize messaging</td><td>05</td><td>m05-messaging</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>4.3.5</td><td>Cache content based on request headers</td><td>04</td><td>m04-api-cognito</td><td class="covered">Covered</td><td></td></tr>
+<tr><td>4.3.6</td><td>Implement application-level caching to improve performance</td><td>01, 02</td><td>m02-databases, g-architecture</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>4.3.7</td><td>Optimize application resource usage</td><td>01</td><td>g-compute, m01-lambda</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>4.3.8</td><td>Analyze application performance issues</td><td>09</td><td>m09-observability</td><td class="partial">Partial</td><td></td></tr>
+<tr><td>4.3.9</td><td>Use application logs to identify performance bottlenecks</td><td>09</td><td>m09-observability</td><td class="partial">Partial</td><td></td></tr>
+</tbody>
+</table>
+
+<h2 id="services">In-scope services (version 2.1 list)</h2>
+<table>
+<thead><tr><th>Category</th><th>Service</th><th>Sets</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Analytics</td><td>Amazon Athena</td><td>g-architecture</td><td class="gap">Gap</td></tr>
+<tr><td>Analytics</td><td>Amazon Kinesis</td><td>m05-messaging</td><td class="covered">Covered</td></tr>
+<tr><td>Analytics</td><td>Amazon OpenSearch Service</td><td>g-architecture</td><td class="gap">Gap</td></tr>
+<tr><td>Application Integration</td><td>AWS AppSync</td><td>m05-messaging</td><td class="covered">Covered</td></tr>
+<tr><td>Application Integration</td><td>Amazon EventBridge</td><td>m05-messaging</td><td class="covered">Covered</td></tr>
+<tr><td>Application Integration</td><td>Amazon SNS</td><td>m05-messaging</td><td class="covered">Covered</td></tr>
+<tr><td>Application Integration</td><td>Amazon SQS</td><td>m05-messaging</td><td class="covered">Covered</td></tr>
+<tr><td>Application Integration</td><td>AWS Step Functions</td><td>m06-step-functions</td><td class="covered">Covered</td></tr>
+<tr><td>Compute</td><td>Amazon EC2</td><td>g-compute, m08-cicd (CodeDeploy on EC2)</td><td class="gap">Gap</td></tr>
+<tr><td>Compute</td><td>AWS Elastic Beanstalk</td><td>m08-cicd</td><td class="covered">Covered</td></tr>
+<tr><td>Compute</td><td>AWS Lambda</td><td>m01-lambda</td><td class="covered">Covered</td></tr>
+<tr><td>Containers</td><td>Amazon ECR</td><td>m08-cicd, g-compute</td><td class="covered">Covered</td></tr>
+<tr><td>Containers</td><td>Amazon ECS</td><td>m08-cicd</td><td class="covered">Covered</td></tr>
+<tr><td>Containers</td><td>Amazon EKS</td><td>g-compute</td><td class="gap">Gap</td></tr>
+<tr><td>Database</td><td>Amazon Aurora</td><td>m02-databases</td><td class="covered">Covered</td></tr>
+<tr><td>Database</td><td>Amazon DynamoDB</td><td>m02-databases</td><td class="covered">Covered</td></tr>
+<tr><td>Database</td><td>Amazon ElastiCache</td><td>m02-databases</td><td class="covered">Covered</td></tr>
+<tr><td>Database</td><td>Amazon RDS</td><td>m02-databases</td><td class="covered">Covered</td></tr>
+<tr><td>Developer Tools</td><td>AWS Amplify</td><td>m08-cicd</td><td class="partial">Partial</td></tr>
+<tr><td>Developer Tools</td><td>AWS CloudShell</td><td>g-dev-practices</td><td class="gap">Gap</td></tr>
+<tr><td>Developer Tools</td><td>AWS CodeArtifact</td><td>m08-cicd</td><td class="partial">Partial (mention only)</td></tr>
+<tr><td>Developer Tools</td><td>AWS CodeBuild</td><td>m08-cicd</td><td class="covered">Covered</td></tr>
+<tr><td>Developer Tools</td><td>AWS CodeDeploy</td><td>m08-cicd</td><td class="covered">Covered</td></tr>
+<tr><td>Developer Tools</td><td>AWS CodePipeline</td><td>m08-cicd</td><td class="covered">Covered</td></tr>
+<tr><td>Developer Tools</td><td>AWS X-Ray</td><td>m09-observability</td><td class="covered">Covered</td></tr>
+<tr><td>Developer Tools</td><td>Amazon Q Developer</td><td>g-dev-practices</td><td class="gap">Gap</td></tr>
+<tr><td>Management and Governance</td><td>AWS AppConfig</td><td>m07-secrets-kms</td><td class="covered">Covered</td></tr>
+<tr><td>Management and Governance</td><td>AWS CDK</td><td>m08-cicd, g-iac</td><td class="covered">Covered</td></tr>
+<tr><td>Management and Governance</td><td>AWS CloudFormation</td><td>g-iac</td><td class="gap">Gap</td></tr>
+<tr><td>Management and Governance</td><td>AWS CloudTrail</td><td>m09-observability</td><td class="covered">Covered</td></tr>
+<tr><td>Management and Governance</td><td>Amazon CloudWatch</td><td>m09-observability</td><td class="covered">Covered</td></tr>
+<tr><td>Management and Governance</td><td>AWS CLI</td><td>g-dev-practices</td><td class="gap">Gap</td></tr>
+<tr><td>Management and Governance</td><td>AWS Systems Manager</td><td>m07-secrets-kms (Parameter Store), g-compute (instance access)</td><td class="partial">Partial</td></tr>
+<tr><td>Networking and Content Delivery</td><td>Amazon API Gateway</td><td>m04-api-cognito</td><td class="covered">Covered</td></tr>
+<tr><td>Networking and Content Delivery</td><td>Amazon CloudFront</td><td>m04-api-cognito</td><td class="covered">Covered</td></tr>
+<tr><td>Networking and Content Delivery</td><td>Elastic Load Balancing</td><td>g-compute, m08-cicd (ALB in labs)</td><td class="gap">Gap</td></tr>
+<tr><td>Networking and Content Delivery</td><td>Amazon Route 53</td><td>m04-api-cognito</td><td class="covered">Covered</td></tr>
+<tr><td>Networking and Content Delivery</td><td>Amazon VPC</td><td>m01-lambda, m02-databases</td><td class="partial">Partial</td></tr>
+<tr><td>Security, Identity, and Compliance</td><td>Amazon Cognito</td><td>m04-api-cognito</td><td class="covered">Covered</td></tr>
+<tr><td>Security, Identity, and Compliance</td><td>AWS IAM</td><td>g-iam-sts</td><td class="gap">Gap</td></tr>
+<tr><td>Security, Identity, and Compliance</td><td>AWS KMS</td><td>m07-secrets-kms</td><td class="covered">Covered</td></tr>
+<tr><td>Security, Identity, and Compliance</td><td>AWS Secrets Manager</td><td>m07-secrets-kms</td><td class="covered">Covered</td></tr>
+<tr><td>Security, Identity, and Compliance</td><td>AWS STS</td><td>g-iam-sts</td><td class="gap">Gap</td></tr>
+<tr><td>Security, Identity, and Compliance</td><td>AWS WAF</td><td>m04-api-cognito</td><td class="covered">Covered</td></tr>
+<tr><td>Storage</td><td>Amazon EBS</td><td>g-architecture</td><td class="gap">Gap</td></tr>
+<tr><td>Storage</td><td>Amazon EFS</td><td>g-architecture, m01-lambda</td><td class="gap">Gap</td></tr>
+<tr><td>Storage</td><td>Amazon S3</td><td>m03-s3</td><td class="covered">Covered</td></tr>
+</tbody>
+</table>
+
+<h3 id="old-services">In the version 1.0 PDF list, not in the version 2.1 list</h3>
+<p>These services have labs in this repository. Keep them in the module sets at low weight. Do not make new topics for them.</p>
+<table>
+<thead><tr><th>Service</th><th>Sets</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>AWS CodeCommit</td><td>m08-cicd</td><td>Skills 3.1.3 and 3.4.6 still use Git repositories. Teach Git triggers in general terms.</td></tr>
+<tr><td>AWS Certificate Manager (ACM), AWS Private CA</td><td>m07-secrets-kms</td><td>Skill 2.2.2 still names AWS Private CA.</td></tr>
+<tr><td>Amazon MemoryDB</td><td>m02-databases</td><td>Know only the difference from ElastiCache (durable primary database).</td></tr>
+<tr><td>Amazon S3 Glacier</td><td>m03-s3</td><td>The S3 Glacier storage classes stay in scope through Amazon S3.</td></tr>
+<tr><td>AWS SAM</td><td>m01-lambda, g-iac</td><td>Not in the 2.1 service list, but skills 1.1.7, 3.2.4, 3.3.1, 3.3.4, and 3.4.3 name it. Treat it as fully in scope.</td></tr>
+<tr><td>AWS Copilot</td><td>m08-cicd</td><td>Removed in 2.1. Skill 3.3.3 still names Copilot environments as an example. One line is enough.</td></tr>
+<tr><td>Amazon CodeGuru, AWS Cloud9, AWS CodeStar</td><td>none</td><td>Removed. Do not teach.</td></tr>
+</tbody>
+</table>
+
+<h2 id="must-also">Must also cover (module sets)</h2>
+<p>Each module set author must add these items. The module README does not teach them, or teaches them only in part. The numbers are guide skills. Items under "Check" are statements in the module README that can be out of date or wrong. Check each one against the AWS documentation before you use it.</p>
+
+<h3>m01-lambda</h3>
+<ul>
+  <li>1.2.7: near-real-time transforms. Lambda with Kinesis and DynamoDB Streams, and the Amazon Data Firehose transformation Lambda.</li>
+  <li>1.2.4, 3.2.1, 3.3.1: test code. Console test events (private and shareable), <code>sam local invoke</code> with an event file, <code>sam remote invoke</code>.</li>
+  <li>2.3.2: encrypt environment variables. The default AWS managed key, a customer managed key, and encryption helpers for encryption in transit.</li>
+  <li>1.2.1: Lambda in a VPC needs a NAT gateway for internet access, or VPC endpoints for AWS services. RDS Proxy for database connection pooling.</li>
+  <li>Storage: <code>/tmp</code> (ephemeral) compared with an Amazon EFS mount (shared, persistent).</li>
+  <li>Function URLs (auth type <code>AWS_IAM</code> or <code>NONE</code>) and response streaming.</li>
+  <li>4.3.2, 4.3.3, 4.3.7: AWS Lambda Power Tuning and AWS Compute Optimizer for memory choice. Read the <code>REPORT</code> log line (Duration, Max Memory Used, Init Duration).</li>
+  <li>3.3.3, 3.4.9: an alias as the "approved version" for an environment.</li>
+</ul>
+
+<h3>m02-databases</h3>
+<ul>
+  <li>1.3.5: serialization. DynamoDB attribute-value JSON (<code>{"S": "..."}</code>) compared with the document client or marshalling helpers. Binary attributes and base64.</li>
+  <li>DAX: item cache and query cache, write-through, microsecond reads, no strongly consistent reads through the cache.</li>
+  <li>Errors: <code>ProvisionedThroughputExceededException</code> and SDK backoff. <code>BatchWriteItem</code> and <code>BatchGetItem</code> limits and <code>UnprocessedItems</code> / <code>UnprocessedKeys</code>.</li>
+  <li>Projection expressions. Filter expressions apply after the read, so they do not reduce consumed RCUs.</li>
+  <li>DynamoDB Streams view types. Global tables. PartiQL (recognition only).</li>
+  <li>RDS Proxy. IAM database authentication. ElastiCache for Redis (Valkey) compared with Memcached.</li>
+  <li>Check: the README rule "switch billing mode only once every 24 hours". AWS changed this limit. Use the current value from the DynamoDB documentation.</li>
+</ul>
+
+<h3>m03-s3</h3>
+<ul>
+  <li>CORS configuration for browser uploads and downloads.</li>
+  <li>Access control: bucket policy compared with IAM policy and ACLs. Object Ownership (ACLs disabled by default for new buckets). Block Public Access.</li>
+  <li>S3 Transfer Acceleration. Byte-range GET requests. Presigned POST for browser form uploads.</li>
+  <li>CloudFront with origin access control (OAC) for private content. CloudFront signed URLs compared with S3 presigned URLs.</li>
+  <li>SSE-KMS and KMS request quotas (throttling). S3 Bucket Keys as the fix.</li>
+  <li>2.2.6: cross-account access to SSE-KMS objects needs the key policy and the bucket policy.</li>
+  <li>Check: S3 Select availability for new customers. Do not teach it as a first choice if AWS no longer offers it to new accounts.</li>
+</ul>
+
+<h3>m04-api-cognito</h3>
+<ul>
+  <li>3.4.2: custom domains. Edge-optimized endpoints need the ACM certificate in us-east-1. Regional endpoints need it in the API Region. Base path mappings.</li>
+  <li>3.2.2: mock integrations for tests. Canary release settings on a stage.</li>
+  <li>Error codes: 400, 403, 429, 502 (bad Lambda proxy response format), 504 (integration timeout). Gateway responses to change status codes and add CORS headers to errors.</li>
+  <li>CORS on REST and HTTP APIs.</li>
+  <li>API caching: default TTL 300 seconds, maximum 3600 seconds. A client sends <code>Cache-Control: max-age=0</code> to skip the cache. The client needs <code>execute-api:InvalidateCache</code> permission if the stage requires it.</li>
+  <li>Account throttling defaults (10,000 requests per second, 5,000 burst) and the throttle order, from most specific to least specific (usage plan per client and method, usage plan per client, stage and method, account Region limit). Check the order against the API Gateway throttling documentation.</li>
+  <li>Cognito: Lambda triggers (for example pre sign-up, pre token generation). Token lifetimes and refresh. OAuth flows (authorization code with PKCE, client credentials). Groups mapped to IAM roles.</li>
+  <li>WebSocket APIs: <code>$connect</code>, <code>$disconnect</code>, <code>$default</code>, the <code>@connections</code> API.</li>
+  <li>CloudFront: signed URLs compared with signed cookies. Lambda@Edge compared with CloudFront Functions.</li>
+  <li>Check: the README puts the <code>Cache-Control: max-age=0</code> rule under CloudFront. That rule is API Gateway cache behavior. Check the API Gateway integration timeout value against current documentation.</li>
+</ul>
+
+<h3>m05-messaging</h3>
+<ul>
+  <li>3.2.5: test event-driven applications. EventBridge archive and replay, <code>TestEventPattern</code>, and a test listener on the bus.</li>
+  <li>Lambda with SQS: partial batch response (<code>ReportBatchItemFailures</code>). Event source mapping filters. Batching window.</li>
+  <li>SNS: payload-based filter policies (<code>FilterPolicyScope: MessageBody</code>). Raw message delivery.</li>
+  <li>Kinesis: partition keys and hot shards, resharding (split, merge), the KCL and its DynamoDB lease table, <code>ProvisionedThroughputExceededException</code>, the <code>IteratorAge</code> metric.</li>
+  <li>1.2.7: Firehose transformation Lambda.</li>
+  <li>EventBridge API destinations.</li>
+  <li>Check: SQS maximum message size (AWS raised the limit above 256 KB in 2025). Check: the README says FIFO throughput is "per MessageGroupId". The quota applies per queue, and high throughput mode raises it. Use the current SQS quota page.</li>
+</ul>
+
+<h3>m06-step-functions</h3>
+<ul>
+  <li>Retry fields: <code>IntervalSeconds</code>, <code>MaxAttempts</code>, <code>BackoffRate</code>, <code>MaxDelaySeconds</code>, <code>JitterStrategy</code>.</li>
+  <li>JSONata query language and workflow variables (new in late 2024). Know that both JSONPath and JSONata exist.</li>
+  <li>Express: synchronous (<code>StartSyncExecution</code>) compared with asynchronous. Use with API Gateway.</li>
+  <li>Redrive of failed Standard executions. The saga (compensation) pattern with <code>Catch</code>.</li>
+  <li>3.2.2, 3.2.5: the <code>TestState</code> API for one state.</li>
+  <li>The payload size quota for state input and output.</li>
+  <li>Check: the README says Standard is "at-most-once". AWS documentation says Standard is exactly-once. Express is at-least-once (asynchronous) or at-most-once (synchronous).</li>
+</ul>
+
+<h3>m07-secrets-kms</h3>
+<ul>
+  <li>2.3.2: Lambda environment variable encryption (shared with m01; m07 covers the KMS side).</li>
+  <li>KMS request quotas and <code>ThrottlingException</code>. Data key caching with the AWS Encryption SDK.</li>
+  <li>Encryption context and the <code>kms:EncryptionContext</code> condition key. Multi-Region keys.</li>
+  <li>Secrets retrieval with caching: client-side caching libraries and the Parameters and Secrets Lambda Extension.</li>
+  <li>Parameter Store: parameter policies (Advanced tier), <code>GetParametersByPath</code>, <code>WithDecryption</code>.</li>
+  <li>Secrets Manager resource policies for cross-account access.</li>
+  <li>AppConfig validators (JSON schema, Lambda) and the AppConfig Agent Lambda extension.</li>
+  <li>ACM: certificates for CloudFront must be in us-east-1. DNS validation compared with email validation. Automatic renewal.</li>
+  <li>Check: the README says customer managed key rotation is "annual". KMS now lets you set a rotation period and rotate on demand. Use the current KMS documentation.</li>
+</ul>
+
+<h3>m08-cicd</h3>
+<ul>
+  <li>CodeArtifact: domains, repositories, upstream repositories, external connections (npm, PyPI, Maven), <code>get-authorization-token</code>.</li>
+  <li>3.3.3: Amplify Hosting branch deployments and pull request previews. Container image tags as approved versions. Copilot environments (one line).</li>
+  <li>3.4.9: CodePipeline triggers on branches and Git tags. Manual approval action with SNS notification.</li>
+  <li>CodeBuild: <code>env</code> section with <code>parameter-store</code> and <code>secrets-manager</code>, cache, reports, local builds.</li>
+  <li>3.4.8: CodeDeploy automatic rollback on failure or CloudWatch alarm. Rollback deploys the last good revision as a new deployment.</li>
+  <li>AppSpec hook order for EC2/On-Premises, Lambda (<code>BeforeAllowTraffic</code>, <code>AfterAllowTraffic</code>), and ECS.</li>
+  <li>Deployment configuration names, for example <code>CodeDeployDefault.LambdaCanary10Percent5Minutes</code>.</li>
+  <li>4.1.6: where deployment logs are. CodeDeploy agent logs on the instance, CodeBuild logs in CloudWatch Logs, CloudFormation stack events.</li>
+  <li>ECS rolling update settings (minimum and maximum healthy percent) and the deployment circuit breaker.</li>
+  <li>Elastic Beanstalk: <code>.platform</code> hooks, application version lifecycle policy.</li>
+  <li>Check: the README lists five Beanstalk deployment policies. The current list also has traffic splitting. Check: the README says ECS deployments are blue/green only through CodeDeploy. Check the current ECS deployment options. Check: the current status of CodeCommit for new customers.</li>
+  <li>Fix: lab 8.9 README line 169 says <code>02-fixthing.config</code> runs before <code>01-config.config</code>. Alphabetical order runs <code>01</code> first. Do not repeat this error in the sheet.</li>
+</ul>
+
+<h3>m09-observability</h3>
+<ul>
+  <li>4.1.5: CloudWatch dashboards (automatic and custom, cross-account). CloudWatch Application Signals and ServiceLens. Lambda Insights, Container Insights, Contributor Insights. CloudWatch Synthetics canaries.</li>
+  <li>4.2.7: structured logging. JSON logs, Lambda advanced logging controls (JSON log format, log level), correlation IDs, Powertools for AWS Lambda Logger.</li>
+  <li>4.2.6: X-Ray instrumentation in code. Patch SDK clients, add subsegments, the X-Ray daemon on EC2 and ECS (UDP port 2000), AWS Distro for OpenTelemetry. Sampling rules. Groups and filter expressions.</li>
+  <li>4.2.5: notifications. EventBridge rules on CodeDeploy and CodePipeline state changes to SNS. Developer Tools notification rules. Service Quotas usage metrics with CloudWatch alarms for quota limits.</li>
+  <li>2.3.5: CloudWatch Logs data protection policies (mask sensitive data, <code>logs:Unmask</code>). Link to <code>appsec-sanitize-mask</code>.</li>
+  <li>4.3.8, 4.3.9: find bottlenecks. X-Ray service map and latency histograms. Logs Insights <code>stats</code> on <code>@duration</code> and <code>@maxMemoryUsed</code>. Init Duration from the <code>REPORT</code> line.</li>
+  <li>Alarm actions (SNS, Auto Scaling, EC2), metric math, anomaly detection.</li>
+</ul>
+
+<h2 id="gap-sets">Gap sets</h2>
+<p>Six gap sets cover the gap rows. Topic ID rule: each gap set uses its own prefix (<code>iam-</code>, <code>appsec-</code>, <code>iac-</code>, <code>dev-</code>, <code>arch-</code>, <code>compute-</code>). Module set authors must not use these prefixes. Gap set authors must not use module prefixes such as <code>lambda-</code>, <code>ddb-</code>, <code>s3-</code>, <code>api-</code>, <code>sqs-</code>, <code>kms-</code>, <code>cw-</code>, <code>xray-</code>, <code>code-</code>, or <code>ecs-</code>. Each topic lists the exam knowledge it must contain. The set author can add more.</p>
+<p>Candidates from the design spec, section 6.2: "IAM and STS" became <code>g-iam-sts</code> and <code>g-app-security</code> (too many topics for one set). "Infrastructure as code" became <code>g-iac</code>. "SDK and development practices" became <code>g-dev-practices</code>. "Architecture patterns" became <code>g-architecture</code>, with data store choice and storage options added. "Containers and compute extras": module 8 labs 8.5, 8.8, and 8.9 teach ECS roles, ECR, and Beanstalk policies. The remaining gaps (EC2, load balancing, health checks, EKS) became <code>g-compute</code>.</p>
+
+<section class="set" id="g-iam-sts">
+<h3>g-iam-sts: IAM and STS for developers</h3>
+<p><strong>Skills:</strong> 2.1.1 (IAM federation), 2.1.3, 2.1.4, 2.1.5, 2.1.6, 2.2.6 (cross-account side). <strong>Services:</strong> IAM, STS. <strong>Domain:</strong> mostly 2.</p>
+<div class="topic"><code>iam-policy-types</code>: Policy types
+<ul><li>Identity-based policies: AWS managed, customer managed, and inline. When to use each one.</li>
+<li>Resource-based policies (S3, SQS, SNS, KMS, Lambda, Secrets Manager). They have a <code>Principal</code> element.</li>
+<li>Permissions boundaries, service control policies, and session policies limit permissions. They never grant permissions.</li></ul></div>
+<div class="topic"><code>iam-policy-evaluation</code>: Policy evaluation logic
+<ul><li>An explicit deny overrides any allow. With no allow, the result is an implicit deny.</li>
+<li>In one account, an allow in the identity policy or the resource policy is enough.</li>
+<li>Across accounts, both the identity policy and the resource policy must allow the action.</li>
+<li>Boundaries and SCPs intersect with identity policies.</li></ul></div>
+<div class="topic"><code>iam-policy-elements</code>: Policy elements and conditions
+<ul><li><code>Effect</code>, <code>Action</code>, <code>Resource</code>, <code>Condition</code>, <code>Principal</code>, <code>NotAction</code>. ARN formats and wildcards.</li>
+<li>Common condition keys: <code>aws:SourceIp</code>, <code>aws:SecureTransport</code>, <code>aws:MultiFactorAuthPresent</code>, <code>aws:PrincipalTag</code>, <code>aws:SourceArn</code>.</li>
+<li>Policy variables, for example <code>${aws:username}</code>.</li></ul></div>
+<div class="topic"><code>iam-roles-trust</code>: Roles and trust policies
+<ul><li>A role has a trust policy (who can assume it) and permissions policies (what it can do).</li>
+<li>Service roles and service-linked roles.</li>
+<li><code>iam:PassRole</code>: a user needs it to give a role to a service (Lambda, ECS, EC2).</li></ul></div>
+<div class="topic"><code>iam-sts-assume-role</code>: STS operations
+<ul><li><code>AssumeRole</code>, <code>AssumeRoleWithWebIdentity</code>, <code>AssumeRoleWithSAML</code>, <code>GetSessionToken</code> (MFA), <code>GetCallerIdentity</code>.</li>
+<li>Temporary credentials: access key ID, secret access key, session token.</li>
+<li>Session duration: 15 minutes up to the role maximum (1 to 12 hours). Role chaining limits the session to 1 hour.</li>
+<li><code>ExternalId</code> for third-party access.</li></ul></div>
+<div class="topic"><code>iam-cross-account</code>: Cross-account access
+<ul><li>Two methods: assume a role in the other account, or use a resource-based policy that names the other account.</li>
+<li>With a resource-based policy, the caller keeps its own permissions. With a role, the caller gives them up.</li>
+<li>Confused deputy protection: <code>aws:SourceArn</code> and <code>aws:SourceAccount</code> in resource policies.</li></ul></div>
+<div class="topic"><code>iam-credential-chain</code>: Programmatic access and the credential provider chain
+<ul><li>The SDK default chain: environment variables, shared config and credentials files (profiles), web identity, container credentials, instance profile. The exact order differs a little by SDK.</li>
+<li>Never put access keys in code. Use roles on AWS compute. Use <code>aws sso login</code> or temporary credentials on a developer machine.</li>
+<li>Signature Version 4 signs each request. The SDK and CLI do this for you.</li></ul></div>
+<div class="topic"><code>iam-compute-roles</code>: Roles for compute
+<ul><li>EC2 instance profile. Credentials come from the instance metadata service.</li>
+<li>Lambda execution role (what the function can call) compared with the function resource-based policy (who can invoke the function).</li>
+<li>ECS task role compared with task execution role (link to m08). EKS Pod Identity and IAM roles for service accounts.</li></ul></div>
+<div class="topic"><code>iam-federation</code>: Federation
+<ul><li>SAML 2.0 compared with OpenID Connect.</li>
+<li>Web identity federation: AWS recommends Cognito identity pools for mobile and web apps.</li>
+<li>IAM Identity Center for workforce users and CLI access.</li></ul></div>
+<div class="topic"><code>iam-least-privilege</code>: Least privilege and access control models
+<ul><li>Start from AWS managed policies, then narrow with customer managed policies.</li>
+<li>IAM Access Analyzer: policy validation and policy generation from CloudTrail activity. Last accessed information.</li>
+<li>RBAC (roles per job) compared with ABAC (tags on principals and resources).</li></ul></div>
+<div class="topic"><code>iam-troubleshooting</code>: Troubleshooting access denied
+<ul><li><code>AccessDenied</code> and <code>UnauthorizedOperation</code> errors. Read which policy type denied the call.</li>
+<li><code>aws sts decode-authorization-message</code> for encoded failure messages.</li>
+<li>IAM policy simulator. CloudTrail records denied API calls.</li></ul></div>
+</section>
+
+<section class="set" id="g-app-security">
+<h3>g-app-security: Application security and sensitive data</h3>
+<p><strong>Skills:</strong> 2.1.2, 2.1.7, 2.1.8, 2.2.1, 2.2.5, 2.3.1, 2.3.4, 2.3.5, 2.3.6. <strong>Services:</strong> Cognito, API Gateway, IAM, CloudWatch Logs, ACM, EC2 key pairs. <strong>Domain:</strong> 2.</p>
+<div class="topic"><code>appsec-data-classification</code>: Data classification
+<ul><li>PII, PHI, and payment data. Classification controls encryption, logging, retention, and access.</li>
+<li>Know what counts as PII and PHI in an exam scenario.</li>
+<li>Collect and keep only the data that the application needs.</li></ul></div>
+<div class="topic"><code>appsec-sanitize-mask</code>: Sanitizing and masking data
+<ul><li>Validate input and encode output. Remove or mask sensitive fields before you write logs.</li>
+<li>CloudWatch Logs data protection policies mask sensitive data. Only principals with <code>logs:Unmask</code> see the original values.</li>
+<li>S3 Object Lambda to redact data on read (link to m03).</li>
+<li>Masking (partial display) compared with tokenization and encryption.</li></ul></div>
+<div class="topic"><code>appsec-jwt-validation</code>: Bearer tokens and JWT validation
+<ul><li>JWT parts: header, payload, signature. Validate the signature with the issuer JSON Web Key Set (JWKS).</li>
+<li>Check <code>iss</code>, <code>aud</code> or <code>client_id</code>, <code>exp</code>, and <code>token_use</code>.</li>
+<li>ID token compared with access token. Send bearer tokens only over HTTPS.</li></ul></div>
+<div class="topic"><code>appsec-fine-grained-authz</code>: Application-level authorization
+<ul><li>OAuth scopes in access tokens. Method authorization scopes in API Gateway.</li>
+<li>Cognito groups for roles. A Lambda authorizer returns a policy and context values.</li>
+<li>ACL-based authorization compared with role-based and attribute-based authorization.</li></ul></div>
+<div class="topic"><code>appsec-service-to-service</code>: Cross-service authentication
+<ul><li>OAuth 2.0 client credentials grant with a Cognito resource server and custom scopes (machine-to-machine).</li>
+<li>IAM authorization with SigV4 between services (API Gateway <code>AWS_IAM</code>, Lambda function URL <code>AWS_IAM</code>).</li>
+<li>Mutual TLS on API Gateway custom domains. Private APIs with VPC endpoints.</li></ul></div>
+<div class="topic"><code>appsec-multi-tenant</code>: Multi-tenant data access
+<ul><li>Silo (resource per tenant) compared with pool (shared resource with tenant key) isolation.</li>
+<li>DynamoDB fine-grained access: the <code>dynamodb:LeadingKeys</code> condition with an identity variable such as <code>${cognito-identity.amazonaws.com:sub}</code>.</li>
+<li>S3 prefix per tenant with policy variables. Take the tenant ID from the verified token, not from the request body.</li></ul></div>
+<div class="topic"><code>appsec-encryption-in-transit</code>: Encryption in transit
+<ul><li>TLS for every connection. Deny HTTP with <code>aws:SecureTransport</code>.</li>
+<li>ACM certificates on ALB, CloudFront, and API Gateway. CloudFront viewer protocol policy (redirect to HTTPS).</li>
+<li>At rest compared with in transit. Which services encrypt at rest by default.</li></ul></div>
+<div class="topic"><code>appsec-dev-certs-keys</code>: Certificates and SSH keys for development
+<ul><li>EC2 key pairs: create in AWS or import a public key from <code>ssh-keygen</code>. AWS does not keep the private key.</li>
+<li>Self-signed certificates (for example with OpenSSL) for local development only.</li>
+<li>AWS Private CA for internal certificates. ACM public certificates for public endpoints.</li></ul></div>
+</section>
+
+<section class="set" id="g-iac">
+<h3>g-iac: Infrastructure as code (CloudFormation, SAM, CDK)</h3>
+<p><strong>Skills:</strong> 1.1.7 (SAM), 3.1.1, 3.1.2, 3.1.5, 3.2.4, 3.3.1 (SAM events), 3.3.4, 3.4.3, 3.4.4, 3.4.11 (SAM), 4.1.6 (stack events). <strong>Services:</strong> CloudFormation, SAM, CDK. <strong>Domain:</strong> 3.</p>
+<div class="topic"><code>iac-cfn-template</code>: Template anatomy
+<ul><li>Sections: <code>Parameters</code>, <code>Mappings</code>, <code>Conditions</code>, <code>Transform</code>, <code>Resources</code>, <code>Outputs</code>, <code>Metadata</code>. Only <code>Resources</code> is required.</li>
+<li>Parameter types, including <code>AWS::SSM::Parameter::Value&lt;String&gt;</code>. Pseudo parameters (<code>AWS::Region</code>, <code>AWS::AccountId</code>, <code>AWS::StackName</code>).</li></ul></div>
+<div class="topic"><code>iac-cfn-intrinsics</code>: Intrinsic functions and dynamic references
+<ul><li><code>Ref</code>, <code>Fn::GetAtt</code>, <code>Fn::Sub</code>, <code>Fn::Join</code>, <code>Fn::FindInMap</code>, <code>Fn::If</code>, <code>Fn::Select</code>, <code>Fn::Split</code>, <code>Fn::ImportValue</code>.</li>
+<li>What <code>Ref</code> returns compared with <code>Fn::GetAtt</code> for common resources.</li>
+<li>Dynamic references: <code>{{resolve:ssm:...}}</code> and <code>{{resolve:secretsmanager:...}}</code>. Keep secrets out of templates.</li></ul></div>
+<div class="topic"><code>iac-cfn-multi-stack</code>: Exports, nested stacks, and StackSets
+<ul><li><code>Outputs</code> with <code>Export</code> and <code>Fn::ImportValue</code>. Same account and same Region only. You cannot delete or change an export that another stack imports.</li>
+<li>Nested stacks (<code>AWS::CloudFormation::Stack</code>) for reuse compared with cross-stack references for shared resources.</li>
+<li>StackSets deploy one template to many accounts and Regions.</li></ul></div>
+<div class="topic"><code>iac-cfn-updates</code>: Stack updates and rollback
+<ul><li>Change sets show changes before you run them. Update behaviors: no interruption, some interruption, replacement.</li>
+<li>Automatic rollback on failure. <code>UPDATE_ROLLBACK_FAILED</code> and continue update rollback.</li>
+<li>Stack policies, termination protection, drift detection.</li>
+<li>4.1.6: read the stack events to find the first failed resource.</li></ul></div>
+<div class="topic"><code>iac-cfn-resource-policies</code>: Resource attributes and helper scripts
+<ul><li><code>DeletionPolicy</code> (<code>Delete</code>, <code>Retain</code>, <code>Snapshot</code>) and <code>UpdateReplacePolicy</code>. <code>DependsOn</code>.</li>
+<li><code>CreationPolicy</code> with <code>cfn-signal</code>. <code>cfn-init</code> and <code>cfn-hup</code> on EC2.</li>
+<li>Lambda-backed custom resources for logic that CloudFormation does not support.</li></ul></div>
+<div class="topic"><code>iac-sam-template</code>: SAM templates
+<ul><li><code>Transform: AWS::Serverless-2016-10-31</code>. SAM expands into CloudFormation.</li>
+<li>Resource types: <code>AWS::Serverless::Function</code>, <code>Api</code>, <code>HttpApi</code>, <code>SimpleTable</code>, <code>LayerVersion</code>, <code>StateMachine</code>, <code>Application</code>. The <code>Globals</code> section. The <code>Events</code> property.</li>
+<li>Policy templates (for example <code>DynamoDBCrudPolicy</code>, <code>S3ReadPolicy</code>, <code>SQSPollerPolicy</code>). SAM connectors.</li></ul></div>
+<div class="topic"><code>iac-sam-cli</code>: SAM CLI workflow and local testing
+<ul><li><code>sam build</code>, <code>sam deploy --guided</code>, <code>samconfig.toml</code>, and <code>--config-env</code> for each environment.</li>
+<li><code>sam local invoke</code>, <code>sam local start-api</code>, <code>sam local start-lambda</code>, <code>sam local generate-event</code>.</li>
+<li><code>sam sync --watch</code> is for development stacks only. <code>sam logs</code>, <code>sam remote invoke</code>.</li></ul></div>
+<div class="topic"><code>iac-sam-safe-deploy</code>: SAM gradual deployments
+<ul><li><code>AutoPublishAlias</code> publishes a version and moves an alias.</li>
+<li><code>DeploymentPreference</code> types (for example <code>Canary10Percent5Minutes</code>, <code>Linear10PercentEvery1Minute</code>, <code>AllAtOnce</code>). SAM creates the CodeDeploy resources.</li>
+<li><code>PreTraffic</code> and <code>PostTraffic</code> hook functions. CloudWatch alarms for automatic rollback.</li></ul></div>
+<div class="topic"><code>iac-cdk</code>: AWS CDK concepts
+<ul><li>App, stack, construct. L1 (<code>Cfn*</code>), L2, and L3 (patterns) constructs.</li>
+<li><code>cdk bootstrap</code> creates the <code>CDKToolkit</code> stack (asset bucket, ECR repository, roles). <code>cdk synth</code> writes the cloud assembly. <code>cdk diff</code>, <code>cdk deploy</code>.</li>
+<li>Grant methods (for example <code>table.grantReadData(fn)</code>). <code>cdk watch</code> and hotswap are for development only.</li></ul></div>
+<div class="topic"><code>iac-environments</code>: One template, many environments
+<ul><li>Parameters, mappings, and conditions for each stage. Separate stacks for each environment.</li>
+<li>3.2.4: deploy the same SAM template to a staging environment with a different config environment or parameter overrides.</li>
+<li>CodePipeline CloudFormation actions: create or update a stack, create and run a change set.</li></ul></div>
+<div class="topic"><code>iac-packaging</code>: Packaging and project layout
+<ul><li><code>aws cloudformation package</code> and <code>sam package</code> upload local code (<code>CodeUri</code>) to S3 and rewrite the template.</li>
+<li>Project layout: one folder for each function, a dependency file for each function, and layers for shared code.</li>
+<li>Container image functions: <code>PackageType: Image</code>, image in ECR.</li></ul></div>
+</section>
+
+<section class="set" id="g-dev-practices">
+<h3>g-dev-practices: SDK, CLI, testing, and Amazon Q Developer</h3>
+<p><strong>Skills:</strong> 1.1.5, 1.1.7, 1.1.9, 1.1.11, 1.1.13, 1.2.4, 2.1.3 (CLI side), 3.2.1, 3.2.2, 3.2.5, 3.3.1, 3.3.6, 4.1.1, 4.1.7. <strong>Services:</strong> AWS SDKs, AWS CLI, CloudShell, Amazon Q Developer. <strong>Domains:</strong> 1, 3, 4.</p>
+<div class="topic"><code>dev-sdk-retries</code>: SDK retries and backoff
+<ul><li>SDKs retry throttling errors, 5xx errors, and timeouts. They do not retry most 4xx errors.</li>
+<li>Exponential backoff with jitter. Why jitter spreads retries from many clients.</li>
+<li>Retry modes: legacy, standard, adaptive (client-side rate limiting). Set the maximum attempts.</li></ul></div>
+<div class="topic"><code>dev-sdk-errors</code>: HTTP status codes and SDK exceptions
+<ul><li>400 (validation), 403 (access denied), 404 (not found), 429 (throttling), 500, 502, 503, 504. Which ones to retry.</li>
+<li>Common exceptions: <code>ThrottlingException</code>, <code>ProvisionedThroughputExceededException</code>, <code>ConditionalCheckFailedException</code>, <code>AccessDeniedException</code>, Lambda <code>TooManyRequestsException</code>.</li></ul></div>
+<div class="topic"><code>dev-sdk-pagination</code>: Pagination and batch calls
+<ul><li>Tokens: <code>NextToken</code>, <code>LastEvaluatedKey</code>, <code>ContinuationToken</code>. SDK paginators.</li>
+<li>CLI: <code>--page-size</code>, <code>--max-items</code>, <code>--starting-token</code>, <code>--no-paginate</code>.</li>
+<li>Batch calls can partly fail. Retry unprocessed items with backoff.</li></ul></div>
+<div class="topic"><code>dev-idempotency</code>: Idempotency
+<ul><li>At-least-once delivery (SQS standard, async Lambda, EventBridge) means a handler can run twice.</li>
+<li>Idempotency keys and client tokens. Conditional writes record "already done".</li>
+<li>Powertools for AWS Lambda idempotency utility with a DynamoDB table.</li></ul></div>
+<div class="topic"><code>dev-resilience</code>: Resilient calls to other services
+<ul><li>Timeouts on every call. Retries with a limit. Circuit breaker states (closed, open, half-open).</li>
+<li>Fallback responses and graceful degradation. Dead-letter queues for work that fails many times.</li>
+<li>Choose Step Functions retries for orchestrated steps and code retries for single calls.</li></ul></div>
+<div class="topic"><code>dev-cli-cloudshell</code>: AWS CLI and CloudShell
+<ul><li>Named profiles, <code>--profile</code>, <code>--region</code>, <code>--output</code>.</li>
+<li><code>--query</code> (JMESPath, client side) compared with server-side <code>--filter</code> options. <code>--dry-run</code> for EC2 permission checks. <code>--cli-input-json</code>.</li>
+<li>CloudShell: browser shell with the console user's credentials, 1 GB persistent home directory in each Region.</li></ul></div>
+<div class="topic"><code>dev-unit-testing</code>: Unit tests and mocks
+<ul><li>Keep business logic out of the handler. Inject SDK clients so tests can replace them.</li>
+<li>Mock AWS calls with stub libraries (for example <code>moto</code>, botocore Stubber, <code>aws-sdk-client-mock</code>).</li>
+<li>Test events: JSON payloads for Lambda, API Gateway, and SQS. <code>sam local generate-event</code> makes them.</li></ul></div>
+<div class="topic"><code>dev-integration-testing</code>: Integration tests and event-driven tests
+<ul><li>Test deployed code in a test stack: <code>sam remote invoke</code>, API Gateway test invoke, Lambda console tests.</li>
+<li>API Gateway mock integrations stand in for a backend that is not ready.</li>
+<li>Event-driven tests: send an event, then poll the result store with a timeout. EventBridge archive and replay. Step Functions <code>TestState</code>.</li></ul></div>
+<div class="topic"><code>dev-debugging</code>: Debugging defects and integration problems
+<ul><li>Read stack traces in CloudWatch Logs. Reproduce with the same event locally.</li>
+<li>Integration problems: missing IAM permission, wrong Region or ARN, timeout too short, wrong payload format between services (for example a Lambda proxy response without <code>statusCode</code> gives API Gateway 502).</li>
+<li>Use X-Ray to find which downstream call fails.</li></ul></div>
+<div class="topic"><code>dev-amazon-q</code>: Amazon Q Developer
+<ul><li>In the IDE: inline code suggestions, chat, code explanation, and agent tasks.</li>
+<li>3.3.6: generate unit tests. Code reviews and security scans. Code transformation (for example language version upgrades).</li>
+<li>Reference tracking shows license information for code similar to open-source code.</li>
+<li>In the console: help to diagnose errors. Pro tier admin controls. Check current feature names in the Amazon Q Developer documentation.</li></ul></div>
+</section>
+
+<section class="set" id="g-architecture">
+<h3>g-architecture: Architecture patterns and data store choice</h3>
+<p><strong>Skills:</strong> 1.1.1, 1.1.2, 1.1.3, 1.1.4, 1.1.12 (pattern side), 1.3.6, 1.3.9, 4.3.6. <strong>Services:</strong> OpenSearch Service, Athena, EBS, EFS, with SNS, SQS, EventBridge, Step Functions as examples. <strong>Domains:</strong> 1, 4.</p>
+<div class="topic"><code>arch-event-driven</code>: Event-driven architecture and fanout
+<ul><li>Events (something happened) compared with commands (do this). Producers do not know consumers.</li>
+<li>Fanout: SNS to many SQS queues, or one EventBridge rule with many targets.</li>
+<li>When to choose SNS, EventBridge, or SQS (link to m05).</li></ul></div>
+<div class="topic"><code>arch-microservices</code>: Monolithic compared with microservices
+<ul><li>A monolith deploys as one unit. Microservices deploy and scale on their own.</li>
+<li>Each microservice owns its data and exposes an API or events.</li>
+<li>Trade-offs: network calls, distributed tracing, and partial failure.</li></ul></div>
+<div class="topic"><code>arch-orchestration</code>: Orchestration compared with choreography
+<ul><li>Orchestration: one controller (Step Functions) runs the steps. Choreography: services react to events.</li>
+<li>Saga pattern: compensating actions undo earlier steps after a failure.</li>
+<li>Exam signals: "central visibility" and "approval step" point to orchestration. "Add consumers without changing the producer" points to choreography.</li></ul></div>
+<div class="topic"><code>arch-coupling-sync</code>: Coupling and synchronous compared with asynchronous
+<ul><li>Tight coupling: the caller waits and fails when the callee fails. Loose coupling: a queue or bus sits between them.</li>
+<li>Synchronous: API Gateway to Lambda, <code>RequestResponse</code> invoke. Asynchronous: <code>Event</code> invoke, SQS, SNS, EventBridge.</li>
+<li>Queues for load leveling: SQS absorbs spikes and protects a slow backend.</li></ul></div>
+<div class="topic"><code>arch-stateless</code>: Stateful compared with stateless
+<ul><li>Stateless compute keeps no session data between requests, so any instance can serve any request.</li>
+<li>Store session state outside the compute (DynamoDB, ElastiCache).</li>
+<li>Sticky sessions keep state on one instance and reduce scaling. Lambda environment reuse is not durable state.</li></ul></div>
+<div class="topic"><code>arch-caching-layers</code>: Application-level caching
+<ul><li>Cache layers: CloudFront, API Gateway cache, ElastiCache, DAX, and in-memory cache in the Lambda execution environment.</li>
+<li>Choose the layer by what changes and who reads it. Set TTLs to limit stale data.</li>
+<li>Strategy definitions (lazy loading, write-through) are in m02. This topic covers where to cache.</li></ul></div>
+<div class="topic"><code>arch-storage-options</code>: Storage options: block, file, object, ephemeral
+<ul><li>EBS: block storage in one Availability Zone, usually attached to one instance.</li>
+<li>EFS: shared NFS file system across Availability Zones. EC2, ECS, and Lambda can mount it.</li>
+<li>S3: object storage. Instance store and Lambda <code>/tmp</code>: ephemeral, data is lost.</li></ul></div>
+<div class="topic"><code>arch-purpose-built-data</code>: Purpose-built data stores
+<ul><li>Choose by access pattern: DynamoDB (key-value), RDS and Aurora (relational, joins), ElastiCache (in-memory).</li>
+<li>OpenSearch Service: full-text search and log analytics. DynamoDB data can flow to OpenSearch (streams or zero-ETL integration).</li>
+<li>Athena: serverless SQL on data in S3. You pay for data scanned. Partitions and columnar formats (Parquet) reduce cost.</li></ul></div>
+</section>
+
+<section class="set" id="g-compute">
+<h3>g-compute: EC2, load balancing, health checks, and EKS</h3>
+<p><strong>Skills:</strong> 3.1.1 (container images), 3.1.4, 4.2.8, 4.3.3, 4.3.7. <strong>Services:</strong> EC2, Elastic Load Balancing, EKS, ECR, Systems Manager. <strong>Domains:</strong> 3, 4.</p>
+<div class="topic"><code>compute-ec2-dev</code>: EC2 for developers
+<ul><li>User data runs at first boot as root by default. Use it for setup scripts.</li>
+<li>Instance metadata service: IMDSv2 needs a session token (PUT request, then GET with the token header). Hop limit 2 for containers on the instance.</li>
+<li>Instance profile credentials (link to <code>iam-compute-roles</code>). Systems Manager Session Manager for shell access without SSH.</li></ul></div>
+<div class="topic"><code>compute-elb</code>: Elastic Load Balancing
+<ul><li>ALB: layer 7, path and host rules, Lambda targets. NLB: layer 4, static IP addresses, very high throughput.</li>
+<li>Target groups, deregistration delay, sticky sessions, <code>X-Forwarded-For</code>.</li>
+<li>ALB errors: 502 (bad response from target), 503 (no healthy targets), 504 (target timeout).</li></ul></div>
+<div class="topic"><code>compute-health-checks</code>: Health checks and readiness probes
+<ul><li>Target group health checks: path, interval, healthy and unhealthy thresholds.</li>
+<li>ECS container health checks and the service health check grace period.</li>
+<li>Kubernetes probes on EKS: liveness (restart), readiness (stop traffic), startup. Route 53 health checks.</li>
+<li>Shallow checks (process is up) compared with deep checks (dependencies work).</li></ul></div>
+<div class="topic"><code>compute-container-images</code>: Container images
+<ul><li>Dockerfile practice: multi-stage builds, small base images, layer order for cache reuse.</li>
+<li>Push to ECR: <code>aws ecr get-login-password</code> to <code>docker login</code>, then tag and push. Immutable tags and image digests for approved versions.</li>
+<li>Lambda container images: AWS base images or the runtime interface client.</li></ul></div>
+<div class="topic"><code>compute-eks</code>: Amazon EKS basics
+<ul><li>EKS runs the Kubernetes control plane for you. Pods, deployments, services.</li>
+<li>Pod permissions: EKS Pod Identity or IAM roles for service accounts.</li>
+<li>When to choose EKS (Kubernetes tools and portability) compared with ECS (simpler, AWS native).</li></ul></div>
+<div class="topic"><code>compute-sizing</code>: Resource sizing and usage
+<ul><li>3.1.4: set memory and CPU for each compute type: Lambda memory (CPU follows), Fargate task size, EC2 instance families.</li>
+<li>4.3.3: find the minimum size with load tests and metrics (CPU, memory, duration).</li>
+<li>4.3.7: AWS Compute Optimizer recommendations. Auto Scaling on the right metric.</li></ul></div>
+</section>
+
+<p class="muted">Data from the DVA-C02 exam guide version 2.1. The module columns come from the module README files and lab README headings in this repository.</p>
+</body>
+</html>
