@@ -14,7 +14,7 @@ function withStudy(edit, check) {
     edit({
       replace(file, from, to) {
         const full = path.join(dir, file);
-        const text = fs.readFileSync(full, "utf8");
+        const text = fs.readFileSync(full, "utf8").replace(/\r\n/g, "\n");
         assert.ok(text.includes(from), `fixture edit missing in ${file}: ${from}`);
         fs.writeFileSync(full, text.replace(from, to));
       },
