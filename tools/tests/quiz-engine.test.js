@@ -209,3 +209,86 @@ test("historyEntries maps each result to a storage entry", () => {
     { q: "q2", set: "set-q2", topic: "b", ok: false, t: 1760000000000 },
   ]);
 });
+
+function withGlobals(values, fn) {
+  const saved = {};
+  for (const key of Object.keys(values)) {
+    saved[key] = Object.getOwnPropertyDescriptor(globalThis, key);
+    Object.defineProperty(globalThis, key, { value: values[key], configurable: true, writable: true });
+  }
+  try {
+    fn();
+  } finally {
+    for (const key of Object.keys(values)) {
+      if (saved[key]) Object.defineProperty(globalThis, key, saved[key]);
+      else delete globalThis[key];
+    }
+  }
+}
+
+const fakeSets = [
+  { id: "s01", title: "Set one", kind: "module", path: "sets/s01/", topics: [{ id: "a", title: "Topic A" }] },
+  { id: "s02", title: "Set two", kind: "gap", path: "sets/s02/", topics: [{ id: "b", title: "Topic B" }, { id: "c", title: "Topic C" }] },
+];
+
+test("allQuestions flattens the banks and adds setId", () => {
+  const banks = [
+    { setId: "s01", questions: [makeQuestion("s01-001", "a", 1)] },
+    { setId: "s02", questions: [makeQuestion("s02-001", "b", 2), makeQuestion("s02-002", "c", 3)] },
+  ];
+  withGlobals({ STUDY_SETS: fakeSets, QUESTION_BANKS: banks }, () => {
+    const all = Q.allQuestions();
+    assert.deepStrictEqual(all.map((q) => [q.id, q.setId]), [["s01-001", "s01"], ["s02-001", "s02"], ["s02-002", "s02"]]);
+  });
+  withGlobals({ STUDY_SETS: fakeSets, QUESTION_BANKS: undefined }, () => {
+    assert.deepStrictEqual(Q.allQuestions(), []);
+  });
+});
+
+test("setById and topicById find entries in any set", () => {
+  withGlobals({ STUDY_SETS: fakeSets }, () => {
+    assert.strictEqual(Q.setById("s02"), fakeSets[1]);
+    assert.strictEqual(Q.setById("nope"), null);
+    const found = Q.topicById("c");
+    assert.strictEqual(found.set, fakeSets[1]);
+    assert.strictEqual(found.topic, fakeSets[1].topics[1]);
+    assert.strictEqual(Q.topicById("nope"), null);
+  });
+});
+
+test("loadHistory drops null and malformed entries", () => {
+  const fake = fakeStorage();
+  withStorage(fake, () => {
+    const good = { q: "q1", set: "s", topic: "t", ok: true, t: 1 };
+    const stored = [null, "x", 5, [], { q: "x" }, { q: "q2", topic: "t", ok: "yes", t: 2 }, { q: "q3", topic: "t", ok: true, t: "3" }, good];
+    fake.setItem(Q.STORAGE_KEY, JSON.stringify(stored));
+    assert.deepStrictEqual(Q.loadHistory(), [good]);
+    assert.deepStrictEqual(Q.topicStats(Q.loadHistory()), { t: { accuracy: 1, count: 1 } });
+  });
+});
+
+test("optionOrder is a permutation that maps display picks to original indexes", () => {
+  const q = makeQuestion("q", "t", 1, [3]);
+  const order = Q.optionOrder(q, mulberry32(8));
+  assert.deepStrictEqual([...order].sort(), [0, 1, 2, 3, 4]);
+  const displayIndexOfCorrect = order.indexOf(3);
+  assert.strictEqual(Q.isCorrect(q, [order[displayIndexOfCorrect]]), true);
+});
+
+test("unansweredNumbers lists 1-based positions with no selection", () => {
+  const qs = [makeQuestion("q1", "a", 1), makeQuestion("q2", "a", 1), makeQuestion("q3", "a", 1)];
+  assert.deepStrictEqual(Q.unansweredNumbers(qs, { q2: [1], q3: [] }), [1, 3]);
+  assert.deepStrictEqual(Q.unansweredNumbers(qs, { q1: [0], q2: [1], q3: [2] }), []);
+});
+
+test("latestSetScore scores only the newest attempt for the set", () => {
+  const history = [
+    { q: "q1", set: "s01", topic: "a", ok: false, t: 1 },
+    { q: "q2", set: "s01", topic: "a", ok: false, t: 1 },
+    { q: "q1", set: "s01", topic: "a", ok: true, t: 5 },
+    { q: "q2", set: "s01", topic: "a", ok: false, t: 5 },
+    { q: "x1", set: "s02", topic: "b", ok: true, t: 9 },
+  ];
+  assert.deepStrictEqual(Q.latestSetScore(history, "s01"), { correct: 1, total: 2, t: 5 });
+  assert.strictEqual(Q.latestSetScore(history, "s03"), null);
+});
