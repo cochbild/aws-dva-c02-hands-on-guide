@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Module 3 — S3: study sheet</title>
+<link rel="stylesheet" href="../../assets/study.css">
+</head>
+<body>
+<header>
+  <h1>Module 3 — S3</h1>
+  <p>Study sheet for the AWS Certified Developer – Associate (DVA-C02) exam. Facts checked against AWS documentation in October 2026.</p>
+  <nav class="links">
+    <a href="../../index.html">Home</a>
+    <a href="../../index.html#quiz/m03-s3">Take the quiz</a>
+  </nav>
+</header>
+
+<nav class="toc">
+  <h2>Topics</h2>
+  <ol>
+    <li><a href="#s3-fundamentals">Buckets, objects, consistency, and request rates</a></li>
+    <li><a href="#s3-storage-classes">Storage classes and archive retrieval</a></li>
+    <li><a href="#s3-lifecycle">Lifecycle rules</a></li>
+    <li><a href="#s3-versioning">Versioning, MFA Delete, and Object Lock</a></li>
+    <li><a href="#s3-replication">Replication</a></li>
+    <li><a href="#s3-multipart">Multipart upload and Transfer Acceleration</a></li>
+    <li><a href="#s3-presigned">Presigned URLs</a></li>
+    <li><a href="#s3-encryption">Encryption options and enforcement</a></li>
+    <li><a href="#s3-kms">SSE-KMS permissions, Bucket Keys, and cross-account access</a></li>
+    <li><a href="#s3-access">Bucket policies, Object Ownership, and access points</a></li>
+    <li><a href="#s3-website-cors">Static websites, CloudFront OAC, and CORS</a></li>
+    <li><a href="#s3-events">Event notifications and EventBridge</a></li>
+    <li><a href="#s3-object-lambda">S3 Object Lambda</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="s3-fundamentals">
+  <h2>Buckets, objects, consistency, and request rates</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>A bucket is in one AWS Region. Objects do not leave the Region unless you copy or replicate them.</li>
+    <li>By default, a general purpose bucket name must be unique across all AWS accounts in the partition. You cannot change the name or the Region after you create the bucket.</li>
+    <li>An object has a key, data, and metadata. User-defined metadata uses the <code>x-amz-meta-</code> prefix.</li>
+    <li>All buckets and objects are private by default. Block Public Access is on by default for new buckets.</li>
+    <li>Use <code>ListObjectsV2</code> for new code. Use <code>HeadObject</code> to read metadata without the body.</li>
+    <li>Amazon S3 Select (<code>SelectObjectContent</code>) is no longer available to new customers. Do not choose it for a new design. Older study material shows it as the way to query part of an object.</li>
+  </ul>
+  <h3>Consistency</h3>
+  <ul>
+    <li>S3 gives <strong>strong read-after-write consistency</strong> for PUT and DELETE of objects, in all Regions. A read or LIST after a successful write returns the new data.</li>
+    <li>An update to one key is atomic. A reader gets the old object or the new object, never a mix.</li>
+    <li>S3 does not lock objects for concurrent writers. If two PUT requests to the same key occur together, the latest timestamp wins.</li>
+    <li>To stop an overwrite of an existing key, use a conditional write on <code>PutObject</code> or <code>CompleteMultipartUpload</code>.</li>
+    <li>Bucket configurations are eventually consistent. AWS recommends that you wait 15 minutes after you first enable versioning before you write objects.</li>
+    <li>Older study material says that S3 is eventually consistent for overwrites and deletes. That rule is out of date.</li>
+  </ul>
+  <h3>Numbers to memorize</h3>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>Request rate for each partitioned prefix</td><td>At least 3,500 PUT/COPY/POST/DELETE and 5,500 GET/HEAD requests per second</td></tr>
+    <tr><td>Number of prefixes in a bucket</td><td>No limit</td></tr>
+    <tr><td>Bucket policy size</td><td>20 KB</td></tr>
+    <tr><td>Durability (all storage classes except Reduced Redundancy)</td><td>99.999999999% (11 nines)</td></tr>
+  </table>
+  <ul>
+    <li>S3 scales to a higher request rate gradually. During scaling, clients can get HTTP 503 (Slow Down) errors. Retry with exponential backoff.</li>
+    <li>Spread requests across more prefixes to get more total throughput. For example, 10 prefixes can give 55,000 reads per second.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Read the object immediately after the PUT returns" → S3 is strongly consistent. No delay or retry loop is necessary.</li>
+      <li>"503 Slow Down at high request rates" → more prefixes, and retries with exponential backoff.</li>
+      <li>"Do not overwrite the object if the key exists" → conditional write.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html#ConsistencyModel">S3 consistency model</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html">Optimizing S3 performance</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/upload-objects.html">Uploading objects (conditional writes)</a>. Lab: <a href="../../../module-03-s3-patterns/lab-01-bucket-basics/README.md">Lab 3.1 Bucket basics</a>.</p>
+</section>
+
+<section id="s3-storage-classes">
+  <h2>Storage classes and archive retrieval</h2>
+  <h3>Comparison</h3>
+  <table>
+    <tr><th>Class</th><th>Availability (designed)</th><th>AZs</th><th>Minimum storage duration</th><th>Minimum billable size</th><th>Access</th></tr>
+    <tr><td>S3 Standard</td><td>99.99%</td><td>3 or more</td><td>None</td><td>None</td><td>Milliseconds</td></tr>
+    <tr><td>S3 Intelligent-Tiering</td><td>99.9%</td><td>3 or more</td><td>None</td><td>None</td><td>Milliseconds (optional archive tiers need a restore)</td></tr>
+    <tr><td>S3 Standard-IA</td><td>99.9%</td><td>3 or more</td><td>30 days</td><td>128 KB</td><td>Milliseconds, retrieval fee</td></tr>
+    <tr><td>S3 One Zone-IA</td><td>99.5%</td><td>1</td><td>30 days</td><td>128 KB</td><td>Milliseconds, retrieval fee</td></tr>
+    <tr><td>S3 Glacier Instant Retrieval</td><td>99.9%</td><td>3 or more</td><td>90 days</td><td>128 KB</td><td>Milliseconds, retrieval fee</td></tr>
+    <tr><td>S3 Glacier Flexible Retrieval</td><td>99.99% (after restore)</td><td>3 or more</td><td>90 days</td><td>40 KB metadata added to each object</td><td>Restore first: minutes to hours</td></tr>
+    <tr><td>S3 Glacier Deep Archive</td><td>99.99% (after restore)</td><td>3 or more</td><td>180 days</td><td>40 KB metadata added to each object</td><td>Restore first: hours</td></tr>
+  </table>
+  <h3>Key facts</h3>
+  <ul>
+    <li>S3 Standard is the default class when the upload does not specify a class.</li>
+    <li>Intelligent-Tiering moves objects between tiers by access pattern. It has a small monitoring fee for each object and no retrieval fees.</li>
+    <li>Intelligent-Tiering does not monitor objects smaller than 128 KB. They stay in the Frequent Access tier.</li>
+    <li>One Zone-IA is not resilient to the loss of an Availability Zone. Use it only for data that you can create again.</li>
+    <li>If you delete or move an object before its minimum storage duration, you pay for the rest of that duration.</li>
+    <li>Glacier Flexible Retrieval and Glacier Deep Archive objects are archived. Call <code>RestoreObject</code> to make a temporary copy. The storage class does not change.</li>
+  </ul>
+  <h3>Archive retrieval tiers</h3>
+  <table>
+    <tr><th>Tier</th><th>Glacier Flexible Retrieval</th><th>Glacier Deep Archive</th></tr>
+    <tr><td>Expedited</td><td>1–5 minutes (objects under 250 MB)</td><td>Not available</td></tr>
+    <tr><td>Standard (default)</td><td>3–5 hours</td><td>Within 12 hours</td></tr>
+    <tr><td>Bulk (lowest cost)</td><td>5–12 hours</td><td>Within 48 hours</td></tr>
+  </table>
+  <ul>
+    <li>Without provisioned capacity, S3 can refuse Expedited requests at times of high demand. Provisioned capacity makes Expedited capacity available.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Unknown or changing access pattern, no retrieval fees" → S3 Intelligent-Tiering.</li>
+      <li>"Rarely accessed, but must be available in milliseconds" → S3 Glacier Instant Retrieval.</li>
+      <li>"Archive for years, 48 hours to restore is acceptable, lowest cost" → S3 Glacier Deep Archive with Bulk retrieval.</li>
+      <li>"Need a few archived files in minutes" → Glacier Flexible Retrieval with Expedited retrieval.</li>
+      <li>"Data can be created again, lowest cost infrequent access" → S3 One Zone-IA.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html#sc-compare">Comparing storage classes</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/restoring-objects-retrieval-options.html">Archive retrieval options</a>. Lab: <a href="../../../module-03-s3-patterns/lab-05-versioning-lifecycle/README.md">Lab 3.5 Versioning and lifecycle</a>.</p>
+</section>
+
+<section id="s3-lifecycle">
+  <h2>Lifecycle rules</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>A lifecycle rule has a filter (prefix, tags, object size, or a combination) and one or more actions.</li>
+    <li><strong>Transition</strong> actions move objects to a colder storage class. <strong>Expiration</strong> actions delete objects.</li>
+    <li>For a versioned bucket, use <code>NoncurrentVersionTransition</code> and <code>NoncurrentVersionExpiration</code> for old versions. <code>NewerNoncurrentVersions</code> keeps a number of recent versions (1 to 100).</li>
+    <li>In a versioned bucket, <code>Expiration</code> on the current version adds a delete marker. It does not remove data.</li>
+    <li>An <strong>expired object delete marker</strong> is a delete marker with no noncurrent versions. Remove these with <code>ExpiredObjectDeleteMarker</code> set to <code>true</code>. You cannot use it with <code>Days</code> in the same rule.</li>
+    <li><code>AbortIncompleteMultipartUpload</code> deletes the parts of uploads that did not complete after a number of days. A rule with this action cannot use a tag filter.</li>
+    <li>Transitions follow a waterfall: from warmer classes to colder classes. A rule cannot move an object from S3 Glacier Deep Archive to another class.</li>
+    <li>Lifecycle transitions are asynchronous. An object can transition some time after the rule date.</li>
+  </ul>
+  <h3>Rules that changed recently</h3>
+  <ul>
+    <li>Since September 2024, by default, lifecycle rules do not transition objects smaller than 128 KB. To transition them, add an object size filter such as <code>ObjectSizeGreaterThan</code>.</li>
+    <li>Since July 2026, new lifecycle rules can transition objects to S3 Standard-IA or S3 One Zone-IA on the day that you create them. Older study material says that objects must stay 30 days in S3 Standard first. The 30-day minimum storage charge for the IA classes still applies.</li>
+    <li>One rule cannot transition an object out of a class before the minimum storage duration of that class. Example: after Glacier Instant Retrieval on day 4, a Deep Archive transition must be on day 94 or later.</li>
+  </ul>
+  <h3>When actions conflict on the same day</h3>
+  <ul>
+    <li>Permanent deletion wins over transition.</li>
+    <li>Transition wins over creation of a delete marker.</li>
+    <li>If an object qualifies for S3 Glacier Flexible Retrieval and S3 Standard-IA, S3 chooses S3 Glacier Flexible Retrieval.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Storage cost grows, but the object list does not show the data" → incomplete multipart uploads. Add <code>AbortIncompleteMultipartUpload</code>.</li>
+      <li>"Delete old versions 30 days after they become noncurrent" → <code>NoncurrentVersionExpiration</code> with <code>NoncurrentDays</code> 30.</li>
+      <li>"Small objects do not transition" → the 128 KB default. Add an object size filter.</li>
+      <li>"Move, then delete on a schedule, with no code" → one lifecycle rule with transition and expiration actions.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-transition-general-considerations.html">Lifecycle transitions</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-configuration-examples.html">Lifecycle configuration examples</a>, <a href="https://aws.amazon.com/about-aws/whats-new/2026/07/s3-removes-30-day-transitions-standard-ia-one-zone-ia/">30-day transition minimum removed (July 2026)</a>. Labs: <a href="../../../module-03-s3-patterns/lab-05-versioning-lifecycle/README.md">Lab 3.5 Versioning and lifecycle</a>, <a href="../../../module-03-s3-patterns/lab-03-multipart-upload/README.md">Lab 3.3 Multipart upload</a>.</p>
+</section>
+
+<section id="s3-versioning">
+  <h2>Versioning, MFA Delete, and Object Lock</h2>
+  <h3>Versioning</h3>
+  <ul>
+    <li>A bucket is in one of three states: unversioned (default), versioning-enabled, or versioning-suspended.</li>
+    <li>After you enable versioning, the bucket can never return to unversioned. You can only suspend versioning.</li>
+    <li>Objects that existed before you enabled versioning have the version ID <code>null</code>.</li>
+    <li>Each version is a full object. You pay for the storage of every version.</li>
+    <li>A DELETE without a version ID adds a <strong>delete marker</strong>. The delete marker becomes the current version. The data stays.</li>
+    <li>To restore the object, delete the delete marker. To delete a version permanently, send a DELETE with its version ID.</li>
+  </ul>
+  <h3>MFA Delete</h3>
+  <ul>
+    <li>MFA Delete requires an MFA code to permanently delete a version or to change the versioning state.</li>
+    <li>Only the bucket owner (root account) can enable MFA Delete.</li>
+    <li>You cannot enable MFA Delete in the console. Use the AWS CLI (<code>put-bucket-versioning --mfa</code>) or the API.</li>
+    <li>You cannot use MFA Delete with lifecycle configurations.</li>
+  </ul>
+  <h3>Object Lock</h3>
+  <ul>
+    <li>Object Lock stores object versions as write-once-read-many (WORM). It works only with versioning enabled.</li>
+    <li>You can enable Object Lock when you create a bucket or on an existing bucket. After you enable it, you cannot disable Object Lock or suspend versioning.</li>
+    <li>A lock protects one object version. A new PUT to the same key creates a new version. A simple DELETE adds a delete marker.</li>
+  </ul>
+  <table>
+    <tr><th>Protection</th><th>Behavior</th></tr>
+    <tr><td>Compliance mode</td><td>No user can delete or overwrite the version, including the root user. You cannot shorten the period or change the mode.</td></tr>
+    <tr><td>Governance mode</td><td>Users with <code>s3:BypassGovernanceRetention</code> can delete or change the lock. The request must include the <code>x-amz-bypass-governance-retention:true</code> header.</td></tr>
+    <tr><td>Legal hold</td><td>Has no end date. It stays until a user with <code>s3:PutObjectLegalHold</code> removes it. It is independent of the retention period.</td></tr>
+  </table>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Recover from accidental deletes and overwrites" → versioning.</li>
+      <li>"Restore a deleted object in a versioned bucket" → delete the delete marker.</li>
+      <li>"Require MFA to permanently delete versions" → MFA Delete, enabled by the root user with the CLI.</li>
+      <li>"No one, not even root, can delete for 7 years" → Object Lock compliance mode.</li>
+      <li>"Protect until the audit ends, end date unknown" → legal hold.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html">Versioning</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/MultiFactorAuthenticationDelete.html">MFA Delete</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html">Object Lock</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock-configure.html">Configuring Object Lock</a>. Lab: <a href="../../../module-03-s3-patterns/lab-05-versioning-lifecycle/README.md">Lab 3.5 Versioning and lifecycle</a>.</p>
+</section>
+
+<section id="s3-replication">
+  <h2>Replication</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Replication copies objects asynchronously to one or more destination buckets. The buckets can be in the same account or in different accounts.</li>
+    <li><strong>Cross-Region Replication (CRR)</strong> copies to another Region: compliance distance, lower latency for users, compute in two Regions.</li>
+    <li><strong>Same-Region Replication (SRR)</strong> copies in the same Region: log aggregation, production to test copies, data sovereignty. SRR has no data transfer charge.</li>
+    <li>Versioning must be enabled on the source and on each destination bucket.</li>
+    <li>S3 needs an IAM role with permission to replicate. For a cross-account destination, the destination bucket policy must allow the source owner.</li>
+    <li>Live replication does not copy objects that existed before you added the rule. Use <strong>S3 Batch Replication</strong> for existing objects and for objects that failed.</li>
+    <li>If the source bucket uses Object Lock, the destination buckets must also use Object Lock.</li>
+    <li><strong>S3 Replication Time Control (RTC)</strong> replicates 99.99 percent of new objects within 15 minutes, with an SLA.</li>
+    <li>You can replicate into a different storage class, for example S3 Glacier Deep Archive in the destination.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Copy existing objects to the new destination" → S3 Batch Replication.</li>
+      <li>"Replicate within 15 minutes with an SLA" → S3 Replication Time Control.</li>
+      <li>"Replication setup fails" → check versioning on both buckets and the replication role.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html">Replication overview</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication-requirements.html">Replication requirements</a>. Lab: <a href="../../../module-03-s3-patterns/README.md">Module 3 overview</a>.</p>
+</section>
+
+<section id="s3-multipart">
+  <h2>Multipart upload and Transfer Acceleration</h2>
+  <h3>Numbers to memorize</h3>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>Single <code>PutObject</code></td><td>Up to 5 GB</td></tr>
+    <tr><td>Console upload</td><td>Up to 160 GB</td></tr>
+    <tr><td>Multipart upload object size</td><td>Up to 50 TB (48.8 TiB). Older study material says 5 TB.</td></tr>
+    <tr><td>Parts for each upload</td><td>1 to 10,000</td></tr>
+    <tr><td>Part size</td><td>5 MiB to 5 GiB. The last part has no minimum.</td></tr>
+    <tr><td>When to consider multipart</td><td>Objects of 100 MB or larger</td></tr>
+  </table>
+  <h3>Multipart flow</h3>
+  <ol>
+    <li><code>CreateMultipartUpload</code> returns an <code>UploadId</code>.</li>
+    <li><code>UploadPart</code> sends each part. Parts can upload in parallel and in any order. Each part returns an ETag.</li>
+    <li><code>CompleteMultipartUpload</code> sends the part numbers and ETags. S3 builds the object in part-number order.</li>
+    <li><code>AbortMultipartUpload</code> stops the upload and deletes the parts.</li>
+  </ol>
+  <ul>
+    <li>Until you complete or abort the upload, you pay for the stored parts. <code>ListObjectsV2</code> does not show them. <code>ListMultipartUploads</code> does.</li>
+    <li>A part smaller than 5 MiB that is not the last part makes <code>CompleteMultipartUpload</code> fail with <code>EntityTooSmall</code>.</li>
+    <li>If one part fails, upload only that part again.</li>
+    <li>The ETag of a multipart object is not the MD5 of the whole object. Use additional checksums (for example CRC32 or SHA-256) to check integrity.</li>
+    <li>The SDK transfer managers and the AWS CLI <code>s3 cp</code> command use multipart upload automatically for large files.</li>
+  </ul>
+  <h3>Transfer Acceleration</h3>
+  <ul>
+    <li>Transfer Acceleration sends data through CloudFront edge locations, then over the AWS network to the bucket. Use it for long-distance uploads and downloads.</li>
+    <li>Enable it on the bucket. Then use the endpoint <code>&lt;bucket&gt;.s3-accelerate.amazonaws.com</code>.</li>
+    <li>The bucket name must be DNS-compliant and must not contain periods.</li>
+    <li>After you enable it, the speed increase can take up to 20 minutes to start.</li>
+  </ul>
+  <h3>Downloads</h3>
+  <ul>
+    <li>Use byte-range GET requests (the <code>Range</code> header) to download parts of a large object in parallel.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Upload a 20 GB file" → multipart upload. A single PUT allows 5 GB.</li>
+      <li>"Resume a failed upload without starting again" → multipart upload. Upload only the failed parts.</li>
+      <li>"Users on other continents upload slowly to one bucket" → Transfer Acceleration.</li>
+      <li>"<code>EntityTooSmall</code> on complete" → parts must be at least 5 MiB, except the last part.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html">Multipart upload limits</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/upload-objects.html">Uploading objects</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/transfer-acceleration.html">Transfer Acceleration</a>. Lab: <a href="../../../module-03-s3-patterns/lab-03-multipart-upload/README.md">Lab 3.3 Multipart upload</a>.</p>
+</section>
+
+<section id="s3-presigned">
+  <h2>Presigned URLs</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>A presigned URL gives time-limited access to one object for one HTTP method. The user of the URL does not need AWS credentials.</li>
+    <li>The URL uses the credentials and the permissions of the principal that created it. If that principal cannot do the action, the URL fails.</li>
+    <li>The SDK creates the URL locally with SigV4. Creating the URL does not call AWS.</li>
+    <li>A presigned URL is a bearer token. Anyone who has the URL can use it, many times, until it expires.</li>
+    <li>A URL for <code>PutObject</code> works only for PUT. Create a separate URL for GET.</li>
+    <li>A presigned PUT replaces an existing object with the same key.</li>
+    <li>Parameters such as <code>ContentType</code> and <code>ServerSideEncryption</code> become signed headers. The client must send the same values, or S3 returns 403 <code>SignatureDoesNotMatch</code>. A backend uses this to force upload settings.</li>
+    <li>S3 checks the expiration time when the request starts. A download that started before expiration can finish.</li>
+  </ul>
+  <h3>Expiration limits</h3>
+  <table>
+    <tr><th>Signed with</th><th>Maximum validity</th></tr>
+    <tr><td>S3 console</td><td>1 minute to 12 hours</td></tr>
+    <tr><td>IAM user long-term keys (CLI or SDK, SigV4)</td><td>7 days (604,800 seconds)</td></tr>
+    <tr><td>Temporary credentials (IAM role, STS)</td><td>Ends when the credentials expire, even if the URL asks for longer. AssumeRole sessions last 1 hour by default.</td></tr>
+    <tr><td>EC2 instance profile credentials</td><td>About 6 hours</td></tr>
+  </table>
+  <h3>Limit or stop presigned URLs</h3>
+  <ul>
+    <li>You cannot revoke one URL. But a URL stops working when the signing credentials are revoked, deleted, or deactivated.</li>
+    <li>Keep <code>ExpiresIn</code> short.</li>
+    <li>Bucket policy condition <code>s3:signatureAge</code> denies requests with an old signature (value in milliseconds).</li>
+    <li>Conditions <code>aws:SourceIp</code> (public endpoint) or <code>aws:SourceVpce</code> / <code>aws:SourceVpc</code> (VPC endpoint) limit the network path.</li>
+  </ul>
+  <h3>Presigned POST (browser form upload)</h3>
+  <ul>
+    <li>A presigned POST lets an HTML form or browser script upload directly to S3 with an HTTP POST. The backend signs a <strong>POST policy</strong>.</li>
+    <li>The POST policy has an <code>expiration</code> and <code>conditions</code>. Conditions can fix the bucket, limit the key with <code>starts-with</code>, and limit the file size with <code>content-length-range</code>.</li>
+    <li>S3 rejects an upload that does not meet the conditions.</li>
+    <li>SDK helpers: <code>generate_presigned_post</code> (Python) and <code>createPresignedPost</code> (JavaScript v3).</li>
+  </ul>
+  <h3>S3 presigned URL compared with CloudFront signed URL</h3>
+  <table>
+    <tr><th>Item</th><th>S3 presigned URL</th><th>CloudFront signed URL or signed cookie</th></tr>
+    <tr><td>Signed with</td><td>AWS credentials of an IAM principal (SigV4)</td><td>A private key. The public key is in a trusted key group of the distribution.</td></tr>
+    <tr><td>Path</td><td>Directly to the S3 endpoint</td><td>Through CloudFront edge locations (caching). Use with OAC so users cannot go to S3 directly.</td></tr>
+    <tr><td>Scope</td><td>One object, one method</td><td>Signed URL: one file. Signed cookie: many files without URL changes.</td></tr>
+  </table>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Browser or mobile client uploads directly to S3 without AWS credentials" → backend returns a presigned PUT URL.</li>
+      <li>"Backend must force the encryption type or content type of client uploads" → sign those headers into the URL.</li>
+      <li>"URL fails before ExpiresIn" → it was signed with temporary credentials that expired.</li>
+      <li>"Share a private file for 3 days from the CLI" → <code>aws s3 presign --expires-in 259200</code> with IAM user credentials.</li>
+      <li>"HTML form upload, limit the file size and the key prefix" → presigned POST with <code>content-length-range</code> and <code>starts-with</code>.</li>
+      <li>"Private content for paying users, served through CloudFront" → CloudFront signed URLs or signed cookies, with OAC on the bucket.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html">Presigned URLs (credentials, expiration, limits)</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/ShareObjectPreSignedURL.html">Sharing objects with presigned URLs</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html">POST policy</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-choosing-signed-urls-cookies.html">CloudFront signed URLs or signed cookies</a>. Lab: <a href="../../../module-03-s3-patterns/lab-02-presigned-urls/README.md">Lab 3.2 Presigned URLs</a>.</p>
+</section>
+
+<section id="s3-encryption">
+  <h2>Encryption options and enforcement</h2>
+  <h3>Comparison</h3>
+  <table>
+    <tr><th>Option</th><th>Who manages the key</th><th>Notes</th></tr>
+    <tr><td>SSE-S3 (<code>AES256</code>)</td><td>Amazon S3</td><td>Default for all new uploads since January 5, 2023. No extra cost.</td></tr>
+    <tr><td>SSE-KMS (<code>aws:kms</code>)</td><td>AWS KMS: AWS managed key <code>aws/s3</code> or a customer managed key</td><td>Key policy control, CloudTrail record of key use, KMS request charges. See the SSE-KMS topic.</td></tr>
+    <tr><td>DSSE-KMS (<code>aws:kms:dsse</code>)</td><td>AWS KMS</td><td>Two layers of encryption. S3 Bucket Keys are not supported.</td></tr>
+    <tr><td>SSE-C</td><td>You. You send the key with each request.</td><td>S3 never stores the key. Disabled by default for new buckets since April 2026.</td></tr>
+    <tr><td>Client-side encryption</td><td>You</td><td>Encrypt before upload, for example with the Amazon S3 Encryption Client. S3 never sees plaintext.</td></tr>
+  </table>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Server-side encryption encrypts object data, not object metadata.</li>
+    <li>Default bucket encryption (<code>PutBucketEncryption</code>) applies when an upload does not specify encryption. A request header can choose a different supported type.</li>
+    <li>To encrypt an existing object with a new setting, copy the object onto itself with <code>CopyObject</code>.</li>
+    <li>For SSE-KMS objects, do not send encryption headers on GET or HEAD. S3 returns HTTP 400.</li>
+  </ul>
+  <h3>SSE-C</h3>
+  <ul>
+    <li>Send the algorithm (AES256), the base64 key, and the base64 MD5 of the key with each PUT and GET.</li>
+    <li>You must use HTTPS. S3 rejects SSE-C requests over HTTP.</li>
+    <li>If you lose the key, you lose the object. The console does not support SSE-C uploads.</li>
+    <li>Since April 2026, S3 blocks SSE-C on new general purpose buckets. A blocked request gets HTTP 403 <code>AccessDenied</code>. To allow it, set <code>BlockedEncryptionTypes</code> to <code>NONE</code> with <code>PutBucketEncryption</code>.</li>
+  </ul>
+  <h3>Enforce encryption with a bucket policy</h3>
+  <ul>
+    <li>Encryption in transit: deny all actions when <code>aws:SecureTransport</code> is <code>false</code>.</li>
+    <li>Require SSE-KMS: deny <code>s3:PutObject</code> when <code>s3:x-amz-server-side-encryption-aws-kms-key-id</code> is null.</li>
+    <li>Require one specific KMS key: use the <code>s3:x-amz-server-side-encryption-aws-kms-key-id</code> condition with the full key ARN.</li>
+    <li>A deny policy rejects uploads that do not meet the rule. Default encryption encrypts uploads that send no header. Use the policy to reject, and default encryption to encrypt without client changes.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Audit each use of the key, control rotation and key access" → SSE-KMS with a customer managed key.</li>
+      <li>"Data must be encrypted before it leaves the application" → client-side encryption.</li>
+      <li>"Company must supply and keep its own keys, no KMS" → SSE-C (enable it on new buckets first).</li>
+      <li>"Deny any request that does not use HTTPS" → <code>aws:SecureTransport</code> false in a deny statement.</li>
+      <li>"Old exam text says objects are not encrypted by default" → out of date. SSE-S3 applies to all new uploads.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingKMSEncryption.html">SSE-KMS (requiring encryption)</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/ServerSideEncryptionCustomerKeys.html">SSE-C (April 2026 default)</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingClientSideEncryption.html">Client-side encryption</a>. Lab: <a href="../../../module-03-s3-patterns/lab-04-encryption-variants/README.md">Lab 3.4 Encryption variants</a>.</p>
+</section>
+
+<section id="s3-kms">
+  <h2>SSE-KMS permissions, Bucket Keys, and cross-account access</h2>
+  <h3>Permissions</h3>
+  <table>
+    <tr><th>Operation</th><th>KMS permission on the key</th></tr>
+    <tr><td><code>PutObject</code> with SSE-KMS</td><td><code>kms:GenerateDataKey</code></td></tr>
+    <tr><td><code>GetObject</code> of an SSE-KMS object</td><td><code>kms:Decrypt</code></td></tr>
+    <tr><td>Multipart upload with SSE-KMS</td><td><code>kms:GenerateDataKey</code> and <code>kms:Decrypt</code></td></tr>
+  </table>
+  <ul>
+    <li>The caller needs the S3 permission and the KMS permission. An S3 allow alone does not decrypt the object.</li>
+    <li>The KMS key must be in the same Region as the bucket. S3 supports only symmetric encryption KMS keys.</li>
+    <li>S3 uses envelope encryption: KMS creates a data key, S3 encrypts the object with it, and S3 stores the encrypted data key with the object.</li>
+  </ul>
+  <h3>Cross-account access</h3>
+  <ul>
+    <li>You cannot share objects encrypted with the AWS managed key <code>aws/s3</code> across accounts. Use a customer managed key.</li>
+    <li>The key policy of the customer managed key must allow the other account. The bucket policy must also allow the other account. The principal in the other account needs an IAM policy for S3 and KMS.</li>
+    <li>Use the full key ARN, not an alias. An alias resolves in the account of the requester.</li>
+    <li>KMS counts cross-account requests against the quota of the calling account.</li>
+  </ul>
+  <h3>S3 Bucket Keys</h3>
+  <ul>
+    <li>A Bucket Key is a short-lived bucket-level key from KMS. S3 uses it to create data keys, so S3 calls KMS less often.</li>
+    <li>Bucket Keys can reduce KMS request costs by up to 99 percent. No client changes are necessary.</li>
+    <li>Bucket Keys apply to new objects only. To use one for an existing object, copy the object.</li>
+    <li>With a Bucket Key, the encryption context is the bucket ARN, not the object ARN. Update IAM or key policies that use the object ARN as encryption context.</li>
+    <li>With a Bucket Key, CloudTrail shows fewer KMS events, and they show the bucket ARN.</li>
+  </ul>
+  <h3>Throttling</h3>
+  <ul>
+    <li>Each SSE-KMS upload or download makes a KMS request (without a Bucket Key). These requests count toward the shared KMS request quota of the account in the Region.</li>
+    <li>Over the quota, KMS throttles the requests (<code>ThrottlingException</code>). Fix with Bucket Keys, or request a quota increase.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"KMS costs are high, or KMS throttles S3 requests" → enable S3 Bucket Keys.</li>
+      <li>"Small uploads work, multipart uploads get AccessDenied" → add <code>kms:Decrypt</code>.</li>
+      <li>"Other account gets AccessDenied for SSE-KMS objects" → customer managed key with a key policy for that account, and a bucket policy.</li>
+      <li>"Key policy uses the object ARN in encryption context, access fails after a change" → Bucket Key changed the context to the bucket ARN.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingKMSEncryption.html">SSE-KMS permissions and cross-account use</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-key.html">S3 Bucket Keys</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/requests-per-second.html">KMS request quotas</a>. Lab: <a href="../../../module-03-s3-patterns/lab-04-encryption-variants/README.md">Lab 3.4 Encryption variants</a>.</p>
+</section>
+
+<section id="s3-access">
+  <h2>Bucket policies, Object Ownership, and access points</h2>
+  <h3>Policy evaluation</h3>
+  <ul>
+    <li>Access to S3 uses IAM identity policies, bucket policies, access point policies, and (when enabled) ACLs.</li>
+    <li>In the same account, an allow in the IAM policy or in the bucket policy is enough. An explicit deny in any policy wins.</li>
+    <li>Across accounts, the bucket policy (or access point policy) must allow the other account, and the IAM policy in the other account must allow the action.</li>
+    <li>Bucket ARN (<code>arn:aws:s3:::bucket</code>) is for bucket actions such as <code>s3:ListBucket</code>. Object ARN (<code>arn:aws:s3:::bucket/*</code>) is for object actions such as <code>s3:GetObject</code>.</li>
+  </ul>
+  <h3>Object Ownership and ACLs</h3>
+  <table>
+    <tr><th>Setting</th><th>Behavior</th></tr>
+    <tr><td>Bucket owner enforced (default)</td><td>ACLs are disabled. The bucket owner owns every object. Policies control all access.</td></tr>
+    <tr><td>Bucket owner preferred</td><td>ACLs are enabled. The bucket owner owns new objects written with the <code>bucket-owner-full-control</code> canned ACL.</td></tr>
+    <tr><td>Object writer</td><td>ACLs are enabled. The uploading account owns the object.</td></tr>
+  </table>
+  <ul>
+    <li>With ACLs disabled, a PUT with an ACL other than bucket owner full control fails with <code>AccessControlListNotSupported</code>.</li>
+    <li>AWS recommends that you keep ACLs disabled and use policies.</li>
+  </ul>
+  <h3>Block Public Access</h3>
+  <ul>
+    <li>Block Public Access settings are on by default for new buckets. They override policies and ACLs that grant public access.</li>
+    <li>You can set them on the account, the bucket, and each access point.</li>
+  </ul>
+  <h3>Access points and VPC access</h3>
+  <ul>
+    <li>An access point is a named endpoint with its own access point policy. Use access points to manage access to a shared dataset for many applications.</li>
+    <li>You can configure an access point to accept requests only from a VPC.</li>
+    <li>From a VPC, use a gateway endpoint for S3 so traffic does not use the internet.</li>
+    <li>To allow only VPC traffic, deny requests in the bucket policy when <code>aws:SourceVpce</code> (or <code>aws:SourceVpc</code>) does not match. <code>aws:SourceIp</code> does not work for requests through a VPC endpoint.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Another account uploads, the bucket owner must own the objects, no ACLs" → Bucket owner enforced.</li>
+      <li>"Many applications share one bucket, the bucket policy is too large" → one access point for each application.</li>
+      <li>"Only allow access from our VPC endpoint" → bucket policy deny with <code>aws:SourceVpce</code>.</li>
+      <li>"Public bucket policy is rejected when saved" → Block Public Access is on.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/about-object-ownership.html">Object Ownership</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html">Block Public Access</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-points.html">Access points</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html#PresignedUrlUploadObject-LimitCapabilities">Network condition keys</a>. Lab: <a href="../../../module-03-s3-patterns/lab-01-bucket-basics/README.md">Lab 3.1 Bucket basics</a>.</p>
+</section>
+
+<section id="s3-website-cors">
+  <h2>Static websites, CloudFront OAC, and CORS</h2>
+  <h3>Static website hosting</h3>
+  <ul>
+    <li>Website endpoint: <code>http://&lt;bucket&gt;.s3-website-&lt;region&gt;.amazonaws.com</code> or <code>http://&lt;bucket&gt;.s3-website.&lt;region&gt;.amazonaws.com</code>, by Region.</li>
+    <li>Configure an index document and an optional error document. The website endpoint supports redirects.</li>
+    <li>The website endpoint serves only publicly readable content. Turn off Block Public Access for the bucket and add a bucket policy that allows <code>s3:GetObject</code> to everyone.</li>
+    <li>The website endpoint does not support HTTPS or access points. It supports only GET and HEAD on objects.</li>
+    <li>For HTTPS, put Amazon CloudFront in front of the content, or use AWS Amplify Hosting.</li>
+    <li>Requester Pays buckets do not allow access through the website endpoint.</li>
+  </ul>
+  <h3>CloudFront with origin access control (OAC)</h3>
+  <ul>
+    <li>OAC lets CloudFront send signed requests to a private S3 bucket. The bucket stays private, and Block Public Access can stay on.</li>
+    <li>The bucket policy allows the service principal <code>cloudfront.amazonaws.com</code>, with a condition <code>AWS:SourceArn</code> equal to the distribution ARN.</li>
+    <li>For SSE-KMS objects, the KMS key policy must also allow <code>cloudfront.amazonaws.com</code> for that distribution.</li>
+    <li>AWS recommends OAC instead of the legacy origin access identity (OAI). OAI does not support SSE-KMS, dynamic requests (PUT, POST, DELETE), or newer Regions.</li>
+    <li>OAC works with the S3 REST endpoint, not with a website endpoint. A website endpoint is a custom origin.</li>
+    <li>With OAC, keep Object Ownership at Bucket owner enforced (the default).</li>
+  </ul>
+  <h3>CORS</h3>
+  <ul>
+    <li>A browser blocks JavaScript requests to a different origin unless the server allows it. Configure CORS on the bucket that receives the requests.</li>
+    <li>Rule elements: <code>AllowedOrigins</code>, <code>AllowedMethods</code> (GET, PUT, POST, DELETE, HEAD), <code>AllowedHeaders</code>, <code>ExposeHeaders</code>, <code>MaxAgeSeconds</code>.</li>
+    <li>A configuration can have up to 100 rules. The console accepts only JSON.</li>
+    <li>S3 uses the first rule that matches the origin, the method, and the requested headers.</li>
+    <li>CORS does not grant permission. Policies and ACLs still apply.</li>
+    <li>To read a response header in JavaScript (for example <code>ETag</code> in a browser multipart upload), list it in <code>ExposeHeaders</code>.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Browser shows a CORS error when the page calls the bucket" → CORS configuration on the target bucket.</li>
+      <li>"Static site must use HTTPS and a custom domain" → CloudFront in front of S3.</li>
+      <li>"Users must reach the files only through CloudFront, bucket stays private" → OAC and a bucket policy for the distribution.</li>
+      <li>"CloudFront with OAC returns 403 for SSE-KMS objects" → add the distribution to the KMS key policy.</li>
+      <li>"Website returns 403 for every page" → objects are not public: Block Public Access or a missing bucket policy.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/WebsiteEndpoints.html">Website endpoints</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/cors.html">CORS</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/ManageCorsUsing.html">CORS configuration elements</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html">CloudFront OAC</a>. Lab: <a href="../../../module-03-s3-patterns/lab-01-bucket-basics/README.md">Lab 3.1 Bucket basics</a>.</p>
+</section>
+
+<section id="s3-events">
+  <h2>Event notifications and EventBridge</h2>
+  <h3>Direct event notifications</h3>
+  <ul>
+    <li>Destinations: Amazon SNS topic, Amazon SQS queue, AWS Lambda function, and Amazon EventBridge.</li>
+    <li>SQS FIFO queues are not supported as a direct destination. Use EventBridge to reach a FIFO queue.</li>
+    <li>Delivery is at least once. Events usually arrive in seconds, but can take a minute or longer. Make consumers idempotent.</li>
+    <li>S3 invokes Lambda <strong>asynchronously</strong>. The function resource-based policy must allow <code>s3.amazonaws.com</code>.</li>
+    <li>The SQS queue policy or SNS topic policy must allow S3 to send messages.</li>
+    <li>Event types include <code>s3:ObjectCreated:*</code> (Put, Post, Copy, CompleteMultipartUpload), <code>s3:ObjectRemoved:*</code>, restore, replication, lifecycle, and tagging events. <code>s3:ObjectCreated:Put</code> alone misses copies, POST uploads, and multipart uploads.</li>
+    <li>The message has a <code>Records</code> array with the bucket name and the object key. It does not contain the object data.</li>
+  </ul>
+  <h3>Filters</h3>
+  <ul>
+    <li>Filter only by key prefix and key suffix. Wildcards (<code>*</code>) are not allowed.</li>
+    <li>For the same event type, rules cannot overlap. Two rules with the same prefix fail unless their suffixes do not overlap.</li>
+    <li>Rules for different event types can overlap.</li>
+    <li>To send one event to several consumers, send it to an SNS topic (fan-out) or use EventBridge.</li>
+  </ul>
+  <h3>EventBridge</h3>
+  <ul>
+    <li>Turn on EventBridge for the bucket. S3 then sends all supported events to the default event bus. You do not choose event types on the bucket.</li>
+    <li>EventBridge rules filter on any field, for example object size or key patterns, and send to many target types.</li>
+    <li>Event format: <code>source</code> is <code>aws.s3</code>, <code>detail-type</code> is for example <code>Object Created</code>.</li>
+  </ul>
+  <h3>Loops</h3>
+  <ul>
+    <li>If the function writes to the bucket that invokes it, it can invoke itself in a loop. Use a second bucket, or limit the trigger to an input prefix.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Several services must react to each upload" → SNS fan-out or EventBridge.</li>
+      <li>"Filter on object size or on a pattern in the middle of the key" → EventBridge rule.</li>
+      <li>"Send S3 events to a FIFO queue" → EventBridge.</li>
+      <li>"Function processed the same upload twice" → at-least-once delivery. Make the code idempotent.</li>
+      <li>"Function runs again and again after it writes its output" → write to another bucket or prefix.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/EventNotifications.html">Event notifications</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/notification-how-to-filtering.html">Key name filtering</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/EventBridge.html">Using EventBridge</a>. Lab: <a href="../../../module-03-s3-patterns/lab-06-event-notifications/README.md">Lab 3.6 Event notifications</a>.</p>
+</section>
+
+<section id="s3-object-lambda">
+  <h2>S3 Object Lambda</h2>
+  <h3>Availability</h3>
+  <ul>
+    <li>Since November 7, 2025, S3 Object Lambda is available only to existing customers and to some AWS Partner Network partners.</li>
+    <li>AWS alternatives: invoke Lambda through CloudFront, API Gateway, or a function URL, or process the data in the client.</li>
+    <li>The exam guide was written before this change. Learn how Object Lambda works, but expect current AWS designs to use the alternatives.</li>
+  </ul>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Object Lambda runs your Lambda function on GET, HEAD, and LIST requests to change the data that S3 returns. The stored object does not change.</li>
+    <li>An Object Lambda Access Point uses a standard access point (the <strong>supporting access point</strong>) to get the data.</li>
+    <li>Use cases: redact PII, convert formats, resize or watermark images, filter rows.</li>
+    <li>Object Lambda does not change PUT or DELETE. To change data on write, use an event notification and a function.</li>
+  </ul>
+  <h3>The GetObject function</h3>
+  <ol>
+    <li>Read <code>getObjectContext</code> from the event: <code>inputS3Url</code>, <code>outputRoute</code>, and <code>outputToken</code>.</li>
+    <li>Download the original object from <code>inputS3Url</code>. It is a presigned URL.</li>
+    <li>Transform the data.</li>
+    <li>Call <code>WriteGetObjectResponse</code> with <code>RequestRoute</code>, <code>RequestToken</code>, and the new body.</li>
+  </ol>
+  <ul>
+    <li>The execution role needs <code>s3-object-lambda:WriteGetObjectResponse</code> (managed policy <code>AmazonS3ObjectLambdaExecutionRolePolicy</code>).</li>
+    <li>If the function returns before it calls <code>WriteGetObjectResponse</code>, the caller gets HTTP 500. S3 ignores the return value of the function.</li>
+    <li>The function has up to 60 seconds to send the complete response.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Different applications need different views of the same object, no copies" → Object Lambda (existing customers), or Lambda behind CloudFront or API Gateway.</li>
+      <li>"Clients get 500 errors from the Object Lambda Access Point" → the function did not call <code>WriteGetObjectResponse</code>.</li>
+      <li>"Transform data when it is uploaded" → not Object Lambda. Use an ObjectCreated event.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/amazons3-ol-change.html">Object Lambda availability change</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/olap-writing-lambda.html">Writing Object Lambda functions</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/olap-policies.html">Object Lambda IAM policies</a>. Lab: <a href="../../../module-03-s3-patterns/lab-07-object-lambda/README.md">Lab 3.7 S3 Object Lambda</a>.</p>
+</section>
+
+</main>
+
+<footer>
+  <a href="../../index.html#quiz/m03-s3">Take the quiz</a>
+</footer>
+</body>
+</html>
