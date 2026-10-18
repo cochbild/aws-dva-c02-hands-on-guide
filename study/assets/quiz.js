@@ -126,7 +126,8 @@
 
   function isHistoryEntry(e) {
     return e !== null && typeof e === "object" && typeof e.q === "string" && typeof e.topic === "string" &&
-      typeof e.ok === "boolean" && typeof e.t === "number";
+      typeof e.ok === "boolean" && typeof e.t === "number" &&
+      (e.src === undefined || typeof e.src === "string");
   }
 
   function loadHistory() {
@@ -156,14 +157,12 @@
     }
   }
 
-  function historyEntries(scoreResult, setIdOf, now) {
-    return scoreResult.results.map((r) => ({
-      q: r.question.id,
-      set: setIdOf(r.question.id),
-      topic: r.question.topic,
-      ok: r.ok,
-      t: now,
-    }));
+  function historyEntries(scoreResult, setIdOf, now, src) {
+    return scoreResult.results.map((r) => {
+      const entry = { q: r.question.id, set: setIdOf(r.question.id), topic: r.question.topic, ok: r.ok, t: now };
+      if (src) entry.src = src;
+      return entry;
+    });
   }
 
   function studySets() {
@@ -199,7 +198,7 @@
   }
 
   function latestSetScore(history, setId) {
-    const entries = history.filter((e) => e.set === setId);
+    const entries = history.filter((e) => e.set === setId && (e.src === undefined || e.src === "set"));
     if (!entries.length) return null;
     const t = Math.max(...entries.map((e) => e.t));
     const latest = entries.filter((e) => e.t === t);
@@ -226,6 +225,8 @@
   function show(container, ...nodes) {
     container.replaceChildren(...nodes);
     window.scrollTo(0, 0);
+    container.tabIndex = -1;
+    container.focus();
   }
 
   function message(container, text) {
@@ -339,6 +340,24 @@
     show(container, ...nodes);
   }
 
+  // Asks the questions, scores them, saves the attempt and shows the results.
+  function runQuiz(container, picked, opts) {
+    const questions = shuffle(picked);
+    renderQuiz(container, questions, {
+      title: opts.title,
+      onSubmit(answers) {
+        const score = scoreAttempt(questions, answers);
+        const setIdOf = (id) => questions.find((q) => q.id === id).setId;
+        const saved = appendHistory(historyEntries(score, setIdOf, Date.now(), opts.src));
+        renderResults(container, score, {
+          title: opts.resultsTitle,
+          notice: saved ? "" : "Progress is not saved in this browser.",
+          onRetake: opts.onRetake,
+        });
+      },
+    });
+  }
+
   function mountSetQuiz(setId, container) {
     const set = setById(setId);
     if (!set) return message(container, "Set not found.");
@@ -346,18 +365,11 @@
     if (!bank.length) return message(container, set.title + ": no questions yet.");
 
     function start(picked) {
-      const questions = shuffle(picked);
-      renderQuiz(container, questions, {
+      runQuiz(container, picked, {
         title: set.title + " quiz",
-        onSubmit(answers) {
-          const score = scoreAttempt(questions, answers);
-          const saved = appendHistory(historyEntries(score, () => setId, Date.now()));
-          renderResults(container, score, {
-            title: set.title + " results",
-            notice: saved ? "" : "Progress is not saved in this browser.",
-            onRetake: () => mountSetQuiz(setId, container),
-          });
-        },
+        resultsTitle: set.title + " results",
+        src: "set",
+        onRetake: () => mountSetQuiz(setId, container),
       });
     }
 
@@ -368,6 +380,31 @@
         button("Start " + Math.min(15, bank.length) + "-question quiz", () => start(pickBalanced(bank, 15))),
         button("Full bank (" + bank.length + " questions)", () => start(bank))),
       el("p", {}, el("a", { href: set.path + "sheet.html" }, "Study sheet"), " · ", homeLink()));
+  }
+
+  function mountWeakQuiz(container) {
+    const stats = topicStats(loadHistory());
+    const weak = weakTopics(stats);
+    if (!weak.length) return message(container, "No weak topics yet. Take a set quiz first.");
+    const picked = pickWeak(allQuestions(), loadHistory(), 15);
+    if (!picked.length) return message(container, "The weak topics have no questions yet.");
+
+    const rows = weak.map((id) => {
+      const found = topicById(id);
+      return [topicLink(id), found ? found.set.title : "", Math.round(stats[id].accuracy * 100) + "%"];
+    });
+    show(container,
+      el("h1", {}, "Weak topics quiz"),
+      el("p", {}, "This quiz uses " + picked.length + " questions from your weak topics."),
+      table(["Topic", "Set", "Accuracy"], rows),
+      el("p", { className: "actions" },
+        button("Start " + picked.length + "-question quiz", () => runQuiz(container, picked, {
+          title: "Weak topics quiz",
+          resultsTitle: "Weak topics results",
+          src: "weak",
+          onRetake: () => mountWeakQuiz(container),
+        }))),
+      el("p", {}, homeLink()));
   }
 
   function mountHome(container) {
@@ -421,6 +458,7 @@
       el("h2", {}, "Weak topics"),
       el("p", {}, "A topic is weak when fewer than 80% of its last 5 answers are correct."),
       weakList,
+      weak.length ? el("p", {}, el("a", { href: "#weak" }, "Take a weak-topics quiz")) : null,
       el("p", {}, notTested + " of " + topicIds.length + " topics not tested."),
       el("h2", {}, "Progress"),
       resetArea);
@@ -465,6 +503,7 @@
     renderQuiz,
     renderResults,
     mountSetQuiz,
+    mountWeakQuiz,
     mountHome,
     mountApp,
   };

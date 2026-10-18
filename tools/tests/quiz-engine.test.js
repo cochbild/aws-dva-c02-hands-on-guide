@@ -129,6 +129,23 @@ test("pickWeak prefers missed, then unseen, then right, and skips other topics",
   assert.deepStrictEqual(Q.pickWeak(qs, history, 2, mulberry32(5)).map((q) => q.id), ["missed", "unseen"]);
 });
 
+test("pickWeak draws from weak topics in different sets and skips the rest", () => {
+  const qs = [
+    Object.assign(makeQuestion("s1-a", "a", 1), { setId: "s01" }),
+    Object.assign(makeQuestion("s1-b", "b", 1), { setId: "s01" }),
+    Object.assign(makeQuestion("s2-c", "c", 1), { setId: "s02" }),
+    Object.assign(makeQuestion("s2-d", "d", 1), { setId: "s02" }),
+  ];
+  const history = [
+    { q: "s1-a", set: "s01", topic: "a", ok: false, t: 1 },
+    { q: "s2-c", set: "s02", topic: "c", ok: false, t: 2 },
+    { q: "s1-b", set: "s01", topic: "b", ok: true, t: 3 },
+    { q: "s2-d", set: "s02", topic: "d", ok: true, t: 4 },
+  ];
+  const ids = Q.pickWeak(qs, history, 15, mulberry32(9)).map((q) => q.id).sort();
+  assert.deepStrictEqual(ids, ["s1-a", "s2-c"]);
+});
+
 test("pickExam fills domain quotas of 21/17/15/12", () => {
   const qs = [];
   for (let i = 0; i < 400; i++) qs.push(makeQuestion("q" + i, "t" + (i % 20), (i % 4) + 1));
@@ -210,6 +227,25 @@ test("historyEntries maps each result to a storage entry", () => {
   ]);
 });
 
+test("historyEntries records the src when given", () => {
+  const qs = [makeQuestion("q1", "a", 1, [0])];
+  const score = Q.scoreAttempt(qs, { q1: [0] });
+  const entries = Q.historyEntries(score, () => "s01", 5, "weak");
+  assert.deepStrictEqual(entries, [{ q: "q1", set: "s01", topic: "a", ok: true, t: 5, src: "weak" }]);
+});
+
+test("isHistoryEntry accepts a missing src and rejects a non-string src", () => {
+  const fake = fakeStorage();
+  withStorage(fake, () => {
+    const base = { q: "q1", set: "s", topic: "t", ok: true };
+    const old = Object.assign({ t: 1 }, base);
+    const weak = Object.assign({ t: 2, src: "weak" }, base);
+    const bad = Object.assign({ t: 3, src: 7 }, base);
+    fake.setItem(Q.STORAGE_KEY, JSON.stringify([old, weak, bad]));
+    assert.deepStrictEqual(Q.loadHistory(), [old, weak]);
+  });
+});
+
 function withGlobals(values, fn) {
   const saved = {};
   for (const key of Object.keys(values)) {
@@ -271,8 +307,9 @@ test("optionOrder is a permutation that maps display picks to original indexes",
   const q = makeQuestion("q", "t", 1, [3]);
   const order = Q.optionOrder(q, mulberry32(8));
   assert.deepStrictEqual([...order].sort(), [0, 1, 2, 3, 4]);
-  const displayIndexOfCorrect = order.indexOf(3);
-  assert.strictEqual(Q.isCorrect(q, [order[displayIndexOfCorrect]]), true);
+  assert.notDeepStrictEqual(order, [0, 1, 2, 3, 4]);
+  const correctPositions = order.map((_, d) => d).filter((d) => Q.isCorrect(q, [order[d]]));
+  assert.deepStrictEqual(correctPositions, [order.indexOf(3)]);
 });
 
 test("unansweredNumbers lists 1-based positions with no selection", () => {
@@ -291,4 +328,14 @@ test("latestSetScore scores only the newest attempt for the set", () => {
   ];
   assert.deepStrictEqual(Q.latestSetScore(history, "s01"), { correct: 1, total: 2, t: 5 });
   assert.strictEqual(Q.latestSetScore(history, "s03"), null);
+});
+
+test("latestSetScore ignores weak-quiz entries and counts entries without src", () => {
+  const history = [
+    { q: "q1", set: "s01", topic: "a", ok: false, t: 1 },
+    { q: "q2", set: "s01", topic: "a", ok: true, t: 1, src: "set" },
+    { q: "q1", set: "s01", topic: "a", ok: true, t: 9, src: "weak" },
+  ];
+  assert.deepStrictEqual(Q.latestSetScore(history, "s01"), { correct: 1, total: 2, t: 1 });
+  assert.strictEqual(Q.latestSetScore([history[2]], "s01"), null);
 });
