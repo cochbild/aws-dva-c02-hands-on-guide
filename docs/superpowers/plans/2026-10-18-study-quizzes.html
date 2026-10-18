@@ -119,9 +119,9 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
       <li><code>pickExam</code>: 400 questions spread over 4 domains → exactly 21/17/15/12; domain 4 with 5 questions → 5 from domain 4, total still 65.</li>
       <li>Storage: with a fake <code>localStorage</code> whose methods throw, <code>loadHistory()</code> returns <code>[]</code> and <code>appendHistory</code> returns <code>false</code> without throwing; corrupt JSON → <code>[]</code>.</li>
     </ul></li>
-  <li>[ ] <strong>Step 2:</strong> Run <code>node --test tools/tests/</code>. Expected: FAIL (module missing).</li>
+  <li>[ ] <strong>Step 2:</strong> Run <code>node --test "tools/tests/*.test.js"</code>. Expected: FAIL (module missing).</li>
   <li>[ ] <strong>Step 3:</strong> Implement the functions above in <code>study/assets/quiz.js</code> inside one IIFE. Storage functions read <code>globalThis.localStorage</code> at call time so tests can inject a fake.</li>
-  <li>[ ] <strong>Step 4:</strong> Run <code>node --test tools/tests/</code>. Expected: all PASS.</li>
+  <li>[ ] <strong>Step 4:</strong> Run <code>node --test "tools/tests/*.test.js"</code>. Expected: all PASS.</li>
   <li>[ ] <strong>Step 5:</strong> Commit: <code>Add quiz engine logic with tests</code>.</li>
 </ul>
 
@@ -141,9 +141,9 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
 </ol>
 <ul>
   <li>[ ] <strong>Step 1: Write failing tests</strong>: a valid fixture tree → <code>errors.length === 0</code>; one test per check above with a fixture (or an in-test mutated copy) that breaks only that rule, asserting an error that names the question or topic ID.</li>
-  <li>[ ] <strong>Step 2:</strong> Run <code>node --test tools/tests/</code>. Expected: new tests FAIL.</li>
+  <li>[ ] <strong>Step 2:</strong> Run <code>node --test "tools/tests/*.test.js"</code>. Expected: new tests FAIL.</li>
   <li>[ ] <strong>Step 3:</strong> Implement <code>validateStudy</code> and the CLI.</li>
-  <li>[ ] <strong>Step 4:</strong> Run <code>node --test tools/tests/</code>. Expected: all PASS.</li>
+  <li>[ ] <strong>Step 4:</strong> Run <code>node --test "tools/tests/*.test.js"</code>. Expected: all PASS.</li>
   <li>[ ] <strong>Step 5:</strong> Commit: <code>Add study data checker</code>.</li>
 </ul>
 
@@ -186,9 +186,9 @@ footer: "Take the quiz" link</pre>
 <p><code>index.html</code> loads <code>registry.js</code>, every set's <code>questions.js</code>, and <code>quiz.js</code>, then calls <code>mountHome</code>. Each content task adds its script tag here.</p>
 <ul>
   <li>[ ] <strong>Step 1: Write failing tests</strong> for the logic that rendering depends on: <code>allQuestions</code> adds <code>setId</code>; <code>topicById</code> finds a topic in the second set. Use a <code>vm</code> context with fake <code>window.STUDY_SETS</code> and <code>window.QUESTION_BANKS</code>.</li>
-  <li>[ ] <strong>Step 2:</strong> Run <code>node --test tools/tests/</code>. Expected: new tests FAIL.</li>
+  <li>[ ] <strong>Step 2:</strong> Run <code>node --test "tools/tests/*.test.js"</code>. Expected: new tests FAIL.</li>
   <li>[ ] <strong>Step 3:</strong> Implement the functions above, <code>study.css</code> (readable measure, tables, light and dark tokens on <code>:root</code>, a visible focus style, correct/incorrect colors plus a text marker so color is not the only signal), and <code>index.html</code>.</li>
-  <li>[ ] <strong>Step 4:</strong> Run <code>node --test tools/tests/</code> and <code>node tools/validate-study.js</code>. Expected: all PASS, 0 errors.</li>
+  <li>[ ] <strong>Step 4:</strong> Run <code>node --test "tools/tests/*.test.js"</code> and <code>node tools/validate-study.js</code>. Expected: all PASS, 0 errors.</li>
   <li>[ ] <strong>Step 5: Browser check</strong> from <code>file://</code>:
     <ol>
       <li>Open <code>study/sets/m01-lambda/sheet.html</code>: TOC links jump to sections; dark mode readable.</li>
@@ -258,7 +258,7 @@ footer: "Take the quiz" link</pre>
 </ul>
 <ul>
   <li>[ ] <strong>Step 1: Write failing tests:</strong> <code>remainingMs(0, 1000, 400) === 600</code>; <code>remainingMs(0, 1000, 5000) === 0</code>; checker reports a domain-capacity error for a fixture with 5 domain-4 questions.</li>
-  <li>[ ] <strong>Step 2:</strong> Run <code>node --test tools/tests/</code>. Expected: new tests FAIL.</li>
+  <li>[ ] <strong>Step 2:</strong> Run <code>node --test "tools/tests/*.test.js"</code>. Expected: new tests FAIL.</li>
   <li>[ ] <strong>Step 3:</strong> Implement.</li>
   <li>[ ] <strong>Step 4:</strong> Run tests and <code>node tools/validate-study.js</code>. Expected: all PASS, 0 errors, all four domains above quota.</li>
   <li>[ ] <strong>Step 5: Browser check:</strong> start the exam; flag two questions; the review screen lists them; set the duration to 60 seconds in the console (or a <code>?minutes=1</code> query parameter used only for this check), wait, and confirm auto-submit; domain scores appear; home page progress updates.</li>
@@ -267,7 +267,7 @@ footer: "Take the quiz" link</pre>
 
 <h3>Task 15: Whole-branch review</h3>
 <ul>
-  <li>[ ] Run <code>node --test tools/tests/</code> and <code>node tools/validate-study.js</code>. Expected: all PASS, 0 errors.</li>
+  <li>[ ] Run <code>node --test "tools/tests/*.test.js"</code> and <code>node tools/validate-study.js</code>. Expected: all PASS, 0 errors.</li>
   <li>[ ] Final review of the branch against the spec, including a sample fact check across sets.</li>
 </ul>
 
