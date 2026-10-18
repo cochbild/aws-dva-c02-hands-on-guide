@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Study Quizzes Design</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.55; color: #1b1f24; background: #fff; }
+  h1, h2, h3 { line-height: 1.25; }
+  code, pre { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; }
+  pre { background: #f4f5f7; padding: 0.75rem; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #ccd; padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+  .call { color: #6a4c00; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e6e8eb; background: #16181c; }
+    pre { background: #22252b; }
+    th, td { border-color: #3a3f48; }
+    .call { color: #e0b450; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Study Sheets and Quizzes — Design</h1>
+<p>Date: 2026-10-18. Branch: <code>feature/study-quizzes</code>.</p>
+<p>Text marked <span class="call">[Claude's call]</span> is a decision that the designer made. The user did not choose it. The builder can change it if there is a good reason.</p>
+
+<h2>1. Intent</h2>
+<p>The user takes the AWS Certified Developer – Associate (DVA-C02) exam in about two weeks (around 2026-11-01). Time is short. The user wants to <strong>read first</strong>, then <strong>test with exam-style questions</strong>, then <strong>read again only where they are weak</strong>.</p>
+<p>The user said: "cover everything possible on this exam" and "be thorough." Coverage of the exam is the main goal. The hands-on labs are not the goal of this work.</p>
+
+<h2>2. Goals</h2>
+<ol>
+  <li>A <strong>study sheet</strong> for each of modules 1 to 9. It is dense, exam-focused reading.</li>
+  <li><strong>Gap sets</strong>: a study sheet for each exam topic area that the modules do not teach (see section 6).</li>
+  <li>A <strong>quiz</strong> for each study sheet, with AWS-style scenario questions.</li>
+  <li><strong>Feedback by topic</strong> after each quiz. Each question shows a written explanation for the correct answer and for each wrong option. Each weak topic links to its section on the study sheet.</li>
+  <li><span class="call">[Claude's call, shown to the user, not rejected]</span> A <strong>home page</strong> that shows the latest score for each set and the weakest topics across all sets.</li>
+  <li><span class="call">[Claude's call, shown to the user, not rejected]</span> A <strong>weak-topics quiz</strong> that draws questions only from topics where the user missed questions.</li>
+  <li><span class="call">[Claude's call, shown to the user, not rejected]</span> A <strong>final practice exam</strong>: 65 questions with the official domain weighting.</li>
+</ol>
+
+<h2>3. Non-goals</h2>
+<ul>
+  <li>No changes to the labs, templates, or module READMEs. The only exception is one link from the root <code>README.md</code> to <code>study/index.html</code>.</li>
+  <li>No server, no accounts, no sync between devices.</li>
+  <li>No spaced-repetition scheduler or flash cards.</li>
+  <li>The module 10 capstone gets no quiz.</li>
+</ul>
+
+<h2>4. Anti-goals (failure even if it works)</h2>
+<ul>
+  <li><strong>Wrong facts.</strong> An incorrect limit, default, or service behavior teaches the user a wrong answer before the exam. Accuracy is more important than volume.</li>
+  <li><strong>Lab re-telling.</strong> A study sheet that repeats lab steps ("run this command") instead of exam knowledge wastes the user's reading time.</li>
+  <li><strong>Trivia questions.</strong> Questions that test recall of one word, instead of scenario judgment, do not prepare the user for the real exam.</li>
+  <li><strong>Copied exam content.</strong> All questions must be original. Do not copy from exam dumps or paid practice tests.</li>
+  <li><strong>Late delivery.</strong> A full set that arrives in week two is worth less than a partial set the user can use on day one. See section 10.</li>
+</ul>
+
+<h2>5. Constraints</h2>
+<ul>
+  <li><strong>Static HTML only.</strong> The user's global rule: documentation is self-contained HTML. No build step, no frameworks, no package install. Inline or local CSS and JavaScript are allowed.</li>
+  <li><strong>Opened from disk.</strong> The user opens the files with <code>file://</code>. Browsers block <code>fetch()</code> of local JSON from a <code>file://</code> page. Thus question data must load through <code>&lt;script src="..."&gt;</code> tags, not through <code>fetch()</code>.</li>
+  <li><strong>No external network.</strong> No CDN scripts or web fonts. The pages must work offline.</li>
+  <li><strong>Storage.</strong> Progress is kept in <code>localStorage</code>. Wrap each read and write in <code>try/catch</code>. The pages must work, without saved progress, when storage is not available.</li>
+  <li><strong>Writing style.</strong> Study sheet prose follows the user's ASD-STE100 rule (short sentences, active voice, common words), by intent. Quiz stems follow the AWS exam style (a scenario, then "Which solution will meet these requirements?" and similar). Do not apply STE to AWS service names or quoted error text.</li>
+  <li><strong>Current exam version.</strong> Content must match the current official DVA-C02 exam guide. The builder must read the official guide and use its domains, task statements, and in-scope services list.</li>
+  <li><strong>Light and dark themes.</strong> Follow <code>prefers-color-scheme</code>. Readable on a laptop screen. <span class="call">[Claude's call]</span> Phone layout is not required, but do not prevent it.</li>
+  <li>Git rules: work on <code>feature/study-quizzes</code> (or phase branches from it). Do not push to <code>main</code>. Do not push or open a pull request without the user's instruction.</li>
+</ul>
+
+<h2>6. Content scope</h2>
+
+<h3>6.1 Module sets (decided)</h3>
+<p>One set for each of modules 1 to 9. Use the module README "theory primer" and "exam blueprint mapping" sections and the lab READMEs as a starting point. Add exam knowledge that the module does not include. The module READMEs are a source, not a limit.</p>
+
+<h3>6.2 Gap sets (decided: cover the gaps; the exact list is the builder's job)</h3>
+<p>The builder must compare the official exam guide (all task statements and the in-scope services list) against the nine modules. Make a gap set for each area with no adequate module coverage. Record the comparison as a coverage table in <code>study/coverage.html</code>: each task statement, the set or sets that cover it.</p>
+<p><span class="call">[Claude's call]</span> Likely gap sets, to confirm or change:</p>
+<ul>
+  <li><strong>IAM and STS</strong>: policy types, policy evaluation logic, explicit deny, resource-based policies, roles and trust policies, AssumeRole, cross-account access, the credential provider chain, instance profiles, least privilege.</li>
+  <li><strong>Infrastructure as code</strong>: CloudFormation (intrinsic functions, parameters, outputs and exports, change sets, stack sets, nested stacks, DeletionPolicy, helper scripts), SAM depth (transform, policy templates, <code>sam local</code>, <code>sam sync</code>), CDK concepts beyond lab 8.7.</li>
+  <li><strong>SDK and application development practices</strong>: retries with exponential backoff and jitter, pagination, idempotency, error codes (throttling, 4xx vs 5xx), EC2 instance metadata (IMDSv2), environment configuration, unit testing and mocking, Amazon Q Developer.</li>
+  <li><strong>Architecture patterns</strong>: event-driven design, loose coupling, fan-out, choreography vs orchestration, stateless design, caching strategies (lazy loading, write-through, TTL), synchronous vs asynchronous patterns.</li>
+  <li><strong>Containers and compute extras</strong>, if lab 8.5, 8.8, and 8.9 do not cover them: ECR, ECS task roles vs execution roles, Elastic Beanstalk deployment policies and <code>.ebextensions</code>, EC2 user data.</li>
+</ul>
+
+<h3>6.3 Topics</h3>
+<p>Each set is divided into <strong>topics</strong>. A topic is one exam-relevant concept, for example "Lambda reserved vs provisioned concurrency." <span class="call">[Claude's call]</span> Use 6 to 15 topics for each set. Each topic has a stable ID (for example <code>lambda-concurrency</code>). The topic ID is the anchor of its section on the study sheet and the tag on each question.</p>
+
+<h2>7. Study sheets</h2>
+<ul>
+  <li>One section for each topic, with the topic ID as the section <code>id</code>.</li>
+  <li>Content for each topic: the key facts, numbers to memorize (limits, defaults, timeouts, sizes), "when to use X vs Y" comparisons, and the traps that exam distractors use. Use tables for comparisons.</li>
+  <li>Each topic ends with a short "Exam signals" list: words in a question stem that point to this answer (for example "near real-time to S3 with no code" → Kinesis Data Firehose).</li>
+  <li>Link to the related lab README where one exists, for hands-on review.</li>
+  <li>Cite the AWS documentation page for each number that is easy to get wrong.</li>
+  <li><span class="call">[Claude's call]</span> A table of contents at the top. A link to the quiz at the top and at the bottom.</li>
+</ul>
+
+<h2>8. Quizzes</h2>
+
+<h3>8.1 Question bank</h3>
+<ul>
+  <li><span class="call">[Claude's call]</span> 30 to 40 questions for each set. Every topic has at least 2 questions. Heavy-weight topics have more.</li>
+  <li>Question types: multiple choice (one correct of four) and multiple response (two or three correct of five or six, stem says "Choose two"). <span class="call">[Claude's call]</span> About 20 to 25 percent multiple response, which matches the real exam.</li>
+  <li>Each question has: ID, set ID, topic ID, exam domain (1 to 4), stem, options, the correct option or options, a "why" text for every option, and a short summary explanation.</li>
+  <li>Distractors must be plausible. Each distractor uses a real AWS feature that does not meet one requirement in the stem. The "why" text names that requirement.</li>
+</ul>
+
+<h3>8.2 Quiz behavior</h3>
+<ul>
+  <li><span class="call">[Claude's call]</span> Each attempt shows 15 questions picked at random from the bank, with balanced topic coverage. Option order is random. A "full bank" option shows all questions.</li>
+  <li>The user answers all questions, then submits. There is no feedback during the attempt (this matches the exam).</li>
+  <li>The results page shows: total score, a score for each topic, weak topics first, with a link to each topic section on the study sheet, then every question with the user's answer, the correct answer, and all "why" texts.</li>
+  <li>A multiple-response question is correct only when the selection is exactly correct (this matches the exam).</li>
+</ul>
+
+<h3>8.3 Progress and weak topics</h3>
+<ul>
+  <li>Save each answer result in <code>localStorage</code>: question ID, topic ID, correct or not, timestamp.</li>
+  <li><span class="call">[Claude's call]</span> Topic accuracy uses the most recent 5 answers for that topic. A topic is <strong>weak</strong> when its accuracy is below 80 percent. A topic with no answers is <strong>not tested</strong>.</li>
+  <li>The home page lists each set with its latest score and a link to its study sheet and quiz. It lists the weak topics across all sets, worst first, each with a link to its study sheet section.</li>
+  <li>The weak-topics quiz draws up to 15 questions from weak topics only, across all sets. It prefers questions the user has missed or not seen.</li>
+  <li>A "reset progress" button on the home page. It asks for confirmation on the page (not with a browser <code>confirm()</code> dialog).</li>
+</ul>
+
+<h3>8.4 Final practice exam</h3>
+<ul>
+  <li>65 questions drawn from all banks, weighted by the official domain percentages (at the time of writing: Domain 1 Development 32 percent, Domain 2 Security 26 percent, Domain 3 Deployment 24 percent, Domain 4 Troubleshooting and Optimization 18 percent; confirm against the guide).</li>
+  <li>A visible 130-minute timer. When time ends, the exam submits.</li>
+  <li>A "flag for review" control on each question and a review list before submit, like the real exam.</li>
+  <li>Results page as in 8.2, plus a score for each domain. Results also update topic progress.</li>
+  <li>Total bank size must be large enough to fill 65 questions with the domain weighting. Tag domains on every question with this in mind.</li>
+</ul>
+
+<h2>9. File layout</h2>
+<p><span class="call">[Claude's call]</span> The builder can change names but must keep one shared quiz engine and data in script files.</p>
+<pre>study/
+  index.html                 home: sets, scores, weak topics, links
+  coverage.html              exam guide task statements → sets
+  final-exam.html
+  weak-topics.html
+  assets/
+    study.css                shared styles, light and dark
+    quiz.js                  shared engine: pick, render, score, store
+  sets/
+    m01-lambda/
+      sheet.html
+      quiz.html
+      questions.js           window.QUESTION_BANKS.push({ ... })
+    m02-databases/ ... m09-observability/
+    g-iam-sts/ ...           gap sets
+  registry.js                list of sets: id, title, paths, topic list
+tools/
+  validate-study.*           data checker (see section 11)</pre>
+<p><strong>Update (2026-10-18, builder check):</strong> Firefox scopes <code>localStorage</code> for <code>file://</code> pages per file or folder. Thus all quiz, weak-topics, exam, and home views are hash routes in one page, <code>study/index.html</code>. Study sheets stay as separate pages because they do not use storage. The plan's Global Constraints give the exact routes.</p>
+<p>Pages that need every bank (home, weak topics, final exam) load <code>registry.js</code> and each <code>questions.js</code> with script tags.</p>
+
+<h2>10. Delivery order</h2>
+<p>The user needs to start studying now. Deliver in phases. The user can use each phase when it is done.</p>
+<ol>
+  <li>Engine, styles, home page, and module 1 (sheet and quiz) end to end. Then stop for the user to try it and give feedback on format before more content is made.</li>
+  <li>Modules 2 to 5.</li>
+  <li>Modules 6 to 9.</li>
+  <li>Coverage table and gap sets.</li>
+  <li>Weak-topics quiz and final practice exam.</li>
+</ol>
+<p><span class="call">[Claude's call]</span> The weak-topics quiz can move earlier, into phase 2, because it is small and the user benefits from it at once.</p>
+
+<h2>11. Verification</h2>
+<ul>
+  <li><strong>Data checker</strong> with no dependencies (Node or Python standard library; use a venv for Python). It loads every <code>questions.js</code> and checks: unique question IDs; each topic ID exists in the registry and as an <code>id</code> anchor in the set's <code>sheet.html</code>; the correct-answer count matches the question type; every option has a "why" text; domain is 1 to 4; every topic has at least 2 questions.</li>
+  <li><strong>Fact review.</strong> A separate reviewer checks each study sheet and question bank for wrong facts against AWS documentation before the phase is done. Fix or remove any fact the reviewer cannot confirm.</li>
+  <li><strong>Browser check.</strong> Open each page from <code>file://</code> in a browser. Take a quiz, submit, and confirm the results, the links to topic sections, and the saved progress on the home page.</li>
+</ul>
+
+<h2>12. Left to the builder</h2>
+<ul>
+  <li>The final list of gap sets and topics, from the exam guide comparison.</li>
+  <li>Visual design, within the constraints in section 5.</li>
+  <li>Engine internals and data format details, within section 8 and 9.</li>
+  <li>The order of sets inside a phase.</li>
+</ul>
+
+</body>
+</html>

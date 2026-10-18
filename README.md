@@ -45,6 +45,10 @@ The course has 10 modules. Several modules cover **multiple AWS services** that 
 | 9 | [Observability](module-09-observability/README.md) | CloudWatch (Logs, Metrics, Alarms, EMF, Logs Insights), X-Ray, CloudTrail | D4 |
 | 10 | [Capstone](module-10-capstone/README.md) | Full serverless app combining everything | All |
 
+## Study sheets and quizzes
+
+Open [`study/index.html`](study/index.html) in a browser to read the study sheets and take practice quizzes. Your quiz results are saved only in that browser.
+
 ## Exam blueprint mapping
 
 The official exam has four domains:

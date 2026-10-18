@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Application security and sensitive data: study sheet</title>
+<link rel="stylesheet" href="../../assets/study.css">
+</head>
+<body>
+<header>
+  <h1>Application security and sensitive data</h1>
+  <p>Study sheet for the AWS Certified Developer – Associate (DVA-C02) exam. Gap set: the labs do not teach these skills. Exam guide skills 2.1.2, 2.1.7, 2.1.8, 2.2.1, 2.2.5, 2.3.1, 2.3.4, 2.3.5, and 2.3.6. Facts checked against AWS documentation in October 2026.</p>
+  <nav class="links">
+    <a href="../../index.html">Home</a>
+    <a href="../../index.html#quiz/g-app-security">Take the quiz</a>
+  </nav>
+</header>
+
+<nav class="toc">
+  <h2>Topics</h2>
+  <ol>
+    <li><a href="#appsec-data-classification">Data classification</a></li>
+    <li><a href="#appsec-sanitize-mask">Sanitizing and masking data</a></li>
+    <li><a href="#appsec-jwt-validation">Bearer tokens and JWT validation</a></li>
+    <li><a href="#appsec-fine-grained-authz">Application-level authorization</a></li>
+    <li><a href="#appsec-service-to-service">Cross-service authentication</a></li>
+    <li><a href="#appsec-multi-tenant">Multi-tenant data access</a></li>
+    <li><a href="#appsec-encryption-in-transit">Encryption in transit</a></li>
+    <li><a href="#appsec-dev-certs-keys">Certificates and SSH keys for development</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="appsec-data-classification">
+  <h2>Data classification</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Data classification puts data into categories by sensitivity. The category controls encryption, logging, retention, and who can read the data.</li>
+    <li><strong>PII</strong> (personally identifiable information) identifies a person. Examples: name with address, email address, phone number, national ID or social security number, passport number, driver's license number.</li>
+    <li><strong>PHI</strong> (protected health information) is health data that is linked to a person. Examples: medical record number, health insurance number, diagnosis linked to a patient. HIPAA regulates PHI in the United States.</li>
+    <li><strong>Payment data</strong>: credit card numbers and related data. PCI DSS regulates card data.</li>
+    <li><strong>Credentials</strong>: passwords, private keys, AWS secret access keys. Never write them to code, logs, or environment variables in plain text. Use Secrets Manager (see the m07 set).</li>
+    <li>Collect and keep only the data that the application needs (data minimization). Data that you do not store cannot leak.</li>
+    <li>Tag resources with the classification. Use the tag in access policies (ABAC) and in audits.</li>
+  </ul>
+  <h3>Controls by classification</h3>
+  <table>
+    <tr><th>Control</th><th>Sensitive data (PII, PHI, card data)</th></tr>
+    <tr><td>At rest</td><td>Encrypt. Use a customer managed KMS key when you must control the key policy or audit key use.</td></tr>
+    <tr><td>In transit</td><td>TLS on every connection, also inside the VPC.</td></tr>
+    <tr><td>Logs</td><td>Do not log the values. Mask them with CloudWatch Logs data protection if they can appear.</td></tr>
+    <tr><td>Access</td><td>Least privilege. Separate the data from less sensitive data, or restrict access by attribute.</td></tr>
+    <tr><td>Retention</td><td>Delete when no longer needed (S3 Lifecycle, DynamoDB TTL, log group retention).</td></tr>
+  </table>
+  <p>CloudWatch Logs managed data identifiers use the same categories: credentials, financial information, PII, PHI, and device identifiers (for example IP addresses and MAC addresses).</p>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Patient record number, insurance ID" → PHI.</li>
+      <li>"Email address, phone number, passport number" → PII.</li>
+      <li>"Reduce the risk of a data leak with the least effort" → do not collect or store the field at all.</li>
+      <li>"Different handling for sensitive and public data" → classify the data, then apply encryption, access, logging, and retention controls per class.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/protect-sensitive-log-data-types.html">CloudWatch Logs: types of data that you can protect</a>.</p>
+</section>
+
+<section id="appsec-sanitize-mask">
+  <h2>Sanitizing and masking data</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li><strong>Validate input</strong>: check type, length, format, and allowed values before you use the data. API Gateway request validation rejects bad requests before the backend runs.</li>
+    <li><strong>Encode output</strong> for its destination (HTML, SQL, shell). Use parameterized queries. Do not build queries from strings.</li>
+    <li><strong>Sanitize logs</strong>: remove or mask sensitive fields in the code before you write a log line. Do not log full request bodies or tokens.</li>
+  </ul>
+  <h3>Masking compared with other methods</h3>
+  <table>
+    <tr><th>Method</th><th>What it does</th><th>Can you get the original back?</th></tr>
+    <tr><td>Masking</td><td>Hides all or part of the value, for example <code>****-****-****-1234</code>.</td><td>No, not from the masked value.</td></tr>
+    <tr><td>Redaction</td><td>Removes the value.</td><td>No.</td></tr>
+    <tr><td>Tokenization</td><td>Replaces the value with a random token. A secure store maps the token to the value.</td><td>Yes, through the token store only.</td></tr>
+    <tr><td>Encryption</td><td>Makes ciphertext with a key.</td><td>Yes, with the key (KMS permission).</td></tr>
+    <tr><td>Hashing</td><td>One-way digest. Good to compare values without storing them.</td><td>No.</td></tr>
+  </table>
+  <h3>CloudWatch Logs data protection policies</h3>
+  <ul>
+    <li>A data protection policy audits and masks sensitive data in log events. It uses managed data identifiers (for example credit card numbers, AWS secret access keys) and custom data identifiers (your own regex).</li>
+    <li>CloudWatch Logs masks the data at <strong>ingestion</strong>. Log events that arrived before you created the policy are not masked.</li>
+    <li>Masked data stays masked at all egress points, including Logs Insights, metric filters, and subscription filters.</li>
+    <li>Only principals with the <code>logs:Unmask</code> IAM permission can see the original values.</li>
+    <li>Two levels: an account-level policy (all existing and future log groups) and a policy on one log group. If both exist, both apply.</li>
+    <li>One log group can have only one log group-level policy. That policy can list many data identifiers.</li>
+    <li>Works with the Standard and Infrequent Access log classes.</li>
+    <li>Findings create the <code>LogEventsWithFindings</code> metric in the <code>AWS/Logs</code> namespace. You can send audit findings to CloudWatch Logs, Amazon S3, or Firehose.</li>
+  </ul>
+  <h3>S3 Object Lambda (redact on read)</h3>
+  <ul>
+    <li>An Object Lambda Access Point runs a Lambda function on S3 <code>GET</code>, <code>LIST</code>, and <code>HEAD</code> requests. The function can redact PII before the data reaches the caller. For <code>GET</code>, the function returns the data with <code>WriteGetObjectResponse</code>. For <code>HEAD</code> and <code>LIST</code>, the function returns the response as its own JSON result.</li>
+    <li>One copy of the data serves callers with different views. You do not store a redacted copy.</li>
+    <li>Availability: since November 7, 2025, S3 Object Lambda is available only to existing customers and select partners. See the m03 set.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Credit card numbers appear in CloudWatch Logs; only the security team may see them" → data protection policy, and <code>logs:Unmask</code> for the security team only.</li>
+      <li>"Mask sensitive data in all log groups, including new ones" → account-level data protection policy.</li>
+      <li>"Old log events still show the data after the policy was added" → expected. Masking applies only to new events.</li>
+      <li>"Support staff see only the last 4 digits" → masking in the application.</li>
+      <li>"Must get the original value back later, only for authorized systems" → tokenization or encryption, not masking.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/mask-sensitive-log-data.html">Help protect sensitive log data with masking</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/transforming-objects.html">S3 Object Lambda (availability note)</a>. Related lab: <a href="../../../module-03-s3-patterns/lab-07-object-lambda/README.md">Lab 3.7 Object Lambda</a>.</p>
+</section>
+
+<section id="appsec-jwt-validation">
+  <h2>Bearer tokens and JWT validation</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>A bearer token gives access to anyone who holds it. Send it only over HTTPS, normally in the <code>Authorization</code> header. Do not put it in a URL or in logs.</li>
+    <li>A JWT has three parts with dots between them: <strong>header</strong>, <strong>payload</strong> (claims), and <strong>signature</strong>. The header and payload are base64url-encoded JSON. Anyone can decode them. Encoding is not encryption.</li>
+    <li>The header has <code>kid</code> (key ID) and <code>alg</code>. Amazon Cognito signs tokens with <code>RS256</code>.</li>
+    <li>Validate the signature with the public key from the issuer JSON Web Key Set (JWKS). Cognito JWKS URL: <code>https://cognito-idp.&lt;Region&gt;.amazonaws.com/&lt;userPoolId&gt;/.well-known/jwks.json</code>.</li>
+    <li>Cache the public keys by <code>kid</code>. If a token has the correct issuer but an unknown <code>kid</code>, refresh the cache. Cognito can rotate signing keys.</li>
+    <li>For Node.js, AWS recommends the <code>aws-jwt-verify</code> library.</li>
+  </ul>
+  <h3>Claims to check (Cognito user pool tokens)</h3>
+  <table>
+    <tr><th>Claim</th><th>Check</th></tr>
+    <tr><td><code>exp</code></td><td>The token is not expired. You can check this offline.</td></tr>
+    <tr><td><code>iss</code></td><td>Matches your user pool: <code>https://cognito-idp.&lt;Region&gt;.amazonaws.com/&lt;userPoolId&gt;</code>.</td></tr>
+    <tr><td><code>aud</code> (ID token) or <code>client_id</code> (access token)</td><td>Matches your app client ID.</td></tr>
+    <tr><td><code>token_use</code></td><td><code>id</code> or <code>access</code>, as your API expects.</td></tr>
+  </table>
+  <p>A valid signature and <code>exp</code> do not show revocation. If the app must honor sign-out before expiry, keep access token lifetimes short or check the token with Cognito.</p>
+  <h3>ID token compared with access token</h3>
+  <table>
+    <tr><th></th><th>ID token</th><th>Access token</th></tr>
+    <tr><td>Purpose</td><td>Who the user is (identity claims)</td><td>What the caller can do (authorization)</td></tr>
+    <tr><td>Content</td><td>User attributes, <code>aud</code></td><td><code>scope</code>, <code>cognito:groups</code>, <code>client_id</code></td></tr>
+    <tr><td>Use for API authorization with scopes</td><td>No</td><td>Yes</td></tr>
+  </table>
+  <h3>Who validates the token</h3>
+  <ul>
+    <li><strong>REST API Cognito authorizer</strong> (<code>COGNITO_USER_POOLS</code>): API Gateway validates the token. No code.</li>
+    <li><strong>HTTP API JWT authorizer</strong>: validates <code>kid</code>, <code>iss</code>, <code>aud</code> or <code>client_id</code>, <code>exp</code>, <code>nbf</code>, <code>iat</code>, and route scopes. It checks <code>client_id</code> only when <code>aud</code> is not present. It caches public keys for up to 2 hours.</li>
+    <li><strong>Lambda authorizer</strong>: your code validates the token (for any issuer, or extra rules).</li>
+    <li><strong>Application Load Balancer</strong> with Cognito authentication: the ALB sends signed claims to targets in the <code>x-amzn-oidc-data</code> header. The target verifies them.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Verify a Cognito token in a Lambda function" → check signature with the JWKS, then <code>exp</code>, <code>iss</code>, <code>aud</code>/<code>client_id</code>, <code>token_use</code>.</li>
+      <li>"Decoding the token shows the claims, so the app trusts them" → wrong. Decoding does not verify. Check the signature.</li>
+      <li>"Signature fails after some weeks" → the app hardcoded one key. Fetch keys from the JWKS by <code>kid</code>.</li>
+      <li>"Validate JWTs on an HTTP API without code" → JWT authorizer.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-verifying-a-jwt.html">Verifying JSON web tokens</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html">HTTP API JWT authorizers</a>. Related lab: <a href="../../../module-04-api-gateway-cognito/lab-05-cognito-user-pool/README.md">Lab 4.5 Cognito user pool</a>.</p>
+</section>
+
+<section id="appsec-fine-grained-authz">
+  <h2>Application-level authorization</h2>
+  <h3>REST API Cognito authorizer and scopes</h3>
+  <ul>
+    <li>No authorization scopes on the method: API Gateway treats the token as an <strong>ID token</strong>.</li>
+    <li>Authorization scopes on the method: API Gateway treats the token as an <strong>access token</strong>. The call succeeds if any method scope matches a scope in the token. Otherwise the result is <code>401 Unauthorized</code>.</li>
+    <li>The optional token validation regex checks the <code>aud</code> claim. Access tokens have no <code>aud</code> unless the token is bound to a resource server, so this regex rejects them.</li>
+    <li>Pass claims to the backend: <code>$context.authorizer.claims.sub</code>, or <code>$context.authorizer.claims['custom:role']</code> for names with a colon.</li>
+  </ul>
+  <h3>Cognito groups</h3>
+  <ul>
+    <li>The <code>cognito:groups</code> claim is in both the ID token and the access token. Use it for role-based checks in the backend or in a Lambda authorizer.</li>
+    <li>A group can have an IAM role. With an identity pool, the user gets temporary AWS credentials for that role.</li>
+    <li>A user in several groups: the group with the lowest precedence value sets <code>cognito:preferred_role</code> in the ID token. Groups cannot be nested.</li>
+  </ul>
+  <h3>Lambda authorizer (REST API)</h3>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>Types</td><td><code>TOKEN</code> (one header with a bearer token) and <code>REQUEST</code> (headers, query strings, stage variables, <code>$context</code> variables). AWS recommends <code>REQUEST</code>.</td></tr>
+    <tr><td>Output</td><td><code>principalId</code> and <code>policyDocument</code> (required). <code>context</code> map and <code>usageIdentifierKey</code> (optional).</td></tr>
+    <tr><td><code>context</code> values</td><td>String, number, or boolean only. No JSON objects or arrays. The backend reads <code>$context.authorizer.&lt;key&gt;</code> (Lambda proxy: <code>event.requestContext.authorizer.&lt;key&gt;</code>).</td></tr>
+    <tr><td>Result cache TTL</td><td>Default 300 seconds. Maximum 3,600 seconds. 0 turns caching off.</td></tr>
+    <tr><td>Cache key</td><td><code>TOKEN</code>: the token header. <code>REQUEST</code>: all identity sources.</td></tr>
+    <tr><td>Missing identity source (<code>REQUEST</code>, caching on)</td><td>API Gateway returns 401 and does not call the function.</td></tr>
+    <tr><td>Deny policy</td><td>The client gets 403.</td></tr>
+  </table>
+  <ul>
+    <li>With caching on, API Gateway uses the cached policy for other methods too. Return a policy that covers every method the caller may use, or use a wildcard resource. A policy for only one method gives 403 on other methods during the TTL.</li>
+    <li>An HTTP API Lambda authorizer can return a simple response (<code>isAuthorized</code> true or false) instead of an IAM policy.</li>
+  </ul>
+  <h3>Access control models</h3>
+  <table>
+    <tr><th>Model</th><th>How it decides</th><th>Fits</th></tr>
+    <tr><td>ACL</td><td>A list of principals for each resource</td><td>Few resources, per-object sharing</td></tr>
+    <tr><td>RBAC</td><td>The role of the user (for example a Cognito group)</td><td>Fixed job functions</td></tr>
+    <tr><td>ABAC</td><td>Attributes of the user and the resource (tags, claims)</td><td>Many resources and tenants; fewer policy changes as the app grows</td></tr>
+  </table>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Only clients with the <code>orders.write</code> scope can call POST" → access token plus authorization scopes on the method.</li>
+      <li>"Admins can delete, other users can only read" → Cognito groups, and check <code>cognito:groups</code>.</li>
+      <li>"Custom token from a third-party issuer on a REST API" → Lambda authorizer.</li>
+      <li>"Pass the tenant ID from the authorizer to the backend" → authorizer <code>context</code> (string value).</li>
+      <li>"First call to /orders works, then /invoices returns 403 for 5 minutes" → cached policy covers one method only.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-enable-cognito-user-pool.html">Integrate a REST API with a Cognito user pool</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-use-lambda-authorizer.html">Lambda authorizers</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-lambda-authorizer-output.html">Lambda authorizer output</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/api/API_CreateAuthorizer.html">CreateAuthorizer (TTL)</a>, <a href="https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-user-groups.html">Cognito groups</a>. Related lab: <a href="../../../module-04-api-gateway-cognito/README.md">Module 4 overview</a>.</p>
+</section>
+
+<section id="appsec-service-to-service">
+  <h2>Cross-service authentication</h2>
+  <h3>OAuth 2.0 client credentials (machine to machine)</h3>
+  <ul>
+    <li>A service with no user gets an access token with its own client ID and client secret.</li>
+    <li>Setup: an app client <strong>with a client secret</strong> (confidential client), a <strong>resource server</strong>, and <strong>custom scopes</strong>. Scope format: <code>resourceServerIdentifier/scopeName</code>, for example <code>orders-api/orders.read</code>.</li>
+    <li>Get the token from the token endpoint (<code>/oauth2/token</code>, needs a user pool domain), or call the <code>GetClientToken</code> API (no domain needed).</li>
+    <li>The result is an <strong>access token</strong> that holds only custom scopes. There is no ID token and no user.</li>
+    <li>The API checks the scopes, for example with a REST API Cognito authorizer with authorization scopes, or an HTTP API JWT authorizer.</li>
+    <li>Cache the token until it expires. Cognito bills M2M by active app clients and token requests.</li>
+  </ul>
+  <h3>IAM authorization with SigV4</h3>
+  <ul>
+    <li>Use it when both services run on AWS with IAM roles. No secret to store or rotate.</li>
+    <li>API Gateway: set the method authorization to <code>AWS_IAM</code>. The caller needs <code>execute-api:Invoke</code> and signs the request with SigV4.</li>
+    <li>Lambda function URL: set <code>AuthType</code> to <code>AWS_IAM</code>. The caller signs with SigV4. Since October 2025, new function URLs need both <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code>. Older study material lists only <code>lambda:InvokeFunctionUrl</code>.</li>
+    <li>Cross-account callers need an allow in their identity policy and in the resource policy (API resource policy or function resource-based policy).</li>
+  </ul>
+  <h3>Mutual TLS (REST API)</h3>
+  <ul>
+    <li>Both sides show X.509 certificates. Common for IoT and business-to-business clients.</li>
+    <li>Needs a <strong>Regional custom domain name</strong> with the <code>TLS_1_2</code> security policy, an ACM certificate for the domain, and a <strong>truststore</strong> (<code>.pem</code> file of CA certificates) in Amazon S3.</li>
+    <li>Disable the default <code>execute-api</code> endpoint, or clients can skip mutual TLS.</li>
+    <li>API Gateway does not check revocation. Use a Lambda authorizer for revocation checks. API Gateway forwards client certificates to Lambda authorizers.</li>
+    <li>Untrusted or expired client certificate: the handshake fails and the client gets 403.</li>
+    <li>Not supported for private APIs.</li>
+  </ul>
+  <h3>Private APIs</h3>
+  <ul>
+    <li>A private API is a REST API that clients call only from a VPC, through an interface VPC endpoint for <code>execute-api</code>. Traffic does not leave the Amazon network.</li>
+    <li>Only REST APIs can be private. HTTP APIs cannot.</li>
+    <li>Use the API resource policy with <code>aws:SourceVpc</code> or <code>aws:SourceVpce</code> to allow only your VPCs or endpoints.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Backend service calls an API with no user, OAuth scopes required" → Cognito client credentials grant with a resource server and custom scopes.</li>
+      <li>"Lambda in one account calls an API in another account, no secrets" → <code>AWS_IAM</code> authorization, SigV4, and a resource policy.</li>
+      <li>"Partners must authenticate with client certificates" → mutual TLS on a Regional custom domain, and disable the default endpoint.</li>
+      <li>"API reachable only from inside the VPC" → private REST API, interface endpoint, resource policy.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html">Scopes, M2M, and resource servers</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/permissions.html">REST API IAM permissions</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Function URL access control</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/rest-api-mutual-tls.html">Mutual TLS for REST APIs</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-private-apis.html">Private REST APIs</a>.</p>
+</section>
+
+<section id="appsec-multi-tenant">
+  <h2>Multi-tenant data access</h2>
+  <h3>Isolation models</h3>
+  <table>
+    <tr><th>Model</th><th>How</th><th>Strength</th><th>Cost</th></tr>
+    <tr><td>Silo</td><td>One resource for each tenant (table, bucket, or account)</td><td>Strongest isolation, simple per-tenant cost</td><td>Higher; more resources to manage</td></tr>
+    <tr><td>Pool</td><td>Shared resource. A tenant key is in every item or object key.</td><td>Isolation depends on policies and code</td><td>Lower; best use of capacity</td></tr>
+    <tr><td>Bridge</td><td>Mix: some tiers silo, some pool</td><td>Per tier</td><td>Per tier</td></tr>
+  </table>
+  <h3>DynamoDB fine-grained access control</h3>
+  <ul>
+    <li>Make the tenant ID or user ID the partition key.</li>
+    <li>Use the <code>dynamodb:LeadingKeys</code> condition with a policy variable. <code>LeadingKeys</code> must use the <code>ForAllValues</code> modifier, for example <code>ForAllValues:StringEquals</code>.</li>
+    <li>Do not allow <code>Scan</code>. A scan returns all items, whatever the leading keys.</li>
+    <li>Limit attributes with <code>dynamodb:Attributes</code>. Also require <code>dynamodb:Select</code> = <code>SPECIFIC_ATTRIBUTES</code> and limit <code>dynamodb:ReturnValues</code>. Without them, a read with no projection returns all attributes.</li>
+    <li>Policy variables need <code>"Version": "2012-10-17"</code> in the policy.</li>
+  </ul>
+  <h3>Policy variables</h3>
+  <table>
+    <tr><th>Variable</th><th>Value</th></tr>
+    <tr><td><code>${cognito-identity.amazonaws.com:sub}</code></td><td>The identity ID from the Cognito <strong>identity pool</strong>. It is not the <code>sub</code> from the user pool.</td></tr>
+    <tr><td><code>${aws:username}</code></td><td>The IAM user name.</td></tr>
+    <tr><td><code>${aws:PrincipalTag/tenant}</code></td><td>A tag on the principal (ABAC). Identity pools can map token claims to principal tags (attributes for access control). Do not map an attribute that users can change themselves.</td></tr>
+  </table>
+  <h3>S3 prefix for each tenant</h3>
+  <ul>
+    <li>Allow <code>s3:GetObject</code> and <code>s3:PutObject</code> on <code>arn:aws:s3:::bucket/${cognito-identity.amazonaws.com:sub}/*</code>.</li>
+    <li>Allow <code>s3:ListBucket</code> on the bucket with a <code>s3:prefix</code> condition for the same prefix.</li>
+  </ul>
+  <h3>Application rules</h3>
+  <ul>
+    <li>Take the tenant ID from the verified token or the authorizer context. Never take it from the request body, a query string, or a header that the client controls.</li>
+    <li>Add the tenant key to every query in the code. Policies are a second layer, not a replacement for the code check.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Mobile users may read and write only their own items in one DynamoDB table" → identity pool role with <code>dynamodb:LeadingKeys</code> = <code>${cognito-identity.amazonaws.com:sub}</code>.</li>
+      <li>"Each user has a private folder in one bucket" → policy variable in the object ARN.</li>
+      <li>"Tenant ID comes from a request header; a user read another tenant's data" → take the tenant ID from the verified token.</li>
+      <li>"Strict isolation and per-tenant encryption keys for regulated tenants" → silo model.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/specifying-conditions.html">DynamoDB fine-grained access control</a>, <a href="https://docs.aws.amazon.com/cognito/latest/developerguide/iam-roles.html">Cognito identity pool IAM roles</a>, <a href="https://docs.aws.amazon.com/cognito/latest/developerguide/attributes-for-access-control.html">Attributes for access control</a>. Related lab: <a href="../../../module-04-api-gateway-cognito/lab-06-cognito-identity-pool/README.md">Lab 4.6 Cognito identity pool</a>.</p>
+</section>
+
+<section id="appsec-encryption-in-transit">
+  <h2>Encryption in transit</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Use TLS for every connection: client to edge, edge to origin, and service to database.</li>
+    <li>Deny plain HTTP to Amazon S3 with a bucket policy: <code>"Effect": "Deny"</code> when <code>"aws:SecureTransport": "false"</code>.</li>
+    <li>Requests to SQS queues and SNS topics with SSE turned on must use HTTPS and Signature Version 4.</li>
+    <li>Private REST APIs support only TLS 1.2.</li>
+  </ul>
+  <h3>Where the certificate goes (ACM)</h3>
+  <table>
+    <tr><th>Endpoint</th><th>ACM certificate Region</th></tr>
+    <tr><td>CloudFront distribution</td><td>US East (N. Virginia), <code>us-east-1</code></td></tr>
+    <tr><td>API Gateway edge-optimized custom domain</td><td><code>us-east-1</code></td></tr>
+    <tr><td>API Gateway Regional custom domain</td><td>The Region of the API</td></tr>
+    <tr><td>Application Load Balancer</td><td>The Region of the load balancer</td></tr>
+  </table>
+  <ul>
+    <li>ACM renews ACM-issued certificates that you use with integrated services. You renew imported certificates.</li>
+    <li>To attach an ACM-managed certificate directly to an EC2 instance, you need Nitro Enclaves. For public certificates on EC2, AWS recommends the ACME protocol. ACM also offers exportable public certificates for an extra charge.</li>
+  </ul>
+  <h3>CloudFront viewer protocol policy</h3>
+  <table>
+    <tr><th>Setting</th><th>HTTP request result</th></tr>
+    <tr><td>HTTP and HTTPS</td><td>Served over HTTP.</td></tr>
+    <tr><td>Redirect HTTP to HTTPS</td><td><code>GET</code> and <code>HEAD</code>: 301 to the HTTPS URL. Other methods on HTTP/1.1 or later: 307.</td></tr>
+    <tr><td>HTTPS only</td><td>403. CloudFront does not return the object.</td></tr>
+  </table>
+  <p>Also use HTTPS from CloudFront to the origin (origin protocol policy).</p>
+  <h3>At rest compared with in transit</h3>
+  <table>
+    <tr><th>Service</th><th>At rest by default?</th></tr>
+    <tr><td>Amazon S3</td><td>Yes. SSE-S3 for all new objects since January 5, 2023. You cannot turn it off.</td></tr>
+    <tr><td>Amazon DynamoDB</td><td>Yes, always.</td></tr>
+    <tr><td>Amazon SQS</td><td>Yes. SSE-SQS is the default for new queues created without encryption attributes (over HTTPS).</td></tr>
+    <tr><td>Amazon SNS</td><td>No. Set a KMS key (<code>KmsMasterKeyId</code>) on the topic.</td></tr>
+  </table>
+  <p>Encryption at rest does not protect data on the network. Encryption in transit does not protect stored data. You need both for sensitive data.</p>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Bucket must reject requests that do not use HTTPS" → bucket policy deny on <code>aws:SecureTransport</code> false.</li>
+      <li>"Users who type http:// must reach the site securely" → viewer protocol policy Redirect HTTP to HTTPS.</li>
+      <li>"Certificate for CloudFront is not in the list" → request or import it in <code>us-east-1</code>.</li>
+      <li>"SNS messages must be encrypted at rest" → turn on SSE with a KMS key. It is not on by default.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html">S3 security best practices</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-https-viewers-to-cloudfront.html">CloudFront: require HTTPS for viewers</a>, <a href="https://docs.aws.amazon.com/acm/latest/userguide/acm-services.html">ACM integrated services</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/how-to-specify-certificate-for-custom-domain-name.html">API Gateway custom domain certificates</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/default-encryption-faq.html">S3 default encryption FAQ</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-configure-sqs-sse-queue.html">SQS SSE-SQS</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-server-side-encryption.html">SNS SSE</a>. Related lab: <a href="../../../module-04-api-gateway-cognito/lab-07-cloudfront-in-front-of-api/README.md">Lab 4.7 CloudFront in front of the API</a>.</p>
+</section>
+
+<section id="appsec-dev-certs-keys">
+  <h2>Certificates and SSH keys for development</h2>
+  <h3>EC2 key pairs</h3>
+  <ul>
+    <li>A key pair has a public key and a private key. EC2 puts the public key on the instance (Linux: <code>~/.ssh/authorized_keys</code>). You keep the private key.</li>
+    <li>When EC2 creates the key pair, you can save the private key one time only. EC2 does not keep a copy, so you cannot recover a lost private key from AWS.</li>
+    <li>Exception: a key pair that CloudFormation creates (<code>AWS::EC2::KeyPair</code> with no <code>PublicKeyMaterial</code>) stores the private key in Parameter Store as <code>/ec2/keypair/&lt;key_pair_id&gt;</code>.</li>
+    <li>Types: RSA (Linux and Windows) and ED25519 (Linux only). EC2 does not accept DSA.</li>
+    <li>Private key file formats: <code>.pem</code> (OpenSSH) or <code>.ppk</code> (PuTTY). On Linux and macOS, run <code>chmod 400</code> on the file.</li>
+    <li>Import: create the key pair with a tool such as <code>ssh-keygen</code>, then import only the <strong>public</strong> key (<code>aws ec2 import-key-pair</code>). The private key never leaves your machine.</li>
+    <li>Windows instances: the private key decrypts the administrator password.</li>
+    <li>Quota: 5,000 key pairs for each Region (you can request more).</li>
+    <li>Session Manager (Systems Manager) connects with no SSH key and no open inbound port.</li>
+  </ul>
+  <h3>Certificates</h3>
+  <table>
+    <tr><th>Need</th><th>Use</th></tr>
+    <tr><td>Local development or a test endpoint only</td><td>Self-signed certificate, for example with OpenSSL. Clients do not trust it by default.</td></tr>
+    <tr><td>Internal services, private hostnames, mutual TLS client certificates</td><td>AWS Private CA (private root and subordinate CAs). Private certificates are trusted only where you install your CA.</td></tr>
+    <tr><td>Public endpoint on CloudFront, ALB, or API Gateway</td><td>ACM public certificate (DNS or email validation). Free for integrated services, and ACM renews it.</td></tr>
+  </table>
+  <ul>
+    <li>Private CA charges a monthly fee for each CA and a fee for each certificate that it issues. Exception: private certificates whose private key you cannot access are free. Examples are certificates used only with integrated services (ELB, CloudFront, API Gateway).</li>
+    <li>Private CAs are Regional. You cannot copy a CA to another Region.</li>
+    <li>You can import a third-party or self-signed certificate into ACM. ACM does not renew imported certificates.</li>
+    <li>Never commit private keys to source control. Store them in Secrets Manager or Parameter Store <code>SecureString</code>.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Lost the .pem file for an EC2 instance" → AWS cannot give it back. Use another access method, then add a new public key.</li>
+      <li>"Use an existing SSH key from the developer's laptop" → import the public key.</li>
+      <li>"Internal microservices need TLS certificates that the company controls" → AWS Private CA.</li>
+      <li>"HTTPS on a laptop for local tests, no cost" → self-signed certificate.</li>
+      <li>"Shell access with no key pairs and no port 22" → Session Manager.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html">EC2 key pairs</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html">Create a key pair (types, import, CloudFormation)</a>, <a href="https://docs.aws.amazon.com/privateca/latest/userguide/PcaWelcome.html">What is AWS Private CA</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/rest-api-mutual-tls.html">Mutual TLS (self-signed and imported certificates)</a>.</p>
+</section>
+
+</main>
+
+<footer>
+  <a href="../../index.html#quiz/g-app-security">Take the quiz</a>
+</footer>
+</body>
+</html>
