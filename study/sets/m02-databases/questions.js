@@ -179,7 +179,7 @@ window.QUESTION_BANKS.push({ setId: "m02-databases", questions: [
       { text: "Increase the table's provisioned write capacity to 2,000 WCUs.", correct: false,
         why: "The table already has 600 unused WCUs. The bottleneck is the GSI, so more table capacity does not stop the throttling." },
       { text: "Change the GSI projection from ALL to KEYS_ONLY without changing its capacity.", correct: false,
-        why: "Smaller index entries can reduce the size of each index write, but 50 WCUs is far below the write rate. Throttling continues." },
+        why: "You cannot change the projection of an existing GSI; you must create a new index. Even with smaller entries, 50 WCUs is far below the write rate, so throttling continues." },
       { text: "Use strongly consistent reads on the GSI.", correct: false,
         why: "GSIs do not support strongly consistent reads, and read settings do not affect write throttling." }
     ],
@@ -407,7 +407,7 @@ window.QUESTION_BANKS.push({ setId: "m02-databases", questions: [
       { text: "A ledger service where every read must return the latest committed balance.", correct: true,
         why: "This service needs strongly consistent reads. DAX passes them to DynamoDB without caching, so DAX adds no benefit." },
       { text: "A nightly import that writes millions of items and rarely reads them.", correct: true,
-        why: "The workload is write-heavy with few repeated reads. Writing through DAX adds latency and fills the cache with data that nobody reads." },
+        why: "The workload is write-heavy with few repeated reads, so a cache gives it no benefit. Writing through DAX adds latency and fills the cache with data that nobody reads, so the import should keep using DynamoDB directly." },
       { text: "A product page that reads the same popular items during a flash sale.", correct: false,
         why: "Repeated reads of hot keys are an ideal DAX case. DAX serves them from memory and protects the table." },
       { text: "A game leaderboard read thousands of times each second, where a few seconds of delay is acceptable.", correct: false,
@@ -561,7 +561,7 @@ window.QUESTION_BANKS.push({ setId: "m02-databases", questions: [
       { text: "DynamoDB Accelerator (DAX) with no DynamoDB table.", correct: false,
         why: "DAX is a cache that requires DynamoDB tables. It cannot run as a database by itself, and it is not Redis-compatible." }
     ],
-    explanation: "MemoryDB is a durable, Redis-compatible primary database. ElastiCache is a cache in front of another database." },
+    explanation: "MemoryDB is a durable, Redis-compatible primary database. ElastiCache is primarily a cache in front of another database." },
 
   { id: "m02-040", topic: "cache-engines", domain: 2,
     stem: "A Lambda function connects to a node-based ElastiCache for Valkey 8.0 replication group. The security team forbids long-lived passwords for the cache and requires the connection to use the function's IAM role. Which combination of actions will meet these requirements? (Choose two.)",

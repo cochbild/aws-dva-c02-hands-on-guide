@@ -85,7 +85,7 @@
       <li>"Get a customer and all the customer's orders in one request" → same partition key, different sort keys, and one <code>Query</code>.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Constraints.html">DynamoDB constraints (item size, key lengths)</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Programming.LowLevelAPI.html">Low-level API data type descriptors</a>,<a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/burst-adaptive-capacity.html">Burst and adaptive capacity (partition limits)</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/WorkingWithItems.html">Working with items</a>. Lab: <a href="../../../module-02-dynamodb-deep-dive/lab-01-table-basics/README.md">Lab 2.1 Table basics</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Constraints.html">DynamoDB constraints (item size, key lengths)</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Programming.LowLevelAPI.html">Low-level API data type descriptors</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/burst-adaptive-capacity.html">Burst and adaptive capacity (partition limits)</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/WorkingWithItems.html">Working with items</a>. Lab: <a href="../../../module-02-dynamodb-deep-dive/lab-01-table-basics/README.md">Lab 2.1 Table basics</a>.</p>
 </section>
 
 <section id="ddb-capacity">
@@ -101,6 +101,7 @@
   </table>
   <ul>
     <li>Round the item size up to the next 4 KB for reads and to the next 1 KB for writes.</li>
+    <li><code>UpdateItem</code> uses the larger of the item size before and after the update, even when it changes only one attribute. <code>PutItem</code> that replaces an item also uses the larger size.</li>
     <li>Example: 10 strongly consistent reads each second of 6 KB items. 6 KB rounds up to 8 KB, which is 2 units. Total: 20 RCU. Eventually consistent: 10 RCU.</li>
     <li>Example: 5 writes each second of 2.5 KB items. 2.5 KB rounds up to 3 KB, which is 3 units. Total: 15 WCU.</li>
     <li>Provisioned tables use read and write capacity units (RCU, WCU). On-demand tables use read and write request units with the same sizes.</li>
@@ -188,7 +189,7 @@
       <li>"Query DynamoDB with SQL-like syntax" → PartiQL (<code>ExecuteStatement</code>).</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html">Read consistency</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.html">PartiQL for DynamoDB</a>,<a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Constraints.html">Constraints (batch and page limits)</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Programming.Errors.html">Batch operations and error handling</a>. Lab: <a href="../../../module-02-dynamodb-deep-dive/lab-02-query-vs-scan/README.md">Lab 2.2 Query vs scan</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html">Read consistency</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ql-reference.html">PartiQL for DynamoDB</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Constraints.html">Constraints (batch and page limits)</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Programming.Errors.html">Batch operations and error handling</a>. Lab: <a href="../../../module-02-dynamodb-deep-dive/lab-02-query-vs-scan/README.md">Lab 2.2 Query vs scan</a>.</p>
 </section>
 
 <section id="ddb-indexes">
@@ -298,6 +299,7 @@
   <h3>Lambda as the consumer</h3>
   <ul>
     <li>A Lambda event source mapping polls the stream. By default, one function instance processes one shard, in order.</li>
+    <li>The execution role needs <code>dynamodb:DescribeStream</code>, <code>dynamodb:GetRecords</code>, <code>dynamodb:GetShardIterator</code>, and <code>dynamodb:ListStreams</code>. The <code>AWSLambdaDynamoDBExecutionRole</code> managed policy includes them.</li>
     <li><code>ParallelizationFactor</code> (up to 10) processes one shard with more instances and keeps the order of changes for each item.</li>
     <li>Use filter criteria on the event source mapping to invoke the function only for matching records, for example <code>eventName</code> <code>INSERT</code>.</li>
     <li>Error controls (bisect batch, retries, on-failure destination, partial batch response) are in the Module 1 sheet.</li>
@@ -341,8 +343,9 @@
     <li>A global table has replica tables in two or more Regions. Applications read and write in any replica Region.</li>
     <li>Default mode: multi-Region eventual consistency (MREC). Replication is asynchronous, typically within a second.</li>
     <li>MREC conflict rule: <strong>last writer wins</strong>, for each item.</li>
-    <li>Multi-Region strong consistency (MRSC) replicates each write synchronously and gives an RPO of zero. It needs exactly three Regions.</li>
-    <li>Transactions are atomic only in the Region where they run.</li>
+    <li>Multi-Region strong consistency (MRSC) replicates each write synchronously and gives an RPO of zero. It needs exactly three Regions: three replicas, or two replicas and one witness.</li>
+    <li>MRSC does not support TTL, LSIs, or transactions.</li>
+    <li>In MREC, transactions are atomic only in the Region where they run. Other Regions can see part of a transaction while it replicates.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
@@ -523,6 +526,7 @@
   <ul>
     <li>Turn on encryption (AWS KMS) when you <strong>create</strong> the DB instance. You cannot encrypt an existing unencrypted instance in place.</li>
     <li>To encrypt an existing database: take a snapshot, copy the snapshot with encryption turned on, and restore a new instance from the copy.</li>
+    <li>A blue/green deployment can also create an encrypted green environment from an unencrypted DB instance.</li>
     <li>You cannot turn off encryption. Replicas and snapshots of an encrypted instance are encrypted.</li>
     <li>You cannot share a snapshot that uses the AWS managed key. Use a customer managed key to share encrypted snapshots with another account.</li>
     <li>To copy an encrypted snapshot to another Region, give a KMS key in the destination Region.</li>
@@ -601,6 +605,7 @@
   <ul>
     <li>ElastiCache: a cache in front of an existing primary database or data store.</li>
     <li>MemoryDB: the primary database itself, when you want Redis-compatible data structures and durability with no separate database.</li>
+    <li>Older study material says that ElastiCache is never durable. Since 2026, node-based ElastiCache for Valkey 9.0 offers optional durability with a Multi-AZ transactional log: synchronous writes (designed for zero data loss) or asynchronous writes (up to 10 seconds of data loss on failure). Exam questions still usually mean "ElastiCache = cache, MemoryDB = durable primary database".</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
@@ -612,7 +617,7 @@
       <li>"Authenticate to the cache without a long-lived password" → ElastiCache IAM authentication.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SelectEngine.html">Comparing Valkey, Memcached, and Redis OSS</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/in-transit-encryption.html">ElastiCache in-transit encryption</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth.html">AUTH</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth-iam.html">IAM authentication (token and connection limits)</a>, <a href="https://docs.aws.amazon.com/memorydb/latest/devguide/what-is-memorydb.html">What is MemoryDB</a>, <a href="https://docs.aws.amazon.com/memorydb/latest/devguide/consistency.html">MemoryDB consistency</a>. Labs: <a href="../../../module-02-dynamodb-deep-dive/lab-10-elasticache-redis/README.md">Lab 2.10 ElastiCache Redis</a>, <a href="../../../module-02-dynamodb-deep-dive/lab-11-memorydb/README.md">Lab 2.11 MemoryDB</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SelectEngine.html">Comparing Valkey, Memcached, and Redis OSS</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/in-transit-encryption.html">ElastiCache in-transit encryption</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth.html">AUTH</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth-iam.html">IAM authentication (token and connection limits)</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/durability.html">ElastiCache durability (Valkey 9.0)</a>, <a href="https://docs.aws.amazon.com/memorydb/latest/devguide/what-is-memorydb.html">What is MemoryDB</a>, <a href="https://docs.aws.amazon.com/memorydb/latest/devguide/consistency.html">MemoryDB consistency</a>. Labs: <a href="../../../module-02-dynamodb-deep-dive/lab-10-elasticache-redis/README.md">Lab 2.10 ElastiCache Redis</a>, <a href="../../../module-02-dynamodb-deep-dive/lab-11-memorydb/README.md">Lab 2.11 MemoryDB</a>.</p>
 </section>
 
 </main>
