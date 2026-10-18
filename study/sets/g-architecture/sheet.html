@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture patterns and data store choice: study sheet</title>
+<link rel="stylesheet" href="../../assets/study.css">
+</head>
+<body>
+<header>
+  <h1>Architecture patterns and data store choice</h1>
+  <p>Gap study sheet for the AWS Certified Developer – Associate (DVA-C02) exam. The lab modules do not teach these skills fully. Exam guide skills: 1.1.1, 1.1.2, 1.1.3, 1.1.4, 1.1.12, 1.3.6, 1.3.9, 4.3.6. Facts checked against AWS documentation in October 2026.</p>
+  <nav class="links">
+    <a href="../../index.html">Home</a>
+    <a href="../../index.html#quiz/g-architecture">Take the quiz</a>
+  </nav>
+</header>
+
+<nav class="toc">
+  <h2>Topics</h2>
+  <ol>
+    <li><a href="#arch-event-driven">Event-driven architecture and fanout</a></li>
+    <li><a href="#arch-microservices">Monolithic compared with microservices</a></li>
+    <li><a href="#arch-orchestration">Orchestration compared with choreography</a></li>
+    <li><a href="#arch-coupling-sync">Coupling and synchronous compared with asynchronous</a></li>
+    <li><a href="#arch-stateless">Stateful compared with stateless</a></li>
+    <li><a href="#arch-caching-layers">Application-level caching</a></li>
+    <li><a href="#arch-storage-options">Storage options: block, file, object, ephemeral</a></li>
+    <li><a href="#arch-purpose-built-data">Purpose-built data stores</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="arch-event-driven">
+  <h2>Event-driven architecture and fanout</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>An <strong>event</strong> tells that something happened (for example, "OrderPlaced"). A <strong>command</strong> tells one receiver to do something (for example, "ChargeCard").</li>
+    <li>A producer publishes an event and does not know the consumers. You can add a consumer without a change to the producer.</li>
+    <li><strong>Fanout</strong> sends one event to many consumers in parallel. Each consumer processes the event on its own.</li>
+    <li>Fanout with Amazon SNS: publish one time to a topic. Subscribe one Amazon SQS queue for each consumer. Each queue keeps its own copy of the message.</li>
+    <li>Fanout with Amazon EventBridge: one rule can send a matching event to up to 5 targets. For more consumers, add more rules on the same event pattern.</li>
+    <li>AWS docs now call the rule-based bus "Custom Event Bus - Classic". The default event bus is a Classic bus. The newer "Custom Event Bus" (2026) uses subscribers and keeps events for replay. Older study material and the exam use rules and targets.</li>
+    <li>SNS filter policies send a subscriber only the messages it needs. A filter policy acts on message attributes or on the message body (filter policy scope). With no filter policy, a subscriber gets every message.</li>
+    <li>EventBridge event patterns match on any field in the event. Use EventBridge for routing on event content, for AWS service events, and for SaaS partner events.</li>
+    <li>SNS FIFO topics deliver to SQS FIFO queues and SQS standard queues. They do not deliver directly to Lambda, HTTP(S), email, or SMS endpoints.</li>
+  </ul>
+  <h3>Which service</h3>
+  <table>
+    <tr><th>Need</th><th>Choose</th></tr>
+    <tr><td>One message to many consumers, high throughput, simple attribute or body filter</td><td>Amazon SNS topic (often with one SQS queue for each consumer)</td></tr>
+    <tr><td>Route events by content to different targets, AWS service events, SaaS events, archive and replay</td><td>Amazon EventBridge event bus and rules</td></tr>
+    <tr><td>One consumer group pulls work at its own speed, buffer for spikes</td><td>Amazon SQS queue</td></tr>
+    <tr><td>Ordered, replayable stream with many readers of the same records</td><td>Amazon Kinesis Data Streams (see Module 5)</td></tr>
+  </table>
+  <h3>Security</h3>
+  <ul>
+    <li>For SNS to SQS fanout, the queue policy must allow the <code>sns.amazonaws.com</code> service principal to do <code>sqs:SendMessage</code>.</li>
+    <li>Add the <code>aws:SourceArn</code> condition with the topic ARN. This stops other topics from sending to the queue (confused deputy protection).</li>
+    <li>Cross-account EventBridge: the receiver event bus needs a resource-based policy that allows the sender accounts (or the organization). The sender account creates a rule with the receiver bus ARN as the target. New cross-account bus targets need an IAM role.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Add new consumers without changing the producer" → publish events to SNS or EventBridge.</li>
+      <li>"Each consumer must process every order, at its own speed, and not lose messages" → SNS topic with one SQS queue for each consumer.</li>
+      <li>"Route events by a field inside the event body to different services" → EventBridge rules with event patterns.</li>
+      <li>"SNS publishes succeed but the queue gets nothing" → the queue policy does not allow <code>sqs:SendMessage</code> from the topic.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html">SNS fanout to SQS</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/subscribe-sqs-queue-to-sns-topic.html">Queue policy for an SNS subscription</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html">SNS message filtering</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-quota.html">EventBridge quotas (5 targets for each rule)</a>. Lab: <a href="../../../module-05-messaging-events/lab-02-sns-fanout/README.md">Lab 5.2 SNS fanout</a>, <a href="../../../module-05-messaging-events/lab-03-eventbridge-rules/README.md">Lab 5.3 EventBridge rules</a>.</p>
+</section>
+
+<section id="arch-microservices">
+  <h2>Monolithic compared with microservices</h2>
+  <h3>Comparison</h3>
+  <table>
+    <tr><th>Item</th><th>Monolith</th><th>Microservices</th></tr>
+    <tr><td>Deployment</td><td>One unit. A small change deploys the whole application.</td><td>Each service deploys on its own.</td></tr>
+    <tr><td>Scaling</td><td>The whole application scales together.</td><td>Each service scales on its own load.</td></tr>
+    <tr><td>Data</td><td>One shared database is common.</td><td>Each service owns its data store. Other services use its API or its events.</td></tr>
+    <tr><td>Calls between parts</td><td>In-process function calls.</td><td>Network calls (HTTP APIs, queues, events).</td></tr>
+    <tr><td>Failure</td><td>One defect can stop the whole application.</td><td>Partial failure: one service can fail while others continue.</td></tr>
+  </table>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Database per service: no other service reads or writes the tables of a service directly. A shared table couples the services again.</li>
+    <li>Network calls add latency and new failure modes. Use timeouts, retries with backoff, and asynchronous messages where the caller does not need an immediate answer.</li>
+    <li>A request can cross many services. Use distributed tracing (AWS X-Ray) and correlation IDs to follow one request.</li>
+    <li>A transaction that spans services cannot use one database transaction. Use a saga (see the orchestration topic).</li>
+    <li>Typical AWS building blocks: API Gateway or an Application Load Balancer in front, and Lambda or containers for compute. Each service uses DynamoDB or RDS, with SQS, SNS, or EventBridge between services.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Teams must deploy and scale components independently" → microservices with separate deployments.</li>
+      <li>"One service reads another service's table directly, and schema changes break it" → give each service its own data store and expose an API or events.</li>
+      <li>"Find which service in a chain causes latency" → AWS X-Ray traces across services.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/whitepapers/latest/microservices-on-aws/microservices-on-aws.html">Implementing Microservices on AWS (whitepaper)</a>. Lab: <a href="../../../module-10-capstone/README.md">Module 10 capstone</a>.</p>
+</section>
+
+<section id="arch-orchestration">
+  <h2>Orchestration compared with choreography</h2>
+  <h3>Comparison</h3>
+  <table>
+    <tr><th>Item</th><th>Orchestration</th><th>Choreography</th></tr>
+    <tr><td>Control</td><td>One controller runs the steps in order and handles errors.</td><td>No controller. Each service reacts to events and publishes new events.</td></tr>
+    <tr><td>AWS service</td><td>AWS Step Functions</td><td>Amazon EventBridge, Amazon SNS, Amazon SQS</td></tr>
+    <tr><td>Visibility</td><td>One place shows the state of each run (execution history).</td><td>The flow is spread across services. Tracing is harder.</td></tr>
+    <tr><td>Change</td><td>Change the workflow definition.</td><td>Add a consumer without a change to other services.</td></tr>
+    <tr><td>Coupling</td><td>Services depend on the controller.</td><td>Services are loosely coupled through events.</td></tr>
+  </table>
+  <h3>Saga pattern</h3>
+  <ul>
+    <li>A saga is a series of local transactions, one in each service. It keeps data consistent across services without a distributed transaction (two-phase commit).</li>
+    <li>If a step fails, the saga runs <strong>compensating transactions</strong> that undo the earlier steps (for example, refund the payment, then release the inventory).</li>
+    <li>Saga participants must be idempotent, because a step can run again after a failure.</li>
+    <li>A saga gives eventual consistency, not isolation. Other requests can see the data between steps.</li>
+    <li>Step Functions can act as the saga orchestrator. When a step fails, the workflow goes to compensation states (for example, through a Catch field or a Choice state).</li>
+  </ul>
+  <h3>Step Functions workflow types</h3>
+  <table>
+    <tr><th>Item</th><th>Standard</th><th>Express</th></tr>
+    <tr><td>Maximum duration</td><td>1 year</td><td>5 minutes</td></tr>
+    <tr><td>Execution semantics</td><td>Exactly once</td><td>At least once (asynchronous); at most once (synchronous)</td></tr>
+    <tr><td>Price basis</td><td>Number of state transitions</td><td>Number of executions, duration, and memory</td></tr>
+    <tr><td>Execution history</td><td>In Step Functions for 90 days</td><td>Only in CloudWatch Logs, if you turn on logging</td></tr>
+    <tr><td>Wait for a callback (<code>.waitForTaskToken</code>) or a job (<code>.sync</code>)</td><td>Yes</td><td>No</td></tr>
+  </table>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Central visibility of each order's progress", "human approval step", "run steps in a fixed order with error handling" → orchestration with Step Functions.</li>
+      <li>"Add consumers without changing the producer", "services must not know each other" → choreography with EventBridge or SNS.</li>
+      <li>"Undo earlier steps when a later step fails across services" → saga with compensating transactions.</li>
+      <li>"Non-idempotent step such as a payment, workflow can run for days" → Standard workflow.</li>
+      <li>"Very high volume of short event processing, at lowest cost" → Express workflow.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html">Choosing a Step Functions workflow type</a>, <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga-orchestration.html">Saga orchestration pattern</a>, <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga-choreography.html">Saga choreography pattern</a>. Lab: <a href="../../../module-06-step-functions/lab-02-standard-vs-express/README.md">Lab 6.2 Standard compared with Express</a>, <a href="../../../module-06-step-functions/lab-03-error-handling/README.md">Lab 6.3 Error handling</a>.</p>
+</section>
+
+<section id="arch-coupling-sync">
+  <h2>Coupling and synchronous compared with asynchronous</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li><strong>Tight coupling</strong>: the caller calls the callee directly and waits. If the callee is slow or down, the caller is slow or fails too.</li>
+    <li><strong>Loose coupling</strong>: a queue, topic, or event bus sits between the components. Each side can fail, scale, or change on its own.</li>
+    <li><strong>Synchronous</strong>: the caller waits for the result. Examples: API Gateway to Lambda, Lambda <code>RequestResponse</code> invocation, Step Functions synchronous Express (<code>StartSyncExecution</code>).</li>
+    <li><strong>Asynchronous</strong>: the caller gets an acknowledgment and continues. Examples: Lambda <code>Event</code> invocation, SQS, SNS, EventBridge.</li>
+    <li>Use synchronous calls only when the caller needs the answer now (for example, a price check before checkout).</li>
+    <li><strong>Load leveling</strong>: an SQS queue absorbs traffic spikes. Consumers read at a rate that the backend can support.</li>
+    <li>A queue keeps messages when the consumer is down. The consumer continues when it comes back, within the retention period.</li>
+    <li>Asynchronous delivery is at least once in most AWS services. Make consumers idempotent.</li>
+    <li>Use a dead-letter queue to keep messages that fail many times. Then one bad message does not block the others.</li>
+  </ul>
+  <h3>Numbers to memorize</h3>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>SQS message retention</td><td>Default 4 days. Range 60 seconds to 14 days.</td></tr>
+    <tr><td>SQS maximum message size</td><td>1 MiB (1,048,576 bytes). Older study material says 256 KB. For larger payloads, store the payload in S3 and send a reference (extended client library).</td></tr>
+    <tr><td>SQS visibility timeout</td><td>Default 30 seconds. Maximum 12 hours.</td></tr>
+    <tr><td>API Gateway REST API integration timeout</td><td>50 ms to 29 seconds by default. You can request more for Regional and private APIs, not for edge-optimized APIs.</td></tr>
+  </table>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Backend database fails during traffic spikes" → put an SQS queue in front of the writer (load leveling).</li>
+      <li>"Order service must keep taking orders when the shipping service is down" → asynchronous messages through a queue.</li>
+      <li>"Long job behind an API times out" → accept the request, queue the work, return an ID, and let the client check status later.</li>
+      <li>"Duplicate processing after a retry" → idempotent consumer (for example, a conditional write on a request ID).</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html">SQS message quotas</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-execution-service-limits-table.html">API Gateway REST API quotas</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async.html">Lambda asynchronous invocation</a>. Lab: <a href="../../../module-05-messaging-events/lab-01-sqs-standard-vs-fifo/README.md">Lab 5.1 SQS standard compared with FIFO</a>, <a href="../../../module-05-messaging-events/lab-04-dlq-and-redrive/README.md">Lab 5.4 DLQ and redrive</a>.</p>
+</section>
+
+<section id="arch-stateless">
+  <h2>Stateful compared with stateless</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>A <strong>stateless</strong> component keeps no client data between requests. Any instance can serve any request.</li>
+    <li>A <strong>stateful</strong> component keeps client data (for example, a session or a cart) in its own memory or disk.</li>
+    <li>Stateless compute scales out and in easily. An instance can stop at any time and no session is lost.</li>
+    <li>Make compute stateless: store session state outside the compute, in DynamoDB or Amazon ElastiCache.</li>
+    <li>DynamoDB for sessions: durable, serverless, and Time to Live (TTL) deletes expired sessions. ElastiCache for sessions: in-memory, lowest latency.</li>
+    <li>Do not keep durable state in Lambda global variables or <code>/tmp</code>. Each execution environment has its own copy, and Lambda can end an environment at any time.</li>
+    <li>Do not keep durable state on one EC2 instance or container. Auto Scaling can terminate it.</li>
+  </ul>
+  <h3>Sticky sessions (Application Load Balancer)</h3>
+  <ul>
+    <li>Sticky sessions (session affinity) send all requests from one client to the same target. The client must support cookies.</li>
+    <li>Duration-based stickiness uses the load balancer cookie <code>AWSALB</code>. Application-based stickiness uses a cookie that your application sets.</li>
+    <li>Sticky sessions let a stateful application run behind a load balancer. But load can become uneven, and a session is lost when its target fails.</li>
+    <li>Sticky sessions are a workaround. The better design is an external session store.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Users are logged out when Auto Scaling removes an instance" → move sessions to ElastiCache or DynamoDB.</li>
+      <li>"Shopping cart must survive instance failure and scale with traffic" → external session store, stateless instances.</li>
+      <li>"Lambda function counts requests in a global variable, and the count is wrong" → each environment has its own memory. Use DynamoDB (for example, an atomic counter).</li>
+      <li>"Legacy application keeps sessions in memory, fastest fix with no code change" → ALB sticky sessions.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/edit-target-group-attributes.html#sticky-sessions">ALB sticky sessions</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html">Lambda execution environment</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html">DynamoDB Time to Live</a>. Lab: <a href="../../../module-02-dynamodb-deep-dive/lab-10-elasticache-redis/README.md">Lab 2.10 ElastiCache</a>.</p>
+</section>
+
+<section id="arch-caching-layers">
+  <h2>Application-level caching</h2>
+  <h3>Where to cache</h3>
+  <table>
+    <tr><th>Layer</th><th>What it caches</th><th>Who shares the cache</th></tr>
+    <tr><td>Amazon CloudFront</td><td>HTTP responses at edge locations (static files, API GET responses)</td><td>All users near an edge location</td></tr>
+    <tr><td>API Gateway cache (REST APIs)</td><td>Integration responses for each stage, by cache key</td><td>All clients of the stage</td></tr>
+    <tr><td>Amazon ElastiCache (Valkey, Redis OSS, Memcached)</td><td>Any data your code puts there: query results, sessions, computed values</td><td>All application instances</td></tr>
+    <tr><td>DynamoDB Accelerator (DAX)</td><td>DynamoDB items and query results, with no change to the data access logic</td><td>All clients of the DAX cluster</td></tr>
+    <tr><td>Lambda execution environment memory</td><td>Values in global variables or <code>/tmp</code></td><td>Only that one execution environment</td></tr>
+  </table>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Choose the layer by who reads the data and how often it changes. Cache close to the user for data that many users read.</li>
+    <li>Set a TTL on every cached item. A short TTL gives fresher data. A long TTL gives more cache hits.</li>
+    <li>Strategy definitions (lazy loading, write-through) are in Module 2. Lazy loading caches only requested data, but data can be stale. Write-through keeps the cache current, but caches data that nobody reads.</li>
+  </ul>
+  <h3>API Gateway cache</h3>
+  <ul>
+    <li>Only REST APIs have a cache. You turn it on for a stage. It costs money for each hour, by cache size.</li>
+    <li>TTL: default 300 seconds, maximum 3,600 seconds. TTL 0 turns caching off.</li>
+    <li>Only GET methods are cached by default. Override method settings to cache other methods.</li>
+    <li>Cache keys can include headers, path parameters, and query strings. Each key value gets its own cache entry.</li>
+    <li>A client can send <code>Cache-Control: max-age=0</code> to get a fresh response. Require the <code>execute-api:InvalidateCache</code> permission, or any client can invalidate entries.</li>
+    <li>Flush the whole stage cache from the console or the CLI (<code>flush-stage-cache</code>).</li>
+  </ul>
+  <h3>CloudFront TTL</h3>
+  <ul>
+    <li>A cache policy sets minimum, default, and maximum TTL. The origin can send <code>Cache-Control: max-age</code>. CloudFront keeps it inside the minimum and maximum TTL.</li>
+    <li>Without a cache policy (legacy settings), the default TTL is 24 hours.</li>
+    <li>To remove content before it expires, create an invalidation or use versioned file names.</li>
+  </ul>
+  <h3>DAX</h3>
+  <ul>
+    <li>DAX is a write-through cache. Writes through DAX update DynamoDB first, then the item cache.</li>
+    <li>DAX passes strongly consistent reads to DynamoDB and does not cache the result. DAX serves only eventually consistent reads from cache.</li>
+    <li>Writes made directly to DynamoDB (not through DAX) do not update the DAX cache. The item stays stale until its TTL expires.</li>
+    <li>The item cache and the query cache are separate. An item update does not refresh cached query results.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Same GET response for many users, reduce backend calls, no code change" → API Gateway cache or CloudFront.</li>
+      <li>"DynamoDB reads need microsecond latency with minimal code change" → DAX.</li>
+      <li>"Read needs strongly consistent data" → DAX does not help. It sends the read to DynamoDB.</li>
+      <li>"Cache results of an expensive RDS query for many instances" → ElastiCache.</li>
+      <li>"Some clients must be able to force a fresh response" → <code>Cache-Control: max-age=0</code> with the <code>execute-api:InvalidateCache</code> permission.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-caching.html">API Gateway caching</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Expiration.html">CloudFront expiration</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DAX.consistency.html">DAX and consistency</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Strategies.html">ElastiCache caching strategies</a>. Lab: <a href="../../../module-02-dynamodb-deep-dive/lab-10-elasticache-redis/README.md">Lab 2.10 ElastiCache</a>, <a href="../../../module-04-api-gateway-cognito/README.md">Module 4 overview</a>.</p>
+</section>
+
+<section id="arch-storage-options">
+  <h2>Storage options: block, file, object, ephemeral</h2>
+  <h3>Comparison</h3>
+  <table>
+    <tr><th>Storage</th><th>Type</th><th>Scope and access</th><th>Persistence</th></tr>
+    <tr><td>Amazon EBS</td><td>Block</td><td>One Availability Zone. Attaches to an instance in the same Availability Zone.</td><td>Persists independently from the instance life.</td></tr>
+    <tr><td>Amazon EFS</td><td>File (NFS)</td><td>Many clients at the same time. Regional file systems store data across Availability Zones. One Zone file systems use one Availability Zone.</td><td>Persistent and shared.</td></tr>
+    <tr><td>Amazon S3</td><td>Object</td><td>HTTPS API from anywhere, by key</td><td>Persistent. Not a mounted disk. Amazon S3 Files (2026) is a separate S3 file system with mount targets and an access point. EC2 and Lambda can mount it over NFS. Older study material: S3 is object storage only.</td></tr>
+    <tr><td>EC2 instance store</td><td>Block, on the host</td><td>Only the one instance</td><td>Kept on reboot. Lost on stop, hibernate, or terminate.</td></tr>
+    <tr><td>Lambda <code>/tmp</code></td><td>Ephemeral</td><td>Only one execution environment</td><td>Lost when the environment ends. Size 512 MB to 10,240 MB.</td></tr>
+  </table>
+  <h3>EBS</h3>
+  <ul>
+    <li>To use the data in another Availability Zone, create a snapshot, then create a new volume from it.</li>
+    <li>Multi-Attach: only Provisioned IOPS SSD (<code>io1</code>, <code>io2</code>), up to 16 Nitro instances in the same Availability Zone.</li>
+    <li>Multi-Attach needs a cluster-aware file system. Standard file systems such as XFS and EXT4 are not safe for many writers.</li>
+  </ul>
+  <h3>EFS</h3>
+  <ul>
+    <li>EFS uses NFS version 4 (4.0 and 4.1). EC2, ECS, EKS, Fargate, and Lambda can mount it. EFS does not support Windows instances.</li>
+    <li>EFS grows and shrinks automatically. You do not provision capacity.</li>
+    <li>Lambda and EFS: the function must connect to the VPC. Create a mount target in each Availability Zone that the function uses. Configure an access point and a local mount path that starts with <code>/mnt/</code>.</li>
+    <li>Security groups must allow NFS traffic on port 2049 between the function and the mount targets.</li>
+    <li>If the file system has an IAM policy, the execution role needs <code>elasticfilesystem:ClientMount</code>, and <code>elasticfilesystem:ClientWrite</code> for write access.</li>
+    <li>An access point sets the POSIX user, group, and root directory for each client. Use it to limit an application to one directory.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Many Lambda functions or containers must share files with a file system interface" → EFS.</li>
+      <li>"Scratch data, fastest local disk, loss is acceptable" → instance store.</li>
+      <li>"Boot or database volume for one instance" → EBS.</li>
+      <li>"Store large objects for many readers over HTTP at low cost" → S3.</li>
+      <li>"Data on a disk is missing after the instance was stopped and started" → it was on instance store.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volumes.html">EBS volumes</a>, <a href="https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volumes-multi.html">EBS Multi-Attach</a>, <a href="https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html">What is Amazon EFS</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-filesystem-efs.html">Lambda with EFS</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-store-lifetime.html">Instance store data persistence</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files.html">Amazon S3 Files</a>. Lab: <a href="../../../module-01-lambda-fundamentals/README.md">Module 1 overview</a>.</p>
+</section>
+
+<section id="arch-purpose-built-data">
+  <h2>Purpose-built data stores</h2>
+  <h3>Choose by access pattern</h3>
+  <table>
+    <tr><th>Access pattern</th><th>Data store</th></tr>
+    <tr><td>Key-value or document access by key, any scale, serverless</td><td>Amazon DynamoDB</td></tr>
+    <tr><td>Relational data, joins, complex SQL, transactions across tables</td><td>Amazon RDS or Amazon Aurora</td></tr>
+    <tr><td>Microsecond to sub-millisecond reads, cache, sessions, leaderboards</td><td>Amazon ElastiCache</td></tr>
+    <tr><td>Full-text search, fuzzy match, relevance ranking, log analytics</td><td>Amazon OpenSearch Service</td></tr>
+    <tr><td>Ad hoc SQL on files in S3, no servers, no data load</td><td>Amazon Athena</td></tr>
+    <tr><td>Large binary objects, files, data lake</td><td>Amazon S3</td></tr>
+  </table>
+  <h3>OpenSearch Service</h3>
+  <ul>
+    <li>DynamoDB is not good at text search. A <code>Scan</code> with a <code>contains</code> filter reads the whole table.</li>
+    <li>Keep DynamoDB as the main store, and copy the data to OpenSearch Service for search.</li>
+    <li>DynamoDB zero-ETL integration uses Amazon OpenSearch Ingestion. It loads a first snapshot through export to S3, then copies changes from DynamoDB Streams.</li>
+    <li>The integration needs point-in-time recovery (for the export) and DynamoDB Streams with new and old images. It does not use the table's read or write capacity.</li>
+    <li>Another option: DynamoDB Streams to a Lambda function that writes to OpenSearch Service. This option needs custom code.</li>
+  </ul>
+  <h3>Athena</h3>
+  <ul>
+    <li>Athena runs standard SQL on data in S3. There is no infrastructure to manage.</li>
+    <li>You pay for the data that each query scans. Less data scanned means lower cost and faster queries.</li>
+    <li>Partition the data (for example, <code>year=2026/month=10/</code>). A query with the partition in the <code>WHERE</code> clause scans only that partition.</li>
+    <li>Use columnar formats (Apache Parquet, ORC) and compression. Athena then reads only the columns that the query needs.</li>
+    <li>Load new Hive-style partitions with <code>MSCK REPAIR TABLE</code>, or use partition projection.</li>
+    <li>A workgroup can set a data scanned limit for each query. Athena cancels a query that scans more.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Search product descriptions by keywords, with relevance" → OpenSearch Service.</li>
+      <li>"Search DynamoDB data with the least operational overhead" → DynamoDB zero-ETL integration with OpenSearch Service.</li>
+      <li>"Query logs in S3 with SQL occasionally, no servers" → Athena.</li>
+      <li>"Athena queries cost too much" → partition the data, convert to Parquet, and compress.</li>
+      <li>"Joins across many tables with referential integrity" → RDS or Aurora, not DynamoDB.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/OpenSearchIngestionForDynamoDB.html">DynamoDB zero-ETL integration with OpenSearch Service</a>, <a href="https://docs.aws.amazon.com/athena/latest/ug/partitions.html">Athena partitions</a>, <a href="https://docs.aws.amazon.com/athena/latest/ug/columnar-storage.html">Athena columnar formats</a>, <a href="https://docs.aws.amazon.com/athena/latest/ug/workgroups-setting-control-limits-cloudwatch.html">Athena data usage controls</a>. Lab: <a href="../../../module-02-dynamodb-deep-dive/README.md">Module 2 overview</a>.</p>
+</section>
+
+</main>
+
+<footer>
+  <a href="../../index.html#quiz/g-architecture">Take the quiz</a>
+</footer>
+</body>
+</html>
