@@ -231,15 +231,15 @@ window.QUESTION_BANKS.push({ setId: "m05-messaging", questions: [
     ],
     explanation: "A filter policy belongs to a subscription. FilterPolicyScope is MessageAttributes by default; set MessageBody to filter on fields in a JSON body." },
 
-  { id: "m05-017", topic: "sns-fanout-filtering", domain: 1,
+  { id: "m05-017", topic: "sns-fanout-filtering", domain: 4,
     stem: "An SNS topic sends all orders to an SQS queue. Each order is published with a numeric message attribute named amount. A consumer on Amazon ECS reads the queue. The consumer must receive only orders with amount greater than 100, and the consumer code must not parse the SNS JSON envelope. Which actions will meet these requirements? (Choose two.)",
     options: [
       { text: "Add a filter policy to the SQS subscription with \"amount\": [{\"numeric\": [\">\", 100]}].", correct: true,
         why: "A numeric filter on the message attribute stops SNS from delivering orders of 100 or less to this subscription." },
       { text: "Turn on raw message delivery for the SQS subscription.", correct: true,
         why: "Raw message delivery sends only the message body to the queue, without the SNS JSON envelope." },
-      { text: "Add a filter policy to the SNS topic.", correct: false,
-        why: "SNS does not support filter policies on a topic. Filter policies are on subscriptions." },
+      { text: "Add filter criteria for amount greater than 100 to a Lambda event source mapping on the queue.", correct: false,
+        why: "Event source mapping filters apply only when Lambda reads the queue. The consumer runs on Amazon ECS, so SNS still delivers every order to it." },
       { text: "Add a condition on the amount attribute to the SQS queue policy.", correct: false,
         why: "A queue policy controls who can call SQS actions. It cannot filter messages by attribute value." },
       { text: "Change the topic to a FIFO topic.", correct: false,

@@ -55,7 +55,7 @@
     <tr><th>Item</th><th>Standard queue</th><th>FIFO queue</th></tr>
     <tr><td>Order</td><td>Best effort</td><td>Strict, inside each <code>MessageGroupId</code></td></tr>
     <tr><td>Delivery</td><td>At least once. Duplicates can occur.</td><td>No duplicates are added in the 5-minute deduplication interval</td></tr>
-    <tr><td>Throughput</td><td>Nearly unlimited API calls each second</td><td>300 transactions each second for each API action (send, receive, delete). With batches of 10: 3,000 messages each second. High throughput mode allows much more.</td></tr>
+    <tr><td>Throughput</td><td>Nearly unlimited API calls each second</td><td>300 transactions each second for each API action (send, receive, delete), for the queue, not for each message group. With batches of 10: 3,000 messages each second. High throughput mode allows much more.</td></tr>
     <tr><td>Name</td><td>Any valid name</td><td>Must end in <code>.fifo</code></td></tr>
     <tr><td><code>MessageGroupId</code></td><td>Optional (turns on fair queues)</td><td>Required on every message</td></tr>
     <tr><td>Per-message delay (message timer)</td><td>Supported</td><td>Not supported. Use a queue-level delay.</td></tr>
@@ -250,6 +250,7 @@
     <li>SNS does not deliver a message that does not match. This saves Lambda invocations and SQS receives.</li>
     <li>Operators include exact match, <code>prefix</code>, <code>suffix</code>, <code>anything-but</code>, <code>numeric</code>, <code>exists</code>, and <code>cidr</code>.</li>
     <li>Quota: 200 filter policies for each topic.</li>
+    <li>A new or changed filter policy can take up to 15 minutes to take full effect.</li>
   </ul>
   <h3>Raw message delivery</h3>
   <ul>
@@ -266,7 +267,7 @@
       <li>"Consumer code must not parse the SNS envelope" → raw message delivery.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html">SNS message filtering</a>, <a href="https://docs.aws.amazon.com/sns/latest/api/API_SetSubscriptionAttributes.html">SetSubscriptionAttributes</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-large-payload-raw-message-delivery.html">Raw message delivery</a>, <a href="https://docs.aws.amazon.com/general/latest/gr/sns.html">SNS quotas</a>. Lab: <a href="../../../module-05-messaging-events/lab-02-sns-fanout/README.md">Lab 5.2 SNS fan-out</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html">SNS message filtering</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-subscription-filter-policies.html">Subscription filter policies</a>, <a href="https://docs.aws.amazon.com/sns/latest/api/API_SetSubscriptionAttributes.html">SetSubscriptionAttributes</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-large-payload-raw-message-delivery.html">Raw message delivery</a>, <a href="https://docs.aws.amazon.com/general/latest/gr/sns.html">SNS quotas</a>. Lab: <a href="../../../module-05-messaging-events/lab-02-sns-fanout/README.md">Lab 5.2 SNS fan-out</a>.</p>
 </section>
 
 <section id="sns-delivery">
@@ -295,7 +296,7 @@
     <li>Strict order inside each <code>MessageGroupId</code>, and deduplication in a 5-minute interval (<code>MessageDeduplicationId</code> or content-based).</li>
     <li>A FIFO topic delivers only to SQS queues: FIFO queues and standard queues.</li>
     <li>A FIFO topic cannot deliver to Lambda, HTTP/S, email, SMS, or mobile push. To reach Lambda, subscribe a queue and use it as the function trigger.</li>
-    <li>Throughput: 300 messages each second for each message group. The topic default is 3,000 messages each second or 20 MB each second.</li>
+    <li>Throughput depends on the topic attribute <code>FifoThroughputScope</code>. With <code>MessageGroup</code>, each message group can receive 300 messages each second. With <code>Topic</code>, the topic default is 3,000 messages each second or 20 MB each second.</li>
     <li>FIFO topics support message archiving and replay. Standard topics do not.</li>
   </ul>
   <div class="exam-signals">
@@ -327,6 +328,7 @@
     <li>A rule can have a maximum of <strong>5 targets</strong>. This quota cannot be increased. For more targets, add a rule with the same pattern or send to an SNS topic.</li>
     <li>Pattern operators include exact match, <code>prefix</code>, <code>suffix</code>, <code>anything-but</code>, <code>numeric</code>, <code>exists</code>, <code>cidr</code>, <code>wildcard</code>, and <code>equals-ignore-case</code>.</li>
     <li>EventBridge patterns can match any field in the event, including nested fields in <code>detail</code>.</li>
+    <li>In September 2026, AWS released a new Custom Event Bus that sends events to subscribers instead of rules and targets. It accepts up to 100 entries in each <code>PutEvents</code> call and keeps events for 1 to 365 days. The exam guide covers the default bus and the rules-and-targets bus, now named Custom Event Bus - Classic. The limits on this sheet are for those buses.</li>
     <li><strong>Input transformer</strong>: <code>InputPathsMap</code> takes values from the event; <code>InputTemplate</code> builds the new input for the target.</li>
     <li><code>PutEvents</code>: up to 10 entries in one request, total size less than 1 MB.</li>
     <li><code>PutEvents</code> can partly fail. Check <code>FailedEntryCount</code> and send the failed entries again.</li>
@@ -357,7 +359,7 @@
       <li>"Send events to a third-party HTTP API with OAuth, no code" → API destination with a connection.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-quota.html">EventBridge quotas</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutEvents.html">PutEvents</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html">Target permissions</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-api-destinations.html">API destinations</a>. Lab: <a href="../../../module-05-messaging-events/lab-03-eventbridge-rules/README.md">Lab 5.3 EventBridge rules</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-quota.html">EventBridge quotas</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-bus.html">Event buses</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutEvents.html">PutEvents</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html">Target permissions</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-api-destinations.html">API destinations</a>. Lab: <a href="../../../module-05-messaging-events/lab-03-eventbridge-rules/README.md">Lab 5.3 EventBridge rules</a>.</p>
 </section>
 
 <section id="eb-delivery-archive">
