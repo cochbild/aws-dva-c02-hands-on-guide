@@ -121,7 +121,7 @@
   <h3>Private integrations (VPC links)</h3>
   <ul>
     <li>A private integration lets the API reach resources in a VPC that are not public.</li>
-    <li>REST API: a VPC link to a Network Load Balancer.</li>
+    <li>REST API: a VPC link V2 to an Application Load Balancer or a Network Load Balancer. VPC links V1 are legacy and support only a Network Load Balancer (older study material says "REST API → NLB"). REST APIs do not support AWS Cloud Map.</li>
     <li>HTTP API: a VPC link to an Application Load Balancer, a Network Load Balancer, or an AWS Cloud Map service.</li>
   </ul>
   <div class="exam-signals">
@@ -133,7 +133,7 @@
       <li>"Front-end team must test against the API before the backend exists" → mock integration.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html">Lambda proxy integrations</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-execution-service-limits-table.html">REST API quotas</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-quotas.html">HTTP API quotas</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-integration-async.html">Asynchronous Lambda invocation</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/how-to-mock-integration.html">Mock integrations</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vs-rest.html">Private integrations (comparison)</a>. Lab: <a href="../../../module-04-api-gateway-cognito/lab-01-rest-vs-http-api/README.md">Lab 4.1 REST vs HTTP API</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html">Lambda proxy integrations</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-execution-service-limits-table.html">REST API quotas</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-quotas.html">HTTP API quotas</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-integration-async.html">Asynchronous Lambda invocation</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/how-to-mock-integration.html">Mock integrations</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/private-integration.html">Private integrations for REST APIs</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vs-rest.html">REST and HTTP API comparison</a>. Lab: <a href="../../../module-04-api-gateway-cognito/lab-01-rest-vs-http-api/README.md">Lab 4.1 REST vs HTTP API</a>.</p>
 </section>
 
 <section id="apigw-stages">

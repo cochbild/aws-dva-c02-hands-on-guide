@@ -253,7 +253,7 @@ window.QUESTION_BANKS.push({ setId: "m04-api-cognito", questions: [
       { text: "Change the client to send the ID token instead of the access token.", correct: false,
         why: "The ID token does not carry OAuth scopes. The method could then not check for orders/read." },
       { text: "Add a token validation regular expression that checks the aud claim.", correct: false,
-        why: "Access tokens do not have an aud claim. This validation rejects access tokens." },
+        why: "Access tokens do not have an aud claim by default. This validation rejects access tokens." },
       { text: "Increase the authorizer result TTL to 3,600 seconds.", correct: false,
         why: "Caching stores results longer. It does not change how the authorizer validates the token." }
     ],
