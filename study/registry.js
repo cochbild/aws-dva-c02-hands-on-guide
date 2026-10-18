@@ -20,4 +20,21 @@ window.STUDY_SETS = [
       { id: "lambda-performance", title: "Performance tuning and SnapStart" },
     ],
   },
+  {
+    id: "g-architecture",
+    title: "Architecture patterns and data store choice",
+    kind: "gap",
+    path: "sets/g-architecture/",
+    lab: null,
+    topics: [
+      { id: "arch-event-driven", title: "Event-driven architecture and fanout" },
+      { id: "arch-microservices", title: "Monolithic compared with microservices" },
+      { id: "arch-orchestration", title: "Orchestration compared with choreography" },
+      { id: "arch-coupling-sync", title: "Coupling and synchronous compared with asynchronous" },
+      { id: "arch-stateless", title: "Stateful compared with stateless" },
+      { id: "arch-caching-layers", title: "Application-level caching" },
+      { id: "arch-storage-options", title: "Storage options: block, file, object, ephemeral" },
+      { id: "arch-purpose-built-data", title: "Purpose-built data stores" },
+    ],
+  },
 ];
