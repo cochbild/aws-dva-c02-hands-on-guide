@@ -65,7 +65,7 @@
   <ul>
     <li>A template with IAM resources needs <code>CAPABILITY_IAM</code> or <code>CAPABILITY_NAMED_IAM</code>. Without one, CloudFormation returns <code>InsufficientCapabilities</code>.</li>
     <li>IAM resources with custom names (for example <code>RoleName</code>) need <code>CAPABILITY_NAMED_IAM</code>.</li>
-    <li>A template with macros (SAM, <code>AWS::Include</code>) that you deploy directly needs <code>CAPABILITY_AUTO_EXPAND</code>.</li>
+    <li><code>create-stack</code> or <code>update-stack</code> directly from a template with a macro (SAM, <code>AWS::Include</code>) needs <code>CAPABILITY_AUTO_EXPAND</code>. Change sets do not need it, so <code>aws cloudformation deploy</code> and <code>sam deploy</code> need it only for a template with macros and nested stacks.</li>
   </ul>
   <h3>Numbers to memorize</h3>
   <table>
@@ -85,7 +85,7 @@
       <li>"InsufficientCapabilities, the role has a fixed name" → <code>CAPABILITY_NAMED_IAM</code>.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-anatomy.html">Template sections</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/parameters-section-structure.html">Parameters (NoEcho)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cloudformation-supplied-parameter-types.html">AWS-specific and SSM parameter types</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/pseudo-parameter-reference.html">Pseudo parameters</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_CreateStack.html">CreateStack (capabilities)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cloudformation-limits.html">CloudFormation quotas</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-anatomy.html">Template sections</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/parameters-section-structure.html">Parameters (NoEcho)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cloudformation-supplied-parameter-types.html">AWS-specific and SSM parameter types</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/pseudo-parameter-reference.html">Pseudo parameters</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_CreateStack.html">CreateStack (capabilities)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_CreateChangeSet.html">CreateChangeSet (CAPABILITY_AUTO_EXPAND has no effect on change sets)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cloudformation-limits.html">CloudFormation quotas</a>.</p>
 </section>
 
 <section id="iac-cfn-intrinsics">
@@ -239,8 +239,8 @@
     <tr><td><code>UpdateReplacePolicy</code></td><td>An update <strong>replaces</strong> the resource (the old physical resource)</td><td><code>Delete</code> (default), <code>Retain</code>, <code>Snapshot</code></td></tr>
   </table>
   <ul>
-    <li>Default exception: <code>AWS::RDS::DBCluster</code>, and <code>AWS::RDS::DBInstance</code> without <code>DBClusterIdentifier</code>, default to <code>Snapshot</code>.</li>
-    <li><code>Snapshot</code> works for EBS volumes, RDS instances and clusters, ElastiCache clusters and replication groups, Neptune, DocumentDB, and Redshift. It does not work for S3 buckets or DynamoDB tables.</li>
+    <li><code>DeletionPolicy</code> default exception: <code>AWS::RDS::DBCluster</code>, and <code>AWS::RDS::DBInstance</code> without <code>DBClusterIdentifier</code>, default to <code>Snapshot</code>. <code>UpdateReplacePolicy</code> has no such exception: its default is always <code>Delete</code>.</li>
+    <li><code>Snapshot</code> works for EBS volumes, RDS instances and clusters, ElastiCache clusters and replication groups, Neptune clusters, and Redshift clusters. <code>DeletionPolicy: Snapshot</code> also works for DocumentDB clusters, but the <code>UpdateReplacePolicy</code> list does not include DocumentDB. <code>Snapshot</code> does not work for S3 buckets or DynamoDB tables.</li>
     <li><code>Retain</code> works for every resource type. A retained resource still costs money.</li>
     <li>CloudFormation cannot delete an S3 bucket that contains objects.</li>
   </ul>
@@ -399,7 +399,7 @@
   </table>
   <ul>
     <li>Without bootstrap, only stacks with no assets and a template under 51,200 bytes deploy.</li>
-    <li>Grant methods (for example <code>table.grantReadData(fn)</code>) add a least-privilege IAM policy to the function role. You do not write the policy JSON.</li>
+    <li>Grants add a least-privilege IAM policy to the function role. You do not write the policy JSON. Current form: <code>table.grants.readData(fn)</code> (the <code>grants</code> property on L2 constructs). Older study material shows <code>table.grantReadData(fn)</code>. These methods still work, but the API reference marks them discouraged.</li>
     <li><code>RemovalPolicy</code> maps to <code>DeletionPolicy</code>. For stateful resources (S3 buckets, DynamoDB tables) the CDK default is <strong>RETAIN</strong>. This is the opposite of the CloudFormation default.</li>
     <li>To delete a bucket with objects on <code>cdk destroy</code>, set <code>removalPolicy: DESTROY</code> and <code>autoDeleteObjects: true</code>.</li>
   </ul>
@@ -411,7 +411,7 @@
       <li>"Give a function read access to a table with the least code" → a grant method.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/cdk/v2/guide/constructs.html">Constructs</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html">Bootstrapping</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/ref-cli-cmd-deploy.html">cdk deploy (hotswap, 51,200 bytes)</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/permissions.html">Grants</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/resources.html">Removal policies</a>. Related set: Module 8 (CI/CD).</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/cdk/v2/guide/constructs.html">Constructs</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html">Bootstrapping</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/ref-cli-cmd-deploy.html">cdk deploy (hotswap, 51,200 bytes)</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/permissions.html">Grants</a>, <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_dynamodb.Table.html">Table API (grants.readData)</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/resources.html">Removal policies</a>. Related set: Module 8 (CI/CD).</p>
 </section>
 
 <section id="iac-environments">
@@ -464,7 +464,7 @@
   <h2>Packaging and project layout</h2>
   <h3>Packaging</h3>
   <ul>
-    <li><code>aws cloudformation package --s3-bucket ...</code> uploads local paths (for example <code>CodeUri</code>, Lambda <code>Code</code>, nested stack <code>TemplateURL</code>) to S3. A folder becomes a .zip file. It writes a new template with the S3 locations.</li>
+    <li><code>aws cloudformation package --s3-bucket ...</code> (or the same job with <code>sam package</code>) uploads local paths (for example <code>CodeUri</code>, Lambda <code>Code</code>, nested stack <code>TemplateURL</code>) to S3. A folder becomes a .zip file. It writes a new template with the S3 locations.</li>
     <li><code>aws cloudformation deploy</code> creates a change set and runs it. With <code>--no-execute-changeset</code>, it stops after it creates the change set.</li>
     <li>A template larger than 51,200 bytes must come from S3. Use <code>deploy --s3-bucket</code>.</li>
     <li><code>sam deploy</code> does the upload for you. <code>resolve_s3 = true</code> makes SAM create a managed bucket.</li>

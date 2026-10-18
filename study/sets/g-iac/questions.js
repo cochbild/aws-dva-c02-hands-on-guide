@@ -93,7 +93,7 @@ window.QUESTION_BANKS.push({ setId: "g-iac", questions: [
       { text: "Make a change to the DB instance resource in the template, and update the stack.", correct: true,
         why: "CloudFormation resolves the dynamic reference only when it creates or updates the resource that contains it. An update to that resource makes it read the new value." },
       { text: "Run drift detection on the stack and resolve the drift.", correct: false,
-        why: "Drift detection does not support dynamic references and does not change resources. The database keeps the old password." },
+        why: "Drift detection does not change resources. The database keeps the old password." },
       { text: "Update the stack with the current template and the existing parameter values.", correct: false,
         why: "With no template or parameter changes, CloudFormation has no updates to perform. It does not read the secret again." },
       { text: "Add AWSPREVIOUS as the version stage in the dynamic reference.", correct: false,
@@ -223,7 +223,7 @@ window.QUESTION_BANKS.push({ setId: "g-iac", questions: [
       { text: "Run drift detection on the stack, and review the resources with a MODIFIED status.", correct: true,
         why: "Drift detection compares the actual configuration of supported resources with the template and parameter values. It reports changed properties." },
       { text: "Create a change set with the current template.", correct: false,
-        why: "A change set compares a new template with the current template. It does not read changes made outside CloudFormation." },
+        why: "A standard change set compares a new template with the current template. It does not read changes made outside CloudFormation." },
       { text: "Read the stack events.", correct: false,
         why: "Stack events record CloudFormation operations only. Changes in the EC2 console do not create stack events." },
       { text: "Update the stack with the current template.", correct: false,
@@ -480,8 +480,8 @@ window.QUESTION_BANKS.push({ setId: "g-iac", questions: [
   { id: "g-iac-034", topic: "iac-cdk", domain: 2,
     stem: "A CDK app defines a Lambda function and a DynamoDB table with L2 constructs. The function must read items from the table. The developer wants least privilege and the least code. Which solution will meet these requirements?",
     options: [
-      { text: "Call the table grant method for read access with the function as the grantee, for example table.grantReadData(fn).", correct: true,
-        why: "L2 grant methods add an IAM policy with the read actions for that table to the function role. The developer writes no policy JSON." },
+      { text: "Use the table grants for read access with the function as the grantee, for example table.grants.readData(fn).", correct: true,
+        why: "L2 grants (the grants property, or the older grantReadData method, which still works but is discouraged) add an IAM policy with the read actions for that table to the function role. The developer writes no policy JSON." },
       { text: "Attach the AmazonDynamoDBFullAccess managed policy to the function role.", correct: false,
         why: "This allows all DynamoDB actions on all tables. It fails least privilege." },
       { text: "Add a policy statement with dynamodb:* on the table ARN to the function role.", correct: false,
@@ -550,7 +550,7 @@ window.QUESTION_BANKS.push({ setId: "g-iac", questions: [
     explanation: "A CloudFormation service role separates deploy permission from resource permission. Users need iam:PassRole for the role; CloudFormation uses it for all later operations." },
 
   { id: "g-iac-039", topic: "iac-packaging", domain: 3,
-    stem: "A CloudFormation template defines an AWS::Serverless::Function with CodeUri: ./src. The developer runs aws cloudformation create-stack with the template, and the deployment cannot find the code. The developer wants to keep the code in the local folder in source control. Which solution will meet these requirements?",
+    stem: "A CloudFormation template defines an AWS::Serverless::Function with CodeUri: ./src. The developer runs aws cloudformation create-stack with the template. The SAM transform fails because CodeUri must be an Amazon S3 location, not a local path. The developer wants to keep the code in the local folder in source control. Which solution will meet these requirements?",
     options: [
       { text: "Run aws cloudformation package with --s3-bucket to upload ./src and write an output template, and then deploy the output template.", correct: true,
         why: "package zips the local folder, uploads it to S3, and replaces CodeUri with the S3 location in a new template that CloudFormation can deploy." },
