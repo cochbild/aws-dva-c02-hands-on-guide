@@ -16,7 +16,7 @@ window.QUESTION_BANKS.push({ setId: "g-dev-practices", questions: [
     explanation: "Exponential backoff with jitter spreads retries from many clients. Without jitter, clients that fail together also retry together." },
 
   { id: "gdev-002", topic: "dev-sdk-retries", domain: 1,
-    stem: "A Python application on Amazon EC2 uses the AWS SDK with the default standard retry mode. Calls to a downstream AWS service sometimes fail after three attempts during short throttling periods. The developer wants the SDK to make up to five attempts. The developer must not change the application code. Which solution will meet these requirements?",
+    stem: "A Python application on Amazon EC2 uses the AWS SDK, configured for the standard retry mode. Calls to a downstream AWS service sometimes fail after three attempts during short throttling periods. The developer wants the SDK to make up to five attempts. The developer must not change the application code. Which solution will meet these requirements?",
     options: [
       { text: "Set the AWS_MAX_ATTEMPTS environment variable to 5 for the application.", correct: true,
         why: "AWS_MAX_ATTEMPTS sets the total number of attempts, including the first request. The SDK reads it at startup, so no code change is necessary." },
@@ -377,7 +377,7 @@ window.QUESTION_BANKS.push({ setId: "g-dev-practices", questions: [
     ],
     explanation: "Never put access keys in code. On AWS compute, create the SDK client without keys and let the default credential chain use the role." },
 
-  { id: "gdev-027", topic: "dev-unit-testing", domain: 3,
+  { id: "gdev-027", topic: "dev-unit-testing", domain: 1,
     stem: "A developer writes unit tests for a Python Lambda function that reads from Amazon DynamoDB. The tests run in a CI pipeline that has no AWS credentials. The tests must be fast and must not call AWS. Which solution will meet these requirements?",
     options: [
       { text: "Pass the DynamoDB client into the business logic as a parameter, and replace it in tests with a stub, for example from moto or the botocore Stubber.", correct: true,

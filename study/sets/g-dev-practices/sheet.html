@@ -61,6 +61,7 @@
   <ul>
     <li>Precedence: client configuration in code, then environment variable, then <code>~/.aws/config</code>, then the SDK default.</li>
     <li>In standard mode, the maximum wait between two attempts is 20 seconds.</li>
+    <li>AWS published updated retry defaults in 2026 (opt-in with <code>AWS_NEW_RETRIES_2026</code> until they become the default). Older study material and the exam use the values above.</li>
     <li>With the AWS CLI, add <code>--debug</code> and search the output for "retry" to see retry attempts.</li>
   </ul>
   <div class="exam-signals">
@@ -80,7 +81,7 @@
   <h3>Status code classes</h3>
   <table>
     <tr><th>Code</th><th>Meaning</th><th>Retry?</th></tr>
-    <tr><td>400</td><td>Bad request: validation error, missing parameter. Some services also send throttling and condition failures as 400 (see the DynamoDB list).</td><td>Only if the error code is a throttling code</td></tr>
+    <tr><td>400</td><td>Bad request: validation error, missing parameter. Some services also send throttling and condition failures as 400 (see the DynamoDB list).</td><td>The SDK retries it only if the error code is a throttling or transient code (for example <code>RequestTimeout</code>)</td></tr>
     <tr><td>403</td><td>Access denied: the caller has no permission, or the signature or credentials are not valid.</td><td>No. Fix the policy or the credentials.</td></tr>
     <tr><td>404</td><td>The resource does not exist.</td><td>No</td></tr>
     <tr><td>429</td><td>Too many requests (throttling). For example, Lambda <code>TooManyRequestsException</code> and API Gateway throttling.</td><td>Yes, with backoff</td></tr>
@@ -261,7 +262,7 @@
     <li>IMDSv2 is session-oriented. First send <code>PUT http://169.254.169.254/latest/api/token</code> with the header <code>X-aws-ec2-metadata-token-ttl-seconds</code>.</li>
     <li>The token lives from 1 second to 6 hours (21,600 seconds). Send it in the <code>X-aws-ec2-metadata-token</code> header on each <code>GET</code>.</li>
     <li>When IMDSv2 is required (<code>HttpTokens</code> = <code>required</code>), a request without a valid token gets <code>401 - Unauthorized</code>.</li>
-    <li>The default hop limit for the <code>PUT</code> response is 1. Containers on the instance can need a larger hop limit.</li>
+    <li>The default hop limit for the <code>PUT</code> response is 1, or 2 for AMIs registered with <code>ImdsSupport</code> <code>v2.0</code>. Containers on the instance can need a hop limit of 2.</li>
     <li>Current SDK and CLI versions use IMDSv2 automatically. Old versions must be upgraded before you require IMDSv2.</li>
   </ul>
   <h3>Filtering and checks</h3>
@@ -289,7 +290,7 @@
       <li>"Protect instance credentials from SSRF" → require IMDSv2.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html">CLI configuration and credentials precedence</a>, <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-filter.html">CLI filtering</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html">IMDSv2</a>, <a href="https://docs.aws.amazon.com/cloudshell/latest/userguide/limits.html">CloudShell quotas</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html">CLI configuration and credentials precedence</a>, <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-filter.html">CLI filtering</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html">IMDSv2</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-new-instances.html">IMDS options for new instances (hop limit)</a>, <a href="https://docs.aws.amazon.com/cloudshell/latest/userguide/limits.html">CloudShell quotas</a>.</p>
 </section>
 
 <section id="dev-unit-testing">
@@ -410,7 +411,7 @@
     <li>In the AWS Management Console, <strong>Diagnose with Amazon Q</strong> explains common errors (for example missing IAM permissions) and gives steps to fix them.</li>
     <li>Free tier: monthly limits. Sign in to the IDE with an AWS Builder ID (no AWS account necessary).</li>
     <li>Pro tier (Amazon Q Developer Pro): paid, higher limits, and advanced features. An organization subscribes its IAM Identity Center users. Administrators manage settings in the Amazon Q Developer console.</li>
-    <li>AWS plans to end support for the Amazon Q Developer IDE plugins on April 30, 2027. The exam guide still lists Amazon Q Developer.</li>
+    <li>AWS plans to end support for the Amazon Q Developer IDE plugins on April 30, 2027. AWS names Kiro as the replacement for the IDE plugins. The exam guide still lists Amazon Q Developer.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
