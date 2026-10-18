@@ -231,7 +231,7 @@ window.QUESTION_BANKS.push({ setId: "g-compute", questions: [
     ],
     explanation: "Liveness failure restarts the container. Readiness failure only removes the Pod from Service endpoints. Keep dependency checks out of liveness probes." },
 
-  { id: "gcmp-017", topic: "compute-health-checks", domain: 3,
+  { id: "gcmp-017", topic: "compute-health-checks", domain: 4,
     stem: "An EC2 Auto Scaling group runs a web application behind an Application Load Balancer. The group was created with the AWS CLI with default health settings. When the application process crashes, the target group marks the instance unhealthy, but Auto Scaling does not replace it. New instances need 4 minutes to start the application. Which actions will meet these requirements? (Choose two.)",
     options: [
       { text: "Turn on Elastic Load Balancing health checks for the Auto Scaling group.", correct: true,
@@ -261,7 +261,7 @@ window.QUESTION_BANKS.push({ setId: "g-compute", questions: [
     ],
     explanation: "Route 53 health checks can monitor an endpoint, other health checks, or a CloudWatch alarm. Use the alarm type for resources with private IP addresses." },
 
-  { id: "gcmp-019", topic: "compute-health-checks", domain: 3,
+  { id: "gcmp-019", topic: "compute-health-checks", domain: 4,
     stem: "A Java application on Amazon EKS needs up to 2 minutes to start. The liveness probe runs every 10 seconds with a failure threshold of 3, so the kubelet restarts the container before it starts. The Service must not send traffic to a Pod until the application can take requests. Which actions will meet these requirements? (Choose two.)",
     options: [
       { text: "Add a startup probe with periodSeconds and failureThreshold values that allow more than 2 minutes.", correct: true,
@@ -406,18 +406,18 @@ window.QUESTION_BANKS.push({ setId: "g-compute", questions: [
     explanation: "For EC2 memory recommendations, Compute Optimizer needs memory metrics from the CloudWatch agent." },
 
   { id: "gcmp-029", topic: "compute-sizing", domain: 4,
-    stem: "A billing application on EC2 instances has its highest load during the last 3 days of each month. The team uses AWS Compute Optimizer with default settings. In the middle of the month, the recommendations suggest smaller instances that would not handle the month-end load. The team wants recommendations that include the full monthly cycle. Which solution will meet this requirement?",
+    stem: "A billing application on EC2 instances has its highest load during the last 3 days of each month. The team uses AWS Compute Optimizer with default settings. In the middle of the month, the recommendations suggest smaller instances that would not handle the month-end load. The team wants recommendations that include the full monthly cycle at no additional cost. Which solution will meet these requirements?",
     options: [
-      { text: "Activate the enhanced infrastructure metrics recommendation preference.", correct: true,
-        why: "By default, Compute Optimizer analyzes the last 14 days. Enhanced infrastructure metrics extend the analysis to 93 days, which includes month-end peaks." },
+      { text: "Set the rightsizing recommendation preference lookback period to 32 days.", correct: true,
+        why: "By default, Compute Optimizer analyzes the last 14 days. The 32-day lookback has no extra cost and captures monthly patterns, including the month-end peak." },
+      { text: "Activate the enhanced infrastructure metrics preference to get a 93-day lookback.", correct: false,
+        why: "93 days includes the peak, but enhanced infrastructure metrics is a paid feature. It fails the no-additional-cost requirement." },
       { text: "Install the CloudWatch agent on the instances.", correct: false,
         why: "The agent adds memory metrics. The lookback period stays 14 days, so the month-end peak can still be missing." },
       { text: "Turn on detailed monitoring for the instances.", correct: false,
-        why: "Detailed monitoring gives 1-minute data. It does not extend the analysis period." },
-      { text: "Opt out of Compute Optimizer and opt in again at the end of each month.", correct: false,
-        why: "This adds manual work every month and does not change the 14-day window. It fails the requirement." }
+        why: "Detailed monitoring gives 1-minute data at extra cost. It does not extend the analysis period." }
     ],
-    explanation: "Compute Optimizer analyzes 14 days of metrics by default. The paid enhanced infrastructure metrics preference extends this to 93 days." },
+    explanation: "Compute Optimizer lookback options: 14 days (default), 32 days (no extra cost, captures monthly cycles), and 93 days (paid enhanced infrastructure metrics)." },
 
   { id: "gcmp-030", topic: "compute-sizing", domain: 3,
     stem: "An application on a general purpose EC2 instance keeps a large dataset in memory. CloudWatch agent metrics show 90 percent memory use and 10 percent CPU use at peak. The team wants the MOST cost-effective instance that keeps the dataset in memory. Which instance family should the team choose?",

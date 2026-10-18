@@ -58,7 +58,7 @@
   <table>
     <tr><th>Item</th><th>Value</th></tr>
     <tr><td>Token time to live</td><td>1 second to 6 hours (21,600 seconds)</td></tr>
-    <tr><td>PUT response hop limit, default</td><td>1. It is 2 if the AMI has <code>ImdsSupport: v2.0</code>.</td></tr>
+    <tr><td>PUT response hop limit, default</td><td>1. It is 2 if the AMI has <code>ImdsSupport: v2.0</code> or the account default sets 2. Amazon Linux 2023 AMIs have <code>ImdsSupport: v2.0</code> (IMDSv2 only, hop limit 2).</td></tr>
     <tr><td>Hop limit for containers on the instance</td><td>AWS recommends 2 in a container environment when IMDSv2 is required. A container that adds a network hop can fail to get a token with hop limit 1.</td></tr>
   </table>
   <h3>Shell access with Session Manager</h3>
@@ -91,7 +91,7 @@
     <tr><td>OSI layer</td><td>Layer 7 (HTTP, HTTPS, gRPC)</td><td>Layer 4 (TCP, UDP, TLS)</td></tr>
     <tr><td>Routing</td><td>Listener rules: host header, path pattern, HTTP header, HTTP method, query string, source IP</td><td>Flow hash to one target for each connection</td></tr>
     <tr><td>Target types</td><td><code>instance</code>, <code>ip</code>, <code>lambda</code></td><td><code>instance</code>, <code>ip</code>, <code>alb</code></td></tr>
-    <tr><td>Static IP addresses</td><td>No Elastic IP addresses</td><td>One static IP address in each Availability Zone. You can attach one Elastic IP address for each subnet.</td></tr>
+    <tr><td>Static IP addresses</td><td>You cannot assign your own Elastic IP addresses.</td><td>One static IP address in each Availability Zone. You can attach one Elastic IP address for each subnet.</td></tr>
     <tr><td>Scale</td><td>Scales automatically</td><td>Millions of requests each second</td></tr>
   </table>
   <ul>
@@ -291,7 +291,8 @@
   <ul>
     <li>AWS recommends EKS Pod Identity when possible.</li>
     <li>Both give least privilege: only Pods that use the service account get the role.</li>
-    <li>If IMDS is not restricted on the node, containers can also get the node IAM role credentials. Restrict IMDS access to stop this.</li>
+    <li>If IMDS is not restricted on the node, containers can also get the node IAM role credentials.</li>
+    <li>To restrict IMDS on EC2 nodes, require IMDSv2 and set the PUT response hop limit to 1. Pod Identity and IRSA credentials do not come from IMDS, so Pod roles keep working. Do not disable IMDS.</li>
     <li>Fargate Pods cannot use IMDS. The Fargate Pod execution role is for image pulls and logs. Containers cannot use it.</li>
   </ul>
   <div class="exam-signals">
@@ -299,11 +300,11 @@
     <ul>
       <li>"Each Pod gets its own permissions; no OIDC provider" → EKS Pod Identity.</li>
       <li>"Pods on Fargate need AWS permissions" → IRSA.</li>
-      <li>"Pods use the node role; stop that" → restrict IMDS on the nodes and give Pods their own role.</li>
+      <li>"Pods use the node role; stop that" → require IMDSv2 with hop limit 1 on the nodes, and give Pods their own role.</li>
       <li>"Team already uses Kubernetes manifests and Helm" → EKS.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html">EKS Pod Identity</a>, <a href="https://docs.aws.amazon.com/eks/latest/userguide/service-accounts.html">Pod Identity compared with IRSA</a>, <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html">IAM roles for service accounts</a>, <a href="https://docs.aws.amazon.com/eks/latest/userguide/fargate.html">EKS on Fargate considerations</a>, <a href="https://docs.aws.amazon.com/decision-guides/latest/containers-on-aws-how-to-choose/choosing-aws-container-service.html">Choosing an AWS container service</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html">EKS Pod Identity</a>, <a href="https://docs.aws.amazon.com/eks/latest/userguide/service-accounts.html">Pod Identity compared with IRSA</a>, <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html">IAM roles for service accounts</a>, <a href="https://docs.aws.amazon.com/eks/latest/userguide/fargate.html">EKS on Fargate considerations</a>, <a href="https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html">EKS best practices: restrict IMDS on nodes</a>, <a href="https://docs.aws.amazon.com/decision-guides/latest/containers-on-aws-how-to-choose/choosing-aws-container-service.html">Choosing an AWS container service</a>.</p>
 </section>
 
 <section id="compute-sizing">
@@ -343,6 +344,7 @@
     <li><strong>AWS Compute Optimizer</strong> gives rightsizing recommendations. You must opt in first.</li>
     <li>It covers EC2 instances, Auto Scaling groups, EBS volumes, Lambda functions, ECS services on Fargate, and more.</li>
     <li>It analyzes the last <strong>14 days</strong> of metrics by default. Enhanced infrastructure metrics (paid) extend this to <strong>93 days</strong>.</li>
+    <li>Rightsizing preferences also allow a free 32-day lookback for monthly cycles.</li>
     <li>For EC2 memory recommendations, install the CloudWatch agent on the instances.</li>
     <li>Scale on the metric that limits the application. For a web tier behind an ALB, request count for each target can be a better signal than CPU.</li>
   </ul>
@@ -352,10 +354,10 @@
       <li>"Fargate task definition fails: invalid CPU or memory" → use a valid task CPU and memory pair.</li>
       <li>"Rightsizing recommendations with the least effort" → AWS Compute Optimizer.</li>
       <li>"Recommendations ignore memory" → install the CloudWatch agent.</li>
-      <li>"Monthly peak is outside the analysis window" → enhanced infrastructure metrics (93 days).</li>
+      <li>"Monthly peak is outside the analysis window" → 32-day lookback (free) or enhanced infrastructure metrics (93 days, paid).</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-tasks-services.html">Fargate task CPU and memory</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/what-is-compute-optimizer.html">What is Compute Optimizer?</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/metrics.html">Metrics analyzed (14 and 93 days)</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/ec2-metrics-analyzed.html">EC2 memory with the CloudWatch agent</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-tasks-services.html">Fargate task CPU and memory</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/what-is-compute-optimizer.html">What is Compute Optimizer?</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/metrics.html">Metrics analyzed (14 and 93 days)</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/ec2-metrics-analyzed.html">EC2 memory with the CloudWatch agent</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/rightsizing-preferences.html">Rightsizing preferences (14, 32, and 93 days)</a>.</p>
 </section>
 
 </main>
