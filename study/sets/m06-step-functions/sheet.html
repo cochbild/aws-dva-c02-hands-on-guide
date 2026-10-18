@@ -75,7 +75,7 @@
       <li>"Undo the flight and hotel bookings when the payment fails" → saga pattern with <code>Catch</code> and compensating steps.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html">Choosing workflow type</a>, <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/implement-the-serverless-saga-pattern-by-using-aws-step-functions.html">Serverless saga pattern with Step Functions</a>,<a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-aws-services-reference.html">API Gateway HTTP API integration subtypes</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/eventbridge-integration.html">EventBridge integration</a>. Lab: <a href="../../../module-06-step-functions/README.md">Module 6 overview</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html">Choosing workflow type</a>, <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/implement-the-serverless-saga-pattern-by-using-aws-step-functions.html">Serverless saga pattern with Step Functions</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-aws-services-reference.html">API Gateway HTTP API integration subtypes</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/eventbridge-integration.html">EventBridge integration</a>. Lab: <a href="../../../module-06-step-functions/README.md">Module 6 overview</a>.</p>
 </section>
 
 <section id="sfn-states">
@@ -163,7 +163,7 @@
       <li>"Step 5 needs a value from step 1, and steps 2 to 4 do not need it" → store it in a variable with <code>Assign</code>.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-input-output-filtering.html">Processing input and output</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/workflow-variables.html">Variables (limits)</a>,<a href="https://docs.aws.amazon.com/step-functions/latest/dg/input-output-resultpath.html">ResultPath</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/intrinsic-functions.html">Intrinsic functions</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/service-quotas.html">Quotas (256 KiB)</a>. Lab: <a href="../../../module-06-step-functions/lab-01-asl-basics/README.md">Lab 6.1 ASL basics</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-input-output-filtering.html">Processing input and output</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/workflow-variables.html">Variables (limits)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/input-output-resultpath.html">ResultPath</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/intrinsic-functions.html">Intrinsic functions</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/service-quotas.html">Quotas (256 KiB)</a>. Lab: <a href="../../../module-06-step-functions/lab-01-asl-basics/README.md">Lab 6.1 ASL basics</a>.</p>
 </section>
 
 <section id="sfn-workflow-types">
@@ -186,7 +186,7 @@
     <li><strong>Synchronous Express</strong> (<code>StartSyncExecution</code>, from API Gateway, Lambda, or the SDK): the caller waits and gets the result. A synchronous request from the console expires after 60 seconds. Use the SDK or CLI for up to 5 minutes.</li>
     <li>You cannot change the workflow type after you create the state machine. Create a new state machine.</li>
     <li>Standard is for non-idempotent actions, such as payments. Express is for idempotent, high-volume event processing.</li>
-    <li>Standard: a <code>StartExecution</code> call with the name of a running execution returns the same response. It does not start a second execution.</li>
+    <li>Standard: a <code>StartExecution</code> call with the same name and the same input as a running execution returns the same response. It does not start a second execution. A call with the same name and a different input, or after that execution closed, fails with <code>ExecutionAlreadyExists</code>.</li>
     <li>Express: Step Functions does not manage idempotency. The same name can start concurrent executions.</li>
     <li>A Standard parent can call an Express child for the high-volume idempotent part. This can reduce cost.</li>
   </ul>
@@ -462,7 +462,7 @@
   <h3>Gradual deployment (<code>AWS::StepFunctions::StateMachineAlias</code> <code>DeploymentPreference</code>)</h3>
   <table>
     <tr><th>Type</th><th>Behavior</th></tr>
-    <tr><td><code>CANARY</code></td><td>Shifts a small percentage first. Shifts the rest after the interval if no alarm goes off.</td></tr>
+    <tr><td><code>CANARY</code></td><td>Shifts a small percentage first. Shifts the rest after the interval if no alarm goes into the ALARM state.</td></tr>
     <tr><td><code>LINEAR</code></td><td>Shifts equal increments with equal minutes between them.</td></tr>
     <tr><td><code>ALL_AT_ONCE</code></td><td>Shifts 100 percent at once and monitors the alarms.</td></tr>
   </table>
@@ -494,7 +494,7 @@
       <li>"Test one Task state and see how InputPath and ResultPath change the data, without deploying" → <code>TestState</code> with <code>DEBUG</code>.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/test-state-isolation.html">TestState API</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-state-machine-version.html">Versions</a>,<a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-state-machine-alias.html">Aliases</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-stepfunctions-statemachinealias-deploymentpreference.html">DeploymentPreference</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html">AWS::Serverless::StateMachine</a>. Lab: <a href="../../../module-06-step-functions/lab-01-asl-basics/README.md">Lab 6.1 ASL basics</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/test-state-isolation.html">TestState API</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-state-machine-version.html">Versions</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-state-machine-alias.html">Aliases</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-stepfunctions-statemachinealias-deploymentpreference.html">DeploymentPreference</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html">AWS::Serverless::StateMachine</a>. Lab: <a href="../../../module-06-step-functions/lab-01-asl-basics/README.md">Lab 6.1 ASL basics</a>.</p>
 </section>
 
 </main>

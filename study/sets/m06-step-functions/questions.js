@@ -205,7 +205,7 @@ window.QUESTION_BANKS.push({ setId: "m06-step-functions", questions: [
     stem: "A web application starts a Standard workflow for each order with the StartExecution API. When a network timeout occurs, the application retries the call. The company must not start two workflow runs for the same order. Which solution will meet these requirements with the fewest code changes?",
     options: [
       { text: "Set the execution name to the order ID in each StartExecution call.", correct: true,
-        why: "For Standard workflows, a StartExecution call with the name of a running execution returns the same response and does not start a second run. If that execution already closed, the call fails with ExecutionAlreadyExists. Either way, no second run starts." },
+        why: "For Standard workflows, a retry with the same name and the same input as a running execution returns the same response and does not start a second run. If that execution already closed, or the input is different, the call fails with ExecutionAlreadyExists. Either way, no second run starts." },
       { text: "Set the execution name to a new random UUID in each StartExecution call.", correct: false,
         why: "Each retry gets a different name, so Step Functions starts a second execution for the same order." },
       { text: "Change the state machine to an Express workflow and set the execution name to the order ID.", correct: false,
@@ -213,7 +213,7 @@ window.QUESTION_BANKS.push({ setId: "m06-step-functions", questions: [
       { text: "Add a Retry field with MaxAttempts set to 0 to the first Task state.", correct: false,
         why: "Retry controls errors inside an execution. It does not stop the application from starting a second execution." }
     ],
-    explanation: "Standard workflows return an idempotent response when you start an execution with the name of a running execution. Use a business ID as the execution name." },
+    explanation: "Standard workflows return an idempotent response when you start an execution with the same name and the same input as a running execution. Otherwise, a name that is already in use gives ExecutionAlreadyExists. Use a business ID as the execution name." },
 
   { id: "m06-016", topic: "sfn-errors", domain: 1,
     stem: "A Task state calls a third-party API that sometimes returns a transient error named ApiBusy. Many executions run at the same time. The developer must retry ApiBusy up to 5 times with exponential backoff that starts at 2 seconds. No single wait can be longer than 30 seconds. The retries from different executions must not happen at the same moment. Which Retry configuration will meet these requirements?",
