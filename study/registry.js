@@ -174,4 +174,19 @@ window.STUDY_SETS = [
       { id: "trail-security", title: "CloudTrail integrity, encryption, Insights, and EventBridge" },
     ],
   },
+  {
+    id: "g-compute",
+    title: "Gap — EC2, load balancing, health checks, and EKS",
+    kind: "gap",
+    path: "sets/g-compute/",
+    lab: null,
+    topics: [
+      { id: "compute-ec2-dev", title: "EC2 for developers" },
+      { id: "compute-elb", title: "Elastic Load Balancing" },
+      { id: "compute-health-checks", title: "Health checks and readiness probes" },
+      { id: "compute-container-images", title: "Container images" },
+      { id: "compute-eks", title: "Amazon EKS basics" },
+      { id: "compute-sizing", title: "Resource sizing and usage" },
+    ],
+  },
 ];
