@@ -41,6 +41,7 @@
     <li><strong>Fanout</strong> sends one event to many consumers in parallel. Each consumer processes the event on its own.</li>
     <li>Fanout with Amazon SNS: publish one time to a topic. Subscribe one Amazon SQS queue for each consumer. Each queue keeps its own copy of the message.</li>
     <li>Fanout with Amazon EventBridge: one rule can send a matching event to up to 5 targets. For more consumers, add more rules on the same event pattern.</li>
+    <li>AWS docs now call the rule-based bus "Custom Event Bus - Classic". The default event bus is a Classic bus. The newer "Custom Event Bus" (2026) uses subscribers and keeps events for replay. Older study material and the exam use rules and targets.</li>
     <li>SNS filter policies send a subscriber only the messages it needs. A filter policy acts on message attributes or on the message body (filter policy scope). With no filter policy, a subscriber gets every message.</li>
     <li>EventBridge event patterns match on any field in the event. Use EventBridge for routing on event content, for AWS service events, and for SaaS partner events.</li>
     <li>SNS FIFO topics deliver to SQS FIFO queues and SQS standard queues. They do not deliver directly to Lambda, HTTP(S), email, or SMS endpoints.</li>
@@ -88,7 +89,7 @@
     <li>Network calls add latency and new failure modes. Use timeouts, retries with backoff, and asynchronous messages where the caller does not need an immediate answer.</li>
     <li>A request can cross many services. Use distributed tracing (AWS X-Ray) and correlation IDs to follow one request.</li>
     <li>A transaction that spans services cannot use one database transaction. Use a saga (see the orchestration topic).</li>
-    <li>Typical AWS building blocks: API Gateway or an Application Load Balancer in front, Lambda or containers for compute, DynamoDB or RDS for each service, SQS, SNS, or EventBridge between services.</li>
+    <li>Typical AWS building blocks: API Gateway or an Application Load Balancer in front, and Lambda or containers for compute. Each service uses DynamoDB or RDS, with SQS, SNS, or EventBridge between services.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
@@ -266,7 +267,7 @@
     <tr><th>Storage</th><th>Type</th><th>Scope and access</th><th>Persistence</th></tr>
     <tr><td>Amazon EBS</td><td>Block</td><td>One Availability Zone. Attaches to an instance in the same Availability Zone.</td><td>Persists independently from the instance life.</td></tr>
     <tr><td>Amazon EFS</td><td>File (NFS)</td><td>Many clients at the same time. Regional file systems store data across Availability Zones. One Zone file systems use one Availability Zone.</td><td>Persistent and shared.</td></tr>
-    <tr><td>Amazon S3</td><td>Object</td><td>HTTPS API from anywhere, by key</td><td>Persistent. Not a mounted disk.</td></tr>
+    <tr><td>Amazon S3</td><td>Object</td><td>HTTPS API from anywhere, by key</td><td>Persistent. Not a mounted disk. Amazon S3 Files (2026) is a separate S3 file system with mount targets and an access point. EC2 and Lambda can mount it over NFS. Older study material: S3 is object storage only.</td></tr>
     <tr><td>EC2 instance store</td><td>Block, on the host</td><td>Only the one instance</td><td>Kept on reboot. Lost on stop, hibernate, or terminate.</td></tr>
     <tr><td>Lambda <code>/tmp</code></td><td>Ephemeral</td><td>Only one execution environment</td><td>Lost when the environment ends. Size 512 MB to 10,240 MB.</td></tr>
   </table>
@@ -295,7 +296,7 @@
       <li>"Data on a disk is missing after the instance was stopped and started" → it was on instance store.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volumes.html">EBS volumes</a>, <a href="https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volumes-multi.html">EBS Multi-Attach</a>, <a href="https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html">What is Amazon EFS</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-filesystem-efs.html">Lambda with EFS</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-store-lifetime.html">Instance store data persistence</a>. Lab: <a href="../../../module-01-lambda-fundamentals/README.md">Module 1 overview</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volumes.html">EBS volumes</a>, <a href="https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volumes-multi.html">EBS Multi-Attach</a>, <a href="https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html">What is Amazon EFS</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-filesystem-efs.html">Lambda with EFS</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-store-lifetime.html">Instance store data persistence</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files.html">Amazon S3 Files</a>. Lab: <a href="../../../module-01-lambda-fundamentals/README.md">Module 1 overview</a>.</p>
 </section>
 
 <section id="arch-purpose-built-data">

@@ -2,7 +2,7 @@ window.QUESTION_BANKS = window.QUESTION_BANKS || [];
 window.QUESTION_BANKS.push({ setId: "g-architecture", questions: [
 
   { id: "garch-001", topic: "arch-event-driven", domain: 1,
-    stem: "An order service publishes an event for each new order. Three teams (billing, shipping, and analytics) must each process every order. Each team processes at a different speed, and a team must not lose orders when its consumer is down for up to one hour. Which solution will meet these requirements with the LEAST operational overhead?",
+    stem: "An order service publishes an event for each new order. Three teams (billing, shipping, and analytics) must each process every order. Each team processes at a different speed, and a team must not lose orders when its consumer is down for up to one day. Which solution will meet these requirements with the LEAST operational overhead?",
     options: [
       { text: "Publish each order to an Amazon SNS topic. Subscribe one Amazon SQS queue for each team, and let each team consume from its own queue.", correct: true,
         why: "SNS fans out one copy of each message to every subscribed queue. Each queue keeps its copy until that team reads it, so each team gets every order at its own speed." },
@@ -32,7 +32,7 @@ window.QUESTION_BANKS.push({ setId: "g-architecture", questions: [
   { id: "garch-003", topic: "arch-event-driven", domain: 1,
     stem: "An application emits JSON events for orders. Events with \"region\": \"EU\" in the event body must go to one AWS Lambda function, and events with a \"priority\": \"high\" field must go to an AWS Step Functions state machine. Other teams will add new consumers later. The producer must not change when consumers are added. Which solution will meet these requirements with the LEAST operational overhead?",
     options: [
-      { text: "Publish the events to an Amazon EventBridge custom event bus. Create one rule for each consumer, with an event pattern that matches the needed fields.", correct: true,
+      { text: "Publish the events to an Amazon EventBridge event bus. Create one rule for each consumer, with an event pattern that matches the needed fields.", correct: true,
         why: "EventBridge rules match on any field in the event and route to many target types, including Lambda and Step Functions. New consumers add new rules with no producer change." },
       { text: "Send the events to an Amazon SQS queue, and write a Lambda function that reads the queue and calls each consumer.", correct: false,
         why: "The router function is custom code that must change for every new consumer. This adds operational overhead." },
@@ -155,7 +155,7 @@ window.QUESTION_BANKS.push({ setId: "g-architecture", questions: [
       { text: "Make each service publish an event to Amazon EventBridge when its step completes, and let the next service react.", correct: false,
         why: "Choreography spreads the flow across services. There is no one place that shows the current step of each application." },
       { text: "Chain AWS Lambda functions so that each function invokes the next one asynchronously.", correct: false,
-        why: "No component shows the state of each application. One function also cannot wait 2 days for approval, because the timeout is 15 minutes." }
+        why: "No component shows the state of each application. One function also cannot wait 2 days for approval, because the timeout is 15 minutes for standard functions." }
     ],
     explanation: "Orchestration with Step Functions gives central visibility. Standard workflows support long waits and human approval with task tokens." },
 
@@ -197,7 +197,7 @@ window.QUESTION_BANKS.push({ setId: "g-architecture", questions: [
       { text: "Use an AWS Step Functions Express workflow.", correct: false,
         why: "Express workflows run a maximum of 5 minutes and do not support the callback pattern. Asynchronous Express is also at least once." },
       { text: "Use an AWS Lambda function that polls the fraud service in a loop until the result arrives.", correct: false,
-        why: "A Lambda function can run a maximum of 15 minutes. It cannot wait 3 days." },
+        why: "A Lambda function can run a maximum of 15 minutes for standard functions. It cannot wait 3 days." },
       { text: "Put the order in an Amazon SQS delay queue until the fraud check completes.", correct: false,
         why: "The maximum delay is 15 minutes. A delay queue also does not know when the fraud result arrives." }
     ],
@@ -218,7 +218,7 @@ window.QUESTION_BANKS.push({ setId: "g-architecture", questions: [
     explanation: "Steps in a saga, including compensating steps, can run more than one time. Make each step idempotent." },
 
   { id: "garch-016", topic: "arch-coupling-sync", domain: 1,
-    stem: "A web application writes customer survey answers directly to an Amazon RDS database. During marketing campaigns, traffic increases 20 times for a few minutes, and the database runs out of connections. Answers can be saved up to 10 minutes after submission. Which solution will meet these requirements with the LEAST operational overhead?",
+    stem: "A web application writes customer survey answers directly to an Amazon RDS database. During marketing campaigns, traffic increases 20 times for a few minutes, and the database runs out of connections. Answers can be saved up to 10 minutes after submission. Which solution will meet these requirements in the MOST cost-effective way?",
     options: [
       { text: "Send each answer to an Amazon SQS queue, and use a consumer that writes to the database at a rate the database supports.", correct: true,
         why: "The queue absorbs the spike (load leveling). The consumer writes at a steady rate, and the 10-minute delay is acceptable." },
