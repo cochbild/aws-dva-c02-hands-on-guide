@@ -104,7 +104,7 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
     explanation: "SCPs set maximum permissions for member accounts, including the root user. They never grant permissions and do not affect service-linked roles or the management account." },
 
   { id: "g-iam-sts-008", topic: "iam-policy-evaluation", domain: 2,
-    stem: "An IAM user has a permissions boundary that allows only Amazon S3, Amazon CloudWatch, and Amazon EC2 actions. An AWS Secrets Manager secret in the same account has a resource-based policy that allows this IAM user ARN to call secretsmanager:GetSecretValue. No policy contains a Deny statement. A security reviewer asks what happens when the user calls GetSecretValue on the secret. Which statement is correct?",
+    stem: "An IAM user has a permissions boundary that allows only Amazon S3, Amazon CloudWatch, and Amazon EC2 actions. An AWS Secrets Manager secret in the same account has a resource-based policy that allows this IAM user ARN to call secretsmanager:GetSecretValue. The secret is encrypted with the AWS managed key aws/secretsmanager. No policy contains a Deny statement. A security reviewer asks what happens when the user calls GetSecretValue on the secret. Which statement is correct?",
     options: [
       { text: "The call succeeds, because an implicit deny in a permissions boundary does not limit a same-account resource-based policy that names the IAM user ARN.", correct: true,
         why: "AWS documents that a same-account resource-based policy that grants access to an IAM user ARN is not limited by an implicit deny in the identity-based policy or the boundary." },
@@ -174,16 +174,16 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
     explanation: "To give a role to a service, the user needs iam:PassRole on that role. Limit it with the role ARN and the iam:PassedToService condition key." },
 
   { id: "g-iam-sts-013", topic: "iam-roles-trust", domain: 4,
-    stem: "A developer creates an IAM role with a permissions policy for Amazon DynamoDB. The developer then tries to create a Lambda function with this role. The request fails, and the error says that Lambda cannot assume the role. The developer has iam:PassRole permission for the role. Which solution will meet these requirements?",
+    stem: "A developer creates an IAM role with a permissions policy for Amazon DynamoDB. The developer then tries to create a Lambda function with this role. The request fails, and the error says that Lambda cannot assume the role. The developer has iam:PassRole permission for the role. The developer must fix the error with least privilege. Which solution will meet these requirements?",
     options: [
       { text: "Edit the role trust policy so that it allows the service principal lambda.amazonaws.com to perform sts:AssumeRole.", correct: true,
-        why: "The trust policy controls who can assume the role. Lambda can use the role only when the trust policy names the Lambda service principal." },
+        why: "The trust policy controls who can assume the role. Lambda can use the role only when the trust policy names the Lambda service principal, and no new permissions are added." },
       { text: "Attach the AWSLambdaBasicExecutionRole managed policy to the role.", correct: false,
-        why: "This policy adds CloudWatch Logs permissions. It does not change who can assume the role, so Lambda still cannot assume it." },
+        why: "This policy adds CloudWatch Logs permissions but does not change who can assume the role. The error continues, so it fails the requirement to fix the error." },
       { text: "Add a function resource-based policy that allows lambda.amazonaws.com to call lambda:InvokeFunction.", correct: false,
-        why: "A function resource-based policy controls who can invoke the function. It does not let Lambda assume the execution role." },
+        why: "A function resource-based policy controls who can invoke the function. It does not let Lambda assume the execution role, so it fails the requirement to fix the error." },
       { text: "Grant the developer sts:AssumeRole on the role.", correct: false,
-        why: "Lambda, not the developer, assumes the execution role. The trust policy still does not name Lambda, so the error continues." }
+        why: "Lambda, not the developer, assumes the execution role. The error continues, and the developer gets a permission that is not needed, which fails least privilege." }
     ],
     explanation: "A role has a trust policy (who can assume it) and permissions policies (what it can do). A service role must trust the service principal." },
 
@@ -334,20 +334,20 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
     explanation: "When a resource policy allows an AWS service principal, add aws:SourceArn and aws:SourceAccount to prevent the cross-service confused deputy problem. S3 bucket ARNs do not contain the account ID, so add aws:SourceAccount too." },
 
   { id: "g-iam-sts-024", topic: "iam-credential-chain", domain: 4,
-    stem: "A developer rotated their IAM access keys and saved the new keys in the default profile of ~/.aws/credentials. An application on the developer's computer that uses the AWS SDK still fails with InvalidClientTokenId, which shows that it still sends the old access key. The application creates its clients with no explicit credentials. Which solution will meet these requirements?",
+    stem: "A developer rotated their IAM access keys and saved the new keys in the default profile of ~/.aws/credentials. An application on the developer's computer that uses the AWS SDK still fails with InvalidClientTokenId, which shows that it still sends the old access key. The application creates its clients with no explicit credentials. The developer must make the application use the new keys with no code changes, and the keys must stay in the credentials file. Which solution will meet these requirements?",
     options: [
       { text: "Remove the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables that still hold the old keys.", correct: true,
-        why: "The SDK checks environment variables before the shared credentials file. Old keys in the environment hide the new keys in the file." },
+        why: "The SDK checks environment variables before the shared credentials file. When the old keys leave the environment, the SDK finds the new keys in the file, with no code change." },
       { text: "Run aws configure again and enter the new keys.", correct: false,
-        why: "aws configure writes the credentials file again. The environment variables still come first in the chain, so the old keys are still used." },
+        why: "aws configure writes the credentials file again. The environment variables still come first in the chain, so the application still sends the old keys. This fails the requirement to use the new keys." },
       { text: "Move the new keys from the credentials file to the config file.", correct: false,
-        why: "The config file is also later in the chain than environment variables. The old keys are still used." },
+        why: "This fails the requirement to keep the keys in the credentials file. The config file is also later in the chain than environment variables, so the old keys are still used." },
       { text: "Set the AWS_REGION environment variable.", correct: false,
-        why: "The Region does not select credentials. The application still sends the old keys." }
+        why: "The Region does not select credentials. The application still sends the old keys, which fails the requirement to use the new keys." }
     ],
     explanation: "The SDK credential chain checks environment variables before shared credentials and config files. The first source that has credentials wins." },
 
-  { id: "g-iam-sts-025", topic: "iam-credential-chain", domain: 1,
+  { id: "g-iam-sts-025", topic: "iam-credential-chain", domain: 2,
     stem: "A Python application on an Amazon EC2 instance creates its boto3 clients with an access key ID and secret access key written in the code. The security team requires that the application use no long-term credentials. The developer wants the fewest code changes. Which solution will meet these requirements?",
     options: [
       { text: "Attach an instance profile with a role that has the required permissions. Remove the keys from the code and create the clients with no explicit credentials.", correct: true,
@@ -378,16 +378,16 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
     explanation: "For workforce users in IAM Identity Center, configure the CLI with aws configure sso and sign in with aws sso login. The CLI then uses short-term credentials." },
 
   { id: "g-iam-sts-027", topic: "iam-compute-roles", domain: 2,
-    stem: "An Amazon ECS service on AWS Fargate starts its tasks successfully. The container image comes from a private Amazon ECR repository. When the application writes to an Amazon DynamoDB table, it gets AccessDenied. Which solution will meet these requirements?",
+    stem: "An Amazon ECS service on AWS Fargate starts its tasks successfully. The container image comes from a private Amazon ECR repository. When the application writes to an Amazon DynamoDB table, it gets AccessDenied. The application must not use long-term credentials, and the fix must follow least privilege. Which solution will meet these requirements?",
     options: [
       { text: "Add the DynamoDB permissions to the task role that the task definition specifies in taskRoleArn.", correct: true,
-        why: "The task role gives permissions to the application code in the containers. The application needs DynamoDB access there." },
+        why: "The task role gives temporary credentials to the application code in the containers. Only the application gets the DynamoDB access." },
       { text: "Add the DynamoDB permissions to the task execution role.", correct: false,
-        why: "The ECS agent uses the task execution role to pull images and send logs. The application code does not get these permissions." },
+        why: "The ECS agent uses the task execution role to pull images and send logs. The application code does not get these permissions, so the error continues, and the agent gets access it does not need, which fails least privilege." },
       { text: "Add the DynamoDB permissions to the EC2 instance profile of the cluster.", correct: false,
-        why: "Fargate tasks have no EC2 instance profile available to containers. This does not give the application access." },
+        why: "Fargate tasks have no EC2 instance profile available to containers. The application still gets AccessDenied, so this fails the requirement to fix the error." },
       { text: "Store an IAM user access key in the task definition environment variables.", correct: false,
-        why: "This puts long-term credentials in the task definition. The task role is the secure way to give the application permissions." }
+        why: "This puts long-term credentials in the task definition, which fails the requirement to use no long-term credentials." }
     ],
     explanation: "ECS task role: permissions for the application code. Task execution role: permissions for the ECS agent to pull images, send logs, and get secrets." },
 
@@ -492,7 +492,7 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
     explanation: "IAM Access Analyzer policy generation creates a policy from up to 90 days of CloudTrail activity. It does not include data events or iam:PassRole, so review the result." },
 
   { id: "g-iam-sts-035", topic: "iam-least-privilege", domain: 2,
-    stem: "A company adds new projects every week. Developers on a project must manage only the Amazon EC2 instances and Amazon S3 objects of their own project. The security team does not want to update IAM policies each time a project is added. Which actions will meet these requirements? (Choose two.)",
+    stem: "A company adds new projects every week. Developers on a project must manage only the Amazon EC2 instances and Amazon SQS queues of their own project. The security team does not want to update IAM policies each time a project is added. Which actions will meet these requirements? (Choose two.)",
     options: [
       { text: "Tag each developer role and each project resource with a project tag.", correct: true,
         why: "ABAC uses tags on principals and resources as the attributes that the policy compares." },
@@ -508,16 +508,16 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
     explanation: "Attribute-based access control (ABAC) compares tags on principals and resources. New projects need new tags only, not new policies." },
 
   { id: "g-iam-sts-036", topic: "iam-troubleshooting", domain: 4,
-    stem: "A developer role in a member account of AWS Organizations has the AdministratorAccess managed policy. A call to codecommit:ListRepositories fails with this message: 'is not authorized to perform: codecommit:ListRepositories with an explicit deny in a service control policy'. Which solution will meet these requirements?",
+    stem: "A developer role in a member account of AWS Organizations has the AdministratorAccess managed policy. A call to codecommit:ListRepositories fails with this message: 'is not authorized to perform: codecommit:ListRepositories with an explicit deny in a service control policy'. What should the developer do to resolve the error?",
     options: [
       { text: "Ask the organization administrator to change the SCP that denies the action for this account.", correct: true,
         why: "The message names an explicit deny in an SCP. Only a change to the SCP by the organization administrator can remove the deny. IAM changes in the member account cannot." },
       { text: "Add an inline policy that allows codecommit:ListRepositories to the developer role.", correct: false,
-        why: "An explicit deny overrides any allow. The role already has AdministratorAccess, so another allow does not help." },
+        why: "An explicit deny overrides any allow. The role already has AdministratorAccess, so another allow does not resolve the error." },
       { text: "Add codecommit:ListRepositories to the permissions boundary of the developer role.", correct: false,
-        why: "The message does not name a boundary. The explicit deny in the SCP still blocks the call." },
+        why: "The message does not name a boundary. The explicit deny in the SCP still blocks the call, so the error is not resolved." },
       { text: "Run aws sts decode-authorization-message on the error.", correct: false,
-        why: "The message is not encoded, and it already names the policy type. Decoding does not remove the deny." }
+        why: "The message is not encoded, and it already names the policy type. Decoding does not remove the deny, so the error is not resolved." }
     ],
     explanation: "Access denied messages name the policy type. 'With an explicit deny in a service control policy' means that only the SCP owner can fix the problem." },
 
@@ -549,6 +549,22 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
       { text: "Add account B to the trust policy of the execution role.", correct: false,
         why: "The trust policy controls who can assume the role. It does not give the role permission to use the KMS key." }
     ],
-    explanation: "To read SSE-KMS objects across accounts, the key policy must allow the caller, and the caller identity policy must allow kms:Decrypt, in addition to the S3 permissions." }
+    explanation: "To read SSE-KMS objects across accounts, the key policy must allow the caller, and the caller identity policy must allow kms:Decrypt, in addition to the S3 permissions." },
+
+  { id: "g-iam-sts-039", topic: "iam-sts-assume-role", domain: 2,
+    stem: "A developer calls aws sts assume-role and copies the returned AccessKeyId and SecretAccessKey into the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables. Every AWS CLI command then fails with InvalidClientTokenId. The role trust policy and permissions are correct. The developer must make authenticated calls with the role credentials with the fewest changes. Which solution will meet these requirements?",
+    options: [
+      { text: "Also set the AWS_SESSION_TOKEN environment variable to the SessionToken value that assume-role returned.", correct: true,
+        why: "Temporary credentials have three parts. The CLI signs each request with SigV4 and must send the session token with the access key ID, or AWS rejects the credentials." },
+      { text: "Call aws sts get-session-token and use those credentials instead.", correct: false,
+        why: "GetSessionToken returns credentials for the IAM user, not for the role. The calls would not use the role permissions, which fails the requirement." },
+      { text: "Call assume-role again with a larger DurationSeconds value.", correct: false,
+        why: "The session length is not the problem. Without the session token, the new credentials fail in the same way, so the calls are still not authenticated." },
+      { text: "Set the AWS_REGION environment variable to the Region of the role.", correct: false,
+        why: "IAM roles are global, and the Region does not complete the credentials. The calls still fail without the session token." },
+      { text: "Create long-term access keys for an IAM user that has the role permissions.", correct: false,
+        why: "This adds a new user and long-term keys, which is more change than needed and does not use the role credentials." }
+    ],
+    explanation: "Temporary credentials from STS have an access key ID, a secret access key, and a session token. The SDK or CLI must send all three; it signs requests with Signature Version 4." }
 
 ] });
