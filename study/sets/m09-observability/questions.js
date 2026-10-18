@@ -16,7 +16,7 @@ window.QUESTION_BANKS.push({ setId: "m09-observability", questions: [
     explanation: "CloudWatch Logs keeps log data indefinitely by default. Set a retention policy on each log group to delete old events automatically." },
 
   { id: "m09-002", topic: "cw-logs-basics", domain: 3,
-    stem: "A developer deploys a Lambda function with an AWS SAM template. Lambda creates the log group /aws/lambda/orders-fn on the first invocation, and the log group has no retention setting. The developer must set a 14-day retention period as part of the same template, so that every environment gets the same setting. Which solution will meet these requirements?",
+    stem: "A developer deploys a Lambda function with an AWS SAM template. If the template does not create the log group, Lambda creates /aws/lambda/orders-fn on the first invocation with no retention setting. The developer must set a 14-day retention period as part of the same template, so that every environment gets the same setting. Which solution will meet these requirements?",
     options: [
       { text: "Add an AWS::Logs::LogGroup resource named /aws/lambda/orders-fn with RetentionInDays set to 14.", correct: true,
         why: "When the template creates the log group with the function's default name, the template controls its retention. Every stack gets the same 14-day setting." },
@@ -320,7 +320,7 @@ window.QUESTION_BANKS.push({ setId: "m09-observability", questions: [
     explanation: "Composite alarms can notify through SNS, invoke Lambda, and create OpsItems or incidents. They cannot perform EC2 or Auto Scaling actions." },
 
   { id: "m09-023", topic: "cw-alarms-advanced", domain: 4,
-    stem: "A team deploys an application with AWS CodeDeploy. The team wants an email each time a deployment fails. The team does not want to write or run any code. Which solution will meet these requirements?",
+    stem: "A team deploys an application with AWS CodeDeploy. The team wants an email each time a deployment fails. The team does not want to write or run any code. Which solution will meet these requirements with the LEAST operational overhead?",
     options: [
       { text: "Create an Amazon EventBridge rule for CodeDeploy Deployment State-change Notification events with the FAILURE state, and set an SNS topic with an email subscription as the target.", correct: true,
         why: "CodeDeploy sends deployment state-change events to EventBridge. A rule with an SNS target sends the email with no code." },
@@ -452,7 +452,7 @@ window.QUESTION_BANKS.push({ setId: "m09-observability", questions: [
   { id: "m09-032", topic: "xray-setup", domain: 4,
     stem: "An application on Amazon EC2 uses the X-Ray SDK with the default sampling rule and reads sampling rules from the X-Ray service. The team needs to trace every POST request to /checkout for one week while it investigates a problem. Other requests must keep the default rate. The team must not redeploy the application. Which solution will meet these requirements?",
     options: [
-      { text: "Create a sampling rule in X-Ray for HTTP method POST and URL path /checkout with a rate of 100 percent and a higher priority than the default rule.", correct: true,
+      { text: "Create a sampling rule in X-Ray for HTTP method POST and URL path /checkout with a rate of 100 percent and a lower priority number than the default rule (evaluated first).", correct: true,
         why: "The SDK reads rules from X-Ray, so a new rule applies with no redeploy. Rules are evaluated by priority, and only matching requests use the 100 percent rate." },
       { text: "Change the default sampling rule rate to 100 percent.", correct: false,
         why: "The default rule applies to all requests that match no other rule. Every request would be traced, which fails the requirement for other requests." },
@@ -478,18 +478,20 @@ window.QUESTION_BANKS.push({ setId: "m09-observability", questions: [
     explanation: "With active tracing, the Lambda execution role needs xray:PutTraceSegments and xray:PutTelemetryRecords." },
 
   { id: "m09-034", topic: "xray-setup", domain: 1,
-    stem: "A team starts a new Java service on Amazon EC2 in 2026. The service must send traces to AWS X-Ray. The team requires an instrumentation library that AWS still develops with new features, not one that receives only security fixes. Which solution will meet these requirements?",
+    stem: "A Python web application on Amazon EC2 uses the X-Ray SDK, and the X-Ray daemon runs on the instance. Traces arrive in X-Ray, but the trace map shows only one node for the application. The application calls Amazon DynamoDB with boto3 and an external HTTP API with the requests library, but these calls do not appear. The developer must see each downstream call with its timing. Which solution will meet these requirements?",
     options: [
-      { text: "Instrument the service with AWS Distro for OpenTelemetry (ADOT), and send traces through the CloudWatch agent or the ADOT Collector.", correct: true,
-        why: "The X-Ray SDKs and daemon entered maintenance mode on February 25, 2026. AWS recommends OpenTelemetry for new instrumentation." },
-      { text: "Instrument the service with the X-Ray SDK for Java and run the X-Ray daemon.", correct: false,
-        why: "The X-Ray SDKs and daemon receive security fixes only since February 25, 2026. This fails the requirement." },
-      { text: "Turn on CloudTrail data events for the service.", correct: false,
-        why: "CloudTrail records AWS API calls for audit. It does not create application traces in X-Ray." },
-      { text: "Write timing values to logs in embedded metric format.", correct: false,
-        why: "EMF creates CloudWatch metrics. It does not create distributed traces with segments and a service map." }
+      { text: "Instrument the AWS SDK and HTTP clients in the code, for example with patch_all() from the X-Ray SDK for Python, so that the SDK records a subsegment for each downstream call.", correct: true,
+        why: "The SDK records downstream calls only for instrumented clients. Each instrumented call becomes a subsegment, and X-Ray shows DynamoDB and the HTTP API as nodes on the trace map." },
+      { text: "Add an annotation with the name of each downstream service to the segment.", correct: false,
+        why: "Annotations are indexed values for search. They do not record downstream calls or their timing, so no new nodes appear." },
+      { text: "Increase the sampling rate to 100 percent.", correct: false,
+        why: "Sampling controls how many requests are traced. The traced requests still have no subsegments for the downstream calls." },
+      { text: "Change the port that the X-Ray daemon listens on.", correct: false,
+        why: "Traces already arrive, so the daemon connection works. The port does not control which calls the SDK records." },
+      { text: "Turn on CloudTrail data events for the DynamoDB table.", correct: false,
+        why: "CloudTrail records API calls for audit in log files. It does not add subsegments or nodes to the X-Ray trace map." }
     ],
-    explanation: "Since February 25, 2026, the X-Ray SDKs and daemon are in maintenance mode. Use OpenTelemetry (ADOT) for new tracing work." },
+    explanation: "To see downstream calls on the trace map, instrument the AWS SDK and HTTP clients so that the X-Ray SDK records a subsegment for each call." },
 
   { id: "m09-035", topic: "trail-events", domain: 2,
     stem: "An Amazon DynamoDB table was deleted two days ago. The account has no CloudTrail trail. The security team must find which IAM principal deleted the table. Which solution will meet these requirements?",

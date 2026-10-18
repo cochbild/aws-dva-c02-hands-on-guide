@@ -57,14 +57,14 @@
     <li>CloudWatch Logs does not delete expired events immediately. Deletion typically occurs up to 72 hours after the retention period ends.</li>
     <li>To remove a retention policy (Never expire), call <code>DeleteRetentionPolicy</code>.</li>
     <li>Sources: AWS services (for example, Lambda), the CloudWatch agent on EC2 and on-premises servers, and the <code>PutLogEvents</code> API.</li>
-    <li>Log classes: Standard and Infrequent Access. Metric filters, subscription filters, and field discovery need the Standard class.</li>
+    <li>Log classes: Standard and Infrequent Access. Metric filters, subscription filters, and embedded metric format (EMF) need the Standard class.</li>
   </ul>
   <h3>Numbers to memorize</h3>
   <table>
     <tr><th>Item</th><th>Value</th></tr>
     <tr><td>Default retention</td><td>Never expire</td></tr>
     <tr><td>Retention values</td><td>1 day to 3,653 days (10 years), from a fixed list</td></tr>
-    <tr><td>Maximum log event size</td><td>1 MB (1,024 KB)</td></tr>
+    <tr><td>Maximum log event size</td><td>1 MB (1,024 KB) (older material says 256 KB)</td></tr>
     <tr><td>Maximum <code>PutLogEvents</code> batch</td><td>1 MB</td></tr>
   </table>
   <h3>Structured logging</h3>
@@ -155,7 +155,7 @@
     <tr><th>Item</th><th>Value</th></tr>
     <tr><td>Query timeout</td><td>60 minutes (the lab README says 60 seconds; that is wrong)</td></tr>
     <tr><td>Log groups in one query (<code>logGroupNames</code>)</td><td>50</td></tr>
-    <tr><td>Concurrent Logs Insights QL queries</td><td>100 for each account, including dashboard queries</td></tr>
+    <tr><td>Concurrent Logs Insights QL queries</td><td>100 for each account, including dashboard queries (older material says 30)</td></tr>
     <tr><td>Query results kept</td><td>7 days</td></tr>
   </table>
   <h3>Find performance bottlenecks in logs</h3>
@@ -304,6 +304,7 @@
   <h3>Key facts</h3>
   <ul>
     <li>A metric alarm watches one metric or one metric math expression and compares it to a threshold.</li>
+    <li>Metric math alarm example: an error rate of <code>100*errors/invocations</code> from the Lambda <code>Errors</code> and <code>Invocations</code> metrics. The expression must give one time series. You cannot alarm on a <code>SEARCH</code> expression.</li>
     <li>States: <code>OK</code>, <code>ALARM</code>, <code>INSUFFICIENT_DATA</code>. There are no other states.</li>
     <li><strong>Period</strong>: the length of one data point. <strong>Evaluation Periods</strong> (N): how many recent data points to evaluate. <strong>Datapoints to Alarm</strong> (M): how many of them must breach.</li>
     <li>"M out of N": 3 of the last 5 periods breach → <code>EvaluationPeriods</code> 5, <code>DatapointsToAlarm</code> 3.</li>
@@ -364,7 +365,8 @@
   <h3>Notifications for deployments and quotas</h3>
   <ul>
     <li>CodeDeploy sends state-change events to EventBridge, for example <code>CodeDeploy Deployment State-change Notification</code> with states such as SUCCESS and FAILURE. Create a rule with an SNS topic or a Lambda function as the target.</li>
-    <li>Developer Tools console <strong>notification rules</strong> notify on events in CodeBuild, CodeCommit, CodeDeploy, and CodePipeline. Targets: SNS topics and chat applications (AWS Chatbot). A notification rule creates an EventBridge rule for you.</li>
+    <li>CodePipeline sends <code>CodePipeline Pipeline Execution State Change</code> events to EventBridge, with states such as FAILED and SUCCEEDED. A rule with an SNS target notifies the team. Stage and action events also exist.</li>
+    <li>Developer Tools console <strong>notification rules</strong> notify on events in CodeBuild, CodeCommit, CodeDeploy, and CodePipeline. Targets: SNS topics and chat applications (AWS Chatbot, now Amazon Q Developer in chat applications). A notification rule creates an EventBridge rule for you.</li>
     <li>Quota limits: many services publish usage metrics in the <code>AWS/Usage</code> namespace. Use the metric math function <code>SERVICE_QUOTA(m1)</code>. Alarm on <code>m1/SERVICE_QUOTA(m1)*100</code>, for example above 80 percent.</li>
   </ul>
   <h3>Composite alarms</h3>
@@ -394,7 +396,7 @@
       <li>"Warn before the account reaches a service quota" → alarm on the usage metric with <code>SERVICE_QUOTA</code>.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/alarm-actions.html">Alarm actions</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/alarms-and-actions-Lambda.html">Lambda alarm action</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Create_Composite_Alarm.html">Composite alarms</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Anomaly_Detection.html">Anomaly detection</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/monitoring-cloudwatch-events.html">CodeDeploy events</a>, <a href="https://docs.aws.amazon.com/dtconsole/latest/userguide/welcome.html">Developer Tools notifications</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Quotas-Visualize-Alarms.html">Service quota alarms</a>. Lab: <a href="../../../module-09-observability/lab-05-alarms/README.md">Lab 9.5 Alarms</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/alarm-actions.html">Alarm actions</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/alarms-and-actions-Lambda.html">Lambda alarm action</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Create_Composite_Alarm.html">Composite alarms</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Anomaly_Detection.html">Anomaly detection</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/monitoring-cloudwatch-events.html">CodeDeploy events</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/detect-state-changes-cloudwatch-events.html">CodePipeline events</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Create-alarm-on-metric-math-expression.html">Metric math alarms</a>, <a href="https://docs.aws.amazon.com/dtconsole/latest/userguide/welcome.html">Developer Tools notifications</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Quotas-Visualize-Alarms.html">Service quota alarms</a>. Lab: <a href="../../../module-09-observability/lab-05-alarms/README.md">Lab 9.5 Alarms</a>.</p>
 </section>
 
 <section id="cw-app-monitoring">
