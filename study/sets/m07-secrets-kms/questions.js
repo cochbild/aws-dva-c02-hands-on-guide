@@ -323,7 +323,7 @@ window.QUESTION_BANKS.push({ setId: "m07-secrets-kms", questions: [
     ],
     explanation: "Multi-Region keys share key ID and key material across Regions, so data encrypted in one Region decrypts in another with no cross-Region call." },
 
-  { id: "m07-023", topic: "kms-envelope", domain: 1,
+  { id: "m07-023", topic: "kms-envelope", domain: 2,
     stem: "An application must encrypt 50 MB files with a KMS key before it stores them in Amazon S3. The application must make as few calls to KMS as possible and must follow AWS best practices. Which solution will meet these requirements?",
     options: [
       { text: "Call GenerateDataKey, encrypt the file locally with the plaintext data key, remove the plaintext key from memory, and store the encrypted data key with the file.", correct: true,
@@ -337,7 +337,7 @@ window.QUESTION_BANKS.push({ setId: "m07-secrets-kms", questions: [
     ],
     explanation: "KMS Encrypt handles up to 4,096 bytes. For larger data, use envelope encryption: GenerateDataKey, encrypt locally, and store the encrypted data key with the data." },
 
-  { id: "m07-024", topic: "kms-envelope", domain: 1,
+  { id: "m07-024", topic: "kms-envelope", domain: 2,
     stem: "A developer implements envelope encryption for customer documents with a symmetric KMS key. Later, any authorized service must be able to decrypt a document without a separate store for keys. Which combination of actions will meet these requirements? (Choose two.)",
     options: [
       { text: "Store the CiphertextBlob from GenerateDataKey together with the encrypted document.", correct: true,
@@ -381,7 +381,7 @@ window.QUESTION_BANKS.push({ setId: "m07-secrets-kms", questions: [
     ],
     explanation: "KMS request quotas are shared for each account and Region, and service calls count. S3 Bucket Keys reduce SSE-KMS requests to KMS." },
 
-  { id: "m07-027", topic: "kms-envelope", domain: 1,
+  { id: "m07-027", topic: "kms-envelope", domain: 2,
     stem: "In a data pipeline, a provisioning service creates storage containers and must attach an encrypted data key to each one. A different processing service later fills the containers and encrypts the data. For security, the provisioning service must never have the plaintext data key. Which KMS operation should the provisioning service call?",
     options: [
       { text: "GenerateDataKeyWithoutPlaintext", correct: true,
