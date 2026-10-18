@@ -1,0 +1,40 @@
+window.QUESTION_BANKS = window.QUESTION_BANKS || [];
+window.QUESTION_BANKS.push({ setId: "s02-beta", questions: [
+    { id: "s02-001", topic: "beta-one", domain: 3,
+      stem: "Which solution will meet these requirements?",
+      options: [
+      { text: "Option 0", correct: true, why: "Reason 0." },
+      { text: "Option 1", correct: false, why: "Reason 1." },
+      { text: "Option 2", correct: false, why: "Reason 2." },
+      { text: "Option 3", correct: false, why: "Reason 3." },
+      ],
+      explanation: "Rule tested by s02-001." },
+    { id: "s02-002", topic: "beta-one", domain: 4,
+      stem: "Which solutions will meet these requirements? (Choose two.)",
+      options: [
+      { text: "Option 0", correct: true, why: "Reason 0." },
+      { text: "Option 1", correct: true, why: "Reason 1." },
+      { text: "Option 2", correct: false, why: "Reason 2." },
+      { text: "Option 3", correct: false, why: "Reason 3." },
+      ],
+      explanation: "Rule tested by s02-002." },
+    { id: "s02-003", topic: "beta-two", domain: 3,
+      stem: "Which solution will meet these requirements?",
+      options: [
+      { text: "Option 0", correct: false, why: "Reason 0." },
+      { text: "Option 1", correct: true, why: "Reason 1." },
+      { text: "Option 2", correct: false, why: "Reason 2." },
+      { text: "Option 3", correct: false, why: "Reason 3." },
+      ],
+      explanation: "Rule tested by s02-003." },
+    { id: "s02-004", topic: "beta-two", domain: 4,
+      stem: "Which solutions will meet these requirements? (Choose three.)",
+      options: [
+      { text: "Option 0", correct: true, why: "Reason 0." },
+      { text: "Option 1", correct: true, why: "Reason 1." },
+      { text: "Option 2", correct: true, why: "Reason 2." },
+      { text: "Option 3", correct: false, why: "Reason 3." },
+      { text: "Option 4", correct: false, why: "Reason 4." },
+      ],
+      explanation: "Rule tested by s02-004." },
+] });
