@@ -197,6 +197,23 @@ window.STUDY_SETS = [
     ],
   },
   {
+    id: "g-app-security",
+    title: "Application security and sensitive data",
+    kind: "gap",
+    path: "sets/g-app-security/",
+    lab: null,
+    topics: [
+      { id: "appsec-data-classification", title: "Data classification" },
+      { id: "appsec-sanitize-mask", title: "Sanitizing and masking data" },
+      { id: "appsec-jwt-validation", title: "Bearer tokens and JWT validation" },
+      { id: "appsec-fine-grained-authz", title: "Application-level authorization" },
+      { id: "appsec-service-to-service", title: "Cross-service authentication" },
+      { id: "appsec-multi-tenant", title: "Multi-tenant data access" },
+      { id: "appsec-encryption-in-transit", title: "Encryption in transit" },
+      { id: "appsec-dev-certs-keys", title: "Certificates and SSH keys for development" },
+    ],
+  },
+  {
     id: "g-dev-practices",
     title: "SDK, CLI, testing, and Amazon Q Developer",
     kind: "gap",
