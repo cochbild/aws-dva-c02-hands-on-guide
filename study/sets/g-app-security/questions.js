@@ -502,8 +502,8 @@ window.QUESTION_BANKS.push({ setId: "g-app-security", questions: [
         why: "This creates a different key pair. It does not use the existing key that the developer wants." },
       { text: "Upload the private key to AWS Secrets Manager and reference it at launch.", correct: false,
         why: "The private key leaves the laptop, which fails the requirement. EC2 launches also need a public key, not a private key." },
-      { text: "Create the key pair with an AWS::EC2::KeyPair resource in AWS CloudFormation.", correct: false,
-        why: "CloudFormation creates a new key pair and stores its private key in Parameter Store. It does not use the existing laptop key." }
+      { text: "Create a new key pair with an AWS::EC2::KeyPair resource that has no PublicKeyMaterial, and get the private key from Parameter Store.", correct: false,
+        why: "This creates a different key pair, and its private key is stored in Parameter Store. It fails both requirements: use the existing laptop key, and the private key must never leave the laptop." }
     ],
     explanation: "To use your own SSH key, create it with a tool such as ssh-keygen and import only the public key into EC2. EC2 never needs your private key." },
 

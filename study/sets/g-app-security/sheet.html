@@ -96,7 +96,7 @@
   </ul>
   <h3>S3 Object Lambda (redact on read)</h3>
   <ul>
-    <li>An Object Lambda Access Point runs a Lambda function on S3 <code>GET</code>, <code>LIST</code>, and <code>HEAD</code> requests. The function can redact PII before the data reaches the caller. The function returns data with <code>WriteGetObjectResponse</code>.</li>
+    <li>An Object Lambda Access Point runs a Lambda function on S3 <code>GET</code>, <code>LIST</code>, and <code>HEAD</code> requests. The function can redact PII before the data reaches the caller. For <code>GET</code>, the function returns the data with <code>WriteGetObjectResponse</code>. For <code>HEAD</code> and <code>LIST</code>, the function returns the response as its own JSON result.</li>
     <li>One copy of the data serves callers with different views. You do not store a redacted copy.</li>
     <li>Availability: since November 7, 2025, S3 Object Lambda is available only to existing customers and select partners. See the m03 set.</li>
   </ul>
@@ -165,7 +165,7 @@
   <ul>
     <li>No authorization scopes on the method: API Gateway treats the token as an <strong>ID token</strong>.</li>
     <li>Authorization scopes on the method: API Gateway treats the token as an <strong>access token</strong>. The call succeeds if any method scope matches a scope in the token. Otherwise the result is <code>401 Unauthorized</code>.</li>
-    <li>The optional token validation regex checks the <code>aud</code> claim. Access tokens have no <code>aud</code>, so this regex rejects them.</li>
+    <li>The optional token validation regex checks the <code>aud</code> claim. Access tokens have no <code>aud</code> unless the token is bound to a resource server, so this regex rejects them.</li>
     <li>Pass claims to the backend: <code>$context.authorizer.claims.sub</code>, or <code>$context.authorizer.claims['custom:role']</code> for names with a colon.</li>
   </ul>
   <h3>Cognito groups</h3>
@@ -224,7 +224,7 @@
   <ul>
     <li>Use it when both services run on AWS with IAM roles. No secret to store or rotate.</li>
     <li>API Gateway: set the method authorization to <code>AWS_IAM</code>. The caller needs <code>execute-api:Invoke</code> and signs the request with SigV4.</li>
-    <li>Lambda function URL: set <code>AuthType</code> to <code>AWS_IAM</code>. The caller signs with SigV4. Since October 2025, new function URLs need both <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code>.</li>
+    <li>Lambda function URL: set <code>AuthType</code> to <code>AWS_IAM</code>. The caller signs with SigV4. Since October 2025, new function URLs need both <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code>. Older study material lists only <code>lambda:InvokeFunctionUrl</code>.</li>
     <li>Cross-account callers need an allow in their identity policy and in the resource policy (API resource policy or function resource-based policy).</li>
   </ul>
   <h3>Mutual TLS (REST API)</h3>
@@ -356,7 +356,7 @@
   <ul>
     <li>A key pair has a public key and a private key. EC2 puts the public key on the instance (Linux: <code>~/.ssh/authorized_keys</code>). You keep the private key.</li>
     <li>When EC2 creates the key pair, you can save the private key one time only. EC2 does not keep a copy, so you cannot recover a lost private key from AWS.</li>
-    <li>Exception: a key pair that CloudFormation creates (<code>AWS::EC2::KeyPair</code>) stores the private key in Parameter Store as <code>/ec2/keypair/&lt;key_pair_id&gt;</code>.</li>
+    <li>Exception: a key pair that CloudFormation creates (<code>AWS::EC2::KeyPair</code> with no <code>PublicKeyMaterial</code>) stores the private key in Parameter Store as <code>/ec2/keypair/&lt;key_pair_id&gt;</code>.</li>
     <li>Types: RSA (Linux and Windows) and ED25519 (Linux only). EC2 does not accept DSA.</li>
     <li>Private key file formats: <code>.pem</code> (OpenSSH) or <code>.ppk</code> (PuTTY). On Linux and macOS, run <code>chmod 400</code> on the file.</li>
     <li>Import: create the key pair with a tool such as <code>ssh-keygen</code>, then import only the <strong>public</strong> key (<code>aws ec2 import-key-pair</code>). The private key never leaves your machine.</li>
