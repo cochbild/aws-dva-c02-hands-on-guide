@@ -50,6 +50,13 @@
     <li>Lambda terminates environments every few hours, even for functions with constant traffic.</li>
     <li>If an invocation crashes or times out, Lambda resets the environment. The reset does not clear <code>/tmp</code>.</li>
   </ul>
+  <h3>The context object</h3>
+  <ul>
+    <li>The handler gets <code>event</code> and <code>context</code>. The context object describes the invocation and the function.</li>
+    <li>Remaining time: <code>getRemainingTimeInMillis()</code> (Node.js, Java) or <code>get_remaining_time_in_millis()</code> (Python). Use it to stop work before the timeout.</li>
+    <li>Request ID: <code>awsRequestId</code> or <code>aws_request_id</code>. It also appears in the <code>START</code>, <code>END</code>, and <code>REPORT</code> log lines.</li>
+    <li>Other properties: function name and version, invoked function ARN (shows the alias or version used), memory limit, log group, and log stream.</li>
+  </ul>
   <h3>Numbers to memorize</h3>
   <table>
     <tr><th>Item</th><th>Value</th></tr>
@@ -66,9 +73,10 @@
       <li>"Reuse the database connection between invocations" → open the connection outside the handler.</li>
       <li>"Some requests are slow, and the log has Init Duration" → cold starts. Fix with provisioned concurrency or SnapStart, or reduce init work.</li>
       <li>"Cache a downloaded file between invocations" → <code>/tmp</code> in the same environment. Do not expect it in every environment.</li>
+      <li>"Stop work safely before the timeout" → check the remaining time from the context object.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html">Execution environment lifecycle</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-01-hello-sam/README.md">Lab 1.1 Hello SAM</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html">Execution environment lifecycle</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/python-context.html">Context object (Python)</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-01-hello-sam/README.md">Lab 1.1 Hello SAM</a>.</p>
 </section>
 
 <section id="lambda-limits">
@@ -83,7 +91,8 @@
     <tr><td>Environment variables</td><td>—</td><td>4 KB total for all variables</td></tr>
     <tr><td>Layers</td><td>—</td><td>5 for each function</td></tr>
     <tr><td>Payload, synchronous</td><td>—</td><td>6 MB request and 6 MB response</td></tr>
-    <tr><td>Payload, asynchronous</td><td>—</td><td>1 MB (older study material says 256 KB)</td></tr>
+    <tr><td>Payload, asynchronous</td><td>—</td><td>1 MB</td></tr>
+    <tr><td>Payload, streamed response</td><td>—</td><td>200 MB. The first 6 MB has no bandwidth cap; the rest streams at up to 2 MBps.</td></tr>
     <tr><td>.zip package, direct upload</td><td>—</td><td>50 MB zipped. Upload larger files through Amazon S3.</td></tr>
     <tr><td>.zip package, unzipped</td><td>—</td><td>250 MB, including layers and custom runtimes</td></tr>
     <tr><td>Container image</td><td>—</td><td>10 GB uncompressed, including all image layers</td></tr>
@@ -97,17 +106,19 @@
     <li>The 15-minute timeout is a hard limit. Use AWS Step Functions or split the work for longer jobs.</li>
     <li>Use <code>/tmp</code> for temporary files. Each execution environment has its own <code>/tmp</code>. Lambda encrypts <code>/tmp</code> data at rest.</li>
     <li>Use Amazon S3 or Amazon EFS for data that must persist or that functions must share.</li>
+    <li>Amazon EFS: the function must connect to the VPC and mount the file system through an access point, at a local path that starts with <code>/mnt/</code>. Many functions and environments can read and write the same files.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
       <li>"Job runs 25 minutes" → Lambda cannot do it in one invocation (900-second maximum).</li>
       <li>"Function must process a 5 GB file locally" → increase ephemeral storage (up to 10,240 MB).</li>
+      <li>"Several functions must share files that persist" → Amazon EFS, not <code>/tmp</code>.</li>
       <li>"CPU-bound function is slow" → increase memory. CPU increases with memory.</li>
       <li>"Deployment package is 70 MB zipped" → upload through Amazon S3, or use a container image.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>, <a href="https://docs.aws.amazon.com/lambda/latest/api/API_CreateFunction.html">CreateFunction (defaults)</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-ephemeral-storage.html">Ephemeral storage</a>. Lab: <a href="../../../module-01-lambda-fundamentals/README.md">Module 1 overview</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>, <a href="https://docs.aws.amazon.com/lambda/latest/api/API_CreateFunction.html">CreateFunction (defaults)</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-ephemeral-storage.html">Ephemeral storage</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-filesystem-efs.html">Amazon EFS access</a>. Lab: <a href="../../../module-01-lambda-fundamentals/README.md">Module 1 overview</a>.</p>
 </section>
 
 <section id="lambda-invocation">
@@ -154,7 +165,7 @@
     <tr><td>Failure records</td><td>Yes (on failure)</td><td>Yes</td></tr>
     <tr><td>Targets</td><td>SQS queue, SNS topic, Lambda function, EventBridge event bus, S3 bucket (on failure only)</td><td>SQS standard queue or SNS standard topic</td></tr>
     <tr><td>Content</td><td>JSON record with request, response, error details, and attempt count</td><td>The original event only, plus attributes (RequestID, ErrorCode, ErrorMessage)</td></tr>
-    <tr><td>Scope</td><td>Function, version, or alias</td><td>Set on the function configuration (<code>$LATEST</code>). Each published version keeps the DLQ setting it had when you published it.</td></tr>
+    <tr><td>Scope</td><td>Function, version, or alias</td><td>You add or remove a DLQ only at the function level.</td></tr>
   </table>
   <h3>Key facts</h3>
   <ul>
@@ -186,7 +197,7 @@
     <li>Batch size: up to 10,000 for a standard queue; maximum 10 for a FIFO queue.</li>
     <li>For a batch size over 10, set <code>MaximumBatchingWindowInSeconds</code> to at least 1 second.</li>
     <li>Set the queue visibility timeout to at least <strong>6 times</strong> the function timeout. Add the batch window if you use one.</li>
-    <li>Lambda returns an error if the function timeout is more than the queue visibility timeout.</li>
+    <li>The function timeout must not be more than the queue visibility timeout. Lambda checks this when you create or update the event source mapping, and returns an error.</li>
     <li>By default, one error makes the <strong>whole batch</strong> visible again after the visibility timeout.</li>
     <li><strong>Partial batch response</strong>: set <code>FunctionResponseTypes</code> to <code>ReportBatchItemFailures</code>. Return the failed message IDs in <code>batchItemFailures</code> as <code>itemIdentifier</code> values.</li>
     <li>With partial batch response, a thrown exception still fails the whole batch. An empty <code>batchItemFailures</code> list means full success.</li>
@@ -200,14 +211,16 @@
     <li>Batch size: default 100, maximum 10,000. Batch window: up to 5 minutes.</li>
     <li>Lambda processes one batch at a time for each shard, in order. <code>ParallelizationFactor</code> (1 to 10) adds concurrent batches for each shard and keeps order for each partition key.</li>
     <li>By default, a failed batch is retried until the records expire. The shard is blocked during that time.</li>
-    <li>Error controls: <code>BisectBatchOnFunctionError</code> (split the failed batch), <code>MaximumRetryAttempts</code>, <code>MaximumRecordAgeInSeconds</code>, an on-failure destination (SQS or SNS), and <code>ReportBatchItemFailures</code>.</li>
+    <li>Error controls: <code>BisectBatchOnFunctionError</code> (split the failed batch), <code>MaximumRetryAttempts</code>, <code>MaximumRecordAgeInSeconds</code>, an on-failure destination, and <code>ReportBatchItemFailures</code>.</li>
+    <li>Stream on-failure destinations: SQS queue, SNS topic, or S3 bucket (a Kafka topic for Kafka sources). SQS and SNS records contain only metadata (shard ID and sequence numbers). S3 records also contain the payload.</li>
+    <li><strong>Tumbling windows</strong> (<code>TumblingWindowInSeconds</code>, up to 900 seconds) keep state between invocations in the same window. The function returns a <code>state</code> object (up to 1 MB for each shard). <code>isFinalInvokeForWindow</code> marks the last invocation of the window.</li>
     <li>The <code>IteratorAge</code> metric shows how far the function is behind the stream.</li>
     <li>Kinesis enhanced fan-out gives the function a dedicated read connection to each shard.</li>
   </ul>
   <h3>All event source mappings</h3>
   <ul>
     <li>Processing is at least once. Duplicates can occur. Make the code idempotent.</li>
-    <li>Use filter criteria on the ESM to stop events that the function does not need.</li>
+    <li>Use filter criteria on the ESM to stop events that the function does not need. Up to 5 filters by default, with EventBridge pattern syntax. For SQS, filter on the <code>body</code> key; Lambda removes messages that do not match from the queue. Sources: SQS, Kinesis, DynamoDB Streams, Amazon MQ, and Kafka.</li>
     <li>Batches can contain up to 6 MB of payload (the synchronous invocation limit).</li>
   </ul>
   <div class="exam-signals">
@@ -218,9 +231,11 @@
       <li>"One bad record blocks the stream" → <code>BisectBatchOnFunctionError</code>, limit retries, and add an on-failure destination.</li>
       <li>"IteratorAge increases" → the function is behind. Increase <code>ParallelizationFactor</code> or add shards.</li>
       <li>"One queue must not use all the concurrency of a shared function" → ESM maximum concurrency.</li>
+      <li>"Do not invoke the function for messages it does not need" → ESM filter criteria.</li>
+      <li>"Aggregate stream data over fixed time periods without a database" → tumbling windows.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html">SQS event source settings</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-scaling.html">SQS scaling and maximum concurrency</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-errorhandling.html">SQS partial batch response</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-kinesis-parameters.html">Kinesis ESM parameters</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html">DynamoDB Streams</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-02-event-sources/README.md">Lab 1.2 Event sources</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html">SQS event source settings</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-scaling.html">SQS scaling and maximum concurrency</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-errorhandling.html">SQS partial batch response</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-kinesis-parameters.html">Kinesis ESM parameters</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html">DynamoDB Streams</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/kinesis-on-failure-destination.html">Stream on-failure destinations</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventfiltering.html">Event filtering</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-kinesis-windows.html">Tumbling windows</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-02-event-sources/README.md">Lab 1.2 Event sources</a>.</p>
 </section>
 
 <section id="lambda-concurrency">
@@ -300,6 +315,7 @@
       <li>"Callers must not change the ARN on each release" → alias.</li>
       <li>"Dev and prod must use different settings from the same function" → aliases point to different versions, each with its own locked environment variables.</li>
       <li>"Run tests before traffic shifts" → <code>PreTraffic</code> hook.</li>
+      <li>"Staging must use only the version that QA approved" → an alias (for example, <code>staging</code>) that points to the approved version. Move the alias after each approval.</li>
     </ul>
   </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-versions.html">Versions</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuring-alias-routing.html">Weighted aliases</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/automating-updates-to-serverless-apps.html">SAM gradual deployments</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-configurations.html">CodeDeploy configurations</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-03-versions-aliases/README.md">Lab 1.3 Versions and aliases</a>.</p>
@@ -327,9 +343,12 @@
   <h3>AWS SAM</h3>
   <ul>
     <li>SAM is a CloudFormation transform: <code>Transform: AWS::Serverless-2016-10-31</code>. <code>AWS::Serverless::Function</code> becomes a function, an execution role, and other resources.</li>
-    <li>Deploying a SAM template through CloudFormation needs <code>CAPABILITY_AUTO_EXPAND</code> (for the transform) and <code>CAPABILITY_IAM</code> (for the role).</li>
+    <li>A template that creates an IAM role needs <code>CAPABILITY_IAM</code>. If you create a stack directly from a SAM template with <code>aws cloudformation create-stack</code> (no change set), CloudFormation also needs <code>CAPABILITY_AUTO_EXPAND</code> for the transform.</li>
+    <li><code>sam deploy</code> and <code>aws cloudformation deploy</code> use change sets, which show the processed template for review.</li>
     <li><code>sam build</code> builds the code and dependencies. <code>sam deploy --guided</code> deploys and saves settings.</li>
     <li><code>sam local invoke -e event.json</code> runs the function locally with a test event. <code>sam local start-api</code> runs a local API.</li>
+    <li><code>sam remote invoke</code> invokes a deployed function in the AWS Cloud with <code>--event</code> or <code>--event-file</code>.</li>
+    <li>Test events are JSON payloads. The Lambda console keeps up to 10 test events for each function. Shareable test events are available to other users in the account.</li>
     <li><code>sam sync</code> sends changes quickly to a development stack. <code>sam logs</code> gets function logs.</li>
   </ul>
   <div class="exam-signals">
@@ -339,10 +358,11 @@
       <li>"Dependencies are 3 GB" → container image (10 GB maximum), not layers.</li>
       <li>"Container image function cannot use the shared layer" → layers are not supported. Build the dependency into the image.</li>
       <li>"Test the function locally with a sample event" → <code>sam local invoke -e</code>.</li>
-      <li>"CloudFormation deploy fails with RequiresCapabilities" → add <code>CAPABILITY_IAM</code> and <code>CAPABILITY_AUTO_EXPAND</code>.</li>
+      <li>"create-stack with a SAM template fails with InsufficientCapabilities" → add <code>CAPABILITY_IAM</code> and <code>CAPABILITY_AUTO_EXPAND</code>.</li>
+      <li>"Test the deployed function in the cloud from the SAM CLI" → <code>sam remote invoke</code>.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/chapter-layers.html">Layers</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/images-create.html">Container images</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>. Labs: <a href="../../../module-01-lambda-fundamentals/lab-01-hello-sam/README.md">Lab 1.1 Hello SAM</a>, <a href="../../../module-01-lambda-fundamentals/lab-04-layers/README.md">Lab 1.4 Layers</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/chapter-layers.html">Layers</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/images-create.html">Container images</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_CreateStack.html">CreateStack capabilities</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-remote-invoke.html">sam remote invoke</a>. Labs: <a href="../../../module-01-lambda-fundamentals/lab-01-hello-sam/README.md">Lab 1.1 Hello SAM</a>, <a href="../../../module-01-lambda-fundamentals/lab-04-layers/README.md">Lab 1.4 Layers</a>.</p>
 </section>
 
 <section id="lambda-security">
@@ -375,6 +395,7 @@
     <li><code>AuthType</code> <code>AWS_IAM</code>: callers sign requests with SigV4 and need <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code>.</li>
     <li><code>AuthType</code> <code>NONE</code>: public access. A resource-based policy must still allow public access.</li>
     <li>Configure CORS on the function URL. Function URLs are reachable only from the public internet.</li>
+    <li>Invoke mode: <code>BUFFERED</code> (default, <code>Invoke</code> API, 6 MB response) or <code>RESPONSE_STREAM</code> (<code>InvokeWithResponseStream</code> API, up to 200 MB). Streaming sends partial responses early and improves time to first byte. Node.js managed runtimes support it natively.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
@@ -384,9 +405,10 @@
       <li>"Store a database password with rotation" → Secrets Manager.</li>
       <li>"Environment variable must not be visible as plain text in the console" → encryption helpers with a customer managed key.</li>
       <li>"Simple HTTPS endpoint for one function, no API features needed" → function URL.</li>
+      <li>"Response is larger than 6 MB, or users must see the first bytes fast" → function URL with <code>RESPONSE_STREAM</code>.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/access-control-resource-based.html">Resource-based policies</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars-encryption.html">Securing environment variables</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Function URL access control</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-configuration.html">Function URLs</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-03-versions-aliases/README.md">Lab 1.3 Versions and aliases</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/access-control-resource-based.html">Resource-based policies</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars-encryption.html">Securing environment variables</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Function URL access control</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-configuration.html">Function URLs</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/config-rs-invoke-furls.html">Response streaming with function URLs</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-03-versions-aliases/README.md">Lab 1.3 Versions and aliases</a>.</p>
 </section>
 
 <section id="lambda-vpc">
@@ -403,7 +425,8 @@
     <li>Lambda creates a <strong>Hyperplane ENI</strong> for each subnet and security group combination. Functions with the same combination share it.</li>
     <li>While Lambda creates the ENI, a new function is <code>Pending</code> and cannot be invoked. After 14 days idle, the function becomes <code>Inactive</code>.</li>
     <li>The target security group must allow inbound traffic from the function security group.</li>
-    <li>Use RDS Proxy to pool database connections when many functions connect.</li>
+    <li>Use RDS Proxy to pool database connections. AWS recommends it for functions that open many short connections, so the function can scale without exhausting database connections.</li>
+    <li>Choose the tool for the problem: NAT gateway for internet access; VPC endpoint for AWS services without the internet; RDS Proxy for database connection pooling.</li>
     <li>Choose subnets in more than one Availability Zone for high availability.</li>
   </ul>
   <div class="exam-signals">
@@ -415,7 +438,7 @@
       <li>"Function must reach an ElastiCache cluster" → attach the function to the VPC and allow its security group.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html">VPC access</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-07-vpc-lambda/README.md">Lab 1.7 VPC Lambda</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html">VPC access</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html">Lambda with Amazon RDS (RDS Proxy)</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-07-vpc-lambda/README.md">Lab 1.7 VPC Lambda</a>.</p>
 </section>
 
 <section id="lambda-observability">
@@ -469,6 +492,8 @@
   <ul>
     <li>Memory controls CPU. More memory can lower cost if the duration falls enough.</li>
     <li>Test several memory sizes and compare duration and cost. AWS Lambda Power Tuning is an open-source tool for this test.</li>
+    <li>AWS Compute Optimizer recommends a memory size for Lambda functions. It analyzes the last 14 days of metrics and marks memory as under-provisioned or over-provisioned.</li>
+    <li>The <code>REPORT</code> log line shows Duration, Billed Duration, Memory Size, and Max Memory Used. Compare Max Memory Used with Memory Size to find unused memory.</li>
     <li>Keep init work small: import only the modules you need, and load rarely used objects when needed.</li>
     <li>Create clients and connections outside the handler, so warm invocations use them again.</li>
     <li>Provisioned concurrency gives the lowest and most constant start latency, at extra cost.</li>
@@ -487,11 +512,11 @@
     <ul>
       <li>"Java function has a slow cold start, lowest cost fix" → SnapStart.</li>
       <li>"Strict latency for every request, cost is not a concern" → provisioned concurrency.</li>
-      <li>"Find the best memory size for cost" → test memory sizes (for example, with Lambda Power Tuning).</li>
+      <li>"Find the best memory size for cost" → test memory sizes (for example, with Lambda Power Tuning), or use AWS Compute Optimizer recommendations.</li>
       <li>"Restored environments create the same random value" → SnapStart uniqueness. Generate it after restore.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/snapstart.html">SnapStart</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html">Optimizing static initialization</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Memory and CPU</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-05-concurrency/README.md">Lab 1.5 Concurrency</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/snapstart.html">SnapStart</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html">Optimizing static initialization</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Memory and CPU</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/view-lambda-recommendations.html">Compute Optimizer for Lambda</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-05-concurrency/README.md">Lab 1.5 Concurrency</a>.</p>
 </section>
 
 </main>

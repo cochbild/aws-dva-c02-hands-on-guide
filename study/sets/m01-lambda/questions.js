@@ -15,19 +15,19 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
     ],
     explanation: "Code outside the handler runs one time for each execution environment. Put SDK clients and database connections there so that warm invocations use them again." },
 
-  { id: "m01-002", topic: "lambda-lifecycle", domain: 1,
-    stem: "A Lambda function downloads a 300 MB machine learning model from Amazon S3 at the start of every invocation. The download adds about 2 seconds to each request. The model changes one time each month. The developer wants to reduce request latency at the lowest cost. Which solution will meet these requirements?",
+  { id: "m01-041", topic: "lambda-lifecycle", domain: 1,
+    stem: "A Lambda function processes a list of files in a loop. The function timeout is 5 minutes. When the list is long, the function times out in the middle of a file and leaves partial output. The function must stop starting new files when less than 30 seconds remain, and it must save its progress. Which solution will meet these requirements?",
     options: [
-      { text: "Download the model to /tmp only when the file is not already there, so that later invocations in the same execution environment use the saved file.", correct: true,
-        why: "The /tmp content stays while the execution environment is frozen. Warm invocations skip the download, and the default 512 MB of /tmp holds the model at no extra cost." },
-      { text: "Store the model in an environment variable.", correct: false,
-        why: "All environment variables together are limited to 4 KB. A 300 MB model does not fit, so this cannot reduce latency." },
-      { text: "Configure provisioned concurrency for the function and keep the download in the handler.", correct: false,
-        why: "Provisioned concurrency removes Init latency, but the handler still downloads the model on every request. It also adds cost, so it fails the lowest-cost requirement." },
-      { text: "Increase the function timeout to 15 minutes.", correct: false,
-        why: "A longer timeout lets the function run longer. It does not remove the download, so latency does not go down." }
+      { text: "In the loop, read the remaining time from the context object (for example, context.get_remaining_time_in_millis() in Python). Stop and save progress when less than 30,000 ms remain.", correct: true,
+        why: "The context object returns the number of milliseconds left before the invocation times out, so the code can stop safely in time." },
+      { text: "Calculate the elapsed time from the REPORT line in CloudWatch Logs.", correct: false,
+        why: "Lambda writes the REPORT line after the invocation ends. The running code cannot use it to stop in time." },
+      { text: "Increase the function memory to 10,240 MB.", correct: false,
+        why: "More memory can make the work faster, but the code still does not know when time runs out. It fails the requirement to stop safely." },
+      { text: "Read context.aws_request_id at the start of each file.", correct: false,
+        why: "The request ID identifies the invocation. It does not tell the code how much time remains." }
     ],
-    explanation: "Global variables and /tmp content stay in a frozen execution environment. Use them as a cache that warm invocations use again." },
+    explanation: "The context object gives invocation data: the remaining time (getRemainingTimeInMillis or get_remaining_time_in_millis), the request ID, the function ARN, and the log group and stream." },
 
   { id: "m01-003", topic: "lambda-lifecycle", domain: 4,
     stem: "An API uses Amazon API Gateway and a Lambda function. Users report that some requests take about 4 seconds, and most take 200 ms. In CloudWatch Logs, only the slow requests have an Init Duration value in the REPORT line. The developer needs consistently low latency for all requests during business hours. Which solution will meet these requirements?",
@@ -71,19 +71,33 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
     ],
     explanation: "A .zip package that you upload directly is limited to 50 MB zipped. Upload larger packages through Amazon S3. The unzipped limit is 250 MB, including layers." },
 
-  { id: "m01-006", topic: "lambda-invocation", domain: 1,
-    stem: "An application uses the AWS SDK to start a Lambda function. The application must not wait for the function to finish. Lambda must retry the function automatically if the function returns an error. Which solution will meet these requirements?",
+  { id: "m01-042", topic: "lambda-limits", domain: 1,
+    stem: "Several Lambda functions must read and write the same set of large files with standard file operations. The files must stay available after the execution environments end. Which solution will meet these requirements?",
     options: [
-      { text: "Call the Invoke API with InvocationType set to Event.", correct: true,
-        why: "Event is an asynchronous invocation. Lambda queues the event, returns HTTP 202 at once, and retries function errors two times by default." },
-      { text: "Call the Invoke API with InvocationType set to RequestResponse.", correct: false,
-        why: "RequestResponse is synchronous. The application waits for the result, and Lambda does not retry errors, so both requirements fail." },
-      { text: "Call the Invoke API with InvocationType set to DryRun.", correct: false,
-        why: "DryRun only checks the parameters and the permission to invoke. The function does not run." },
-      { text: "Create an event source mapping from the application to the function.", correct: false,
-        why: "An event source mapping polls a supported source such as a queue or a stream. It cannot receive calls from application code." }
+      { text: "Connect the functions to the VPC and mount an Amazon EFS file system through an access point at a local path under /mnt.", correct: true,
+        why: "Amazon EFS is a shared, persistent file system. All functions and environments that mount it see the same files." },
+      { text: "Increase the ephemeral storage of each function to 10,240 MB and write the files to /tmp.", correct: false,
+        why: "Each execution environment has its own /tmp. Other functions cannot read it, and the content is lost when the environment ends." },
+      { text: "Put the files in a Lambda layer that all functions use.", correct: false,
+        why: "A layer version is immutable. Functions can read layer files in /opt but cannot write changes that other functions see." },
+      { text: "Store the files in environment variables.", correct: false,
+        why: "All environment variables together are limited to 4 KB. Large files do not fit, and functions cannot change them at run time." }
     ],
-    explanation: "Set InvocationType to Event for an asynchronous invocation. Lambda returns HTTP 202, queues the event, and retries function errors." },
+    explanation: "Use /tmp for temporary files in one execution environment. Use Amazon EFS (mounted under /mnt, function in the VPC) for files that functions must share and keep." },
+
+  { id: "m01-043", topic: "lambda-invocation", domain: 1,
+    stem: "A Node.js Lambda function creates reports that can be up to 50 MB. Users download the reports in a browser through a function URL. Downloads of large reports fail, and users want to see the first bytes quickly. Which solution will meet these requirements with the LEAST operational overhead?",
+    options: [
+      { text: "Set the invoke mode of the function URL to RESPONSE_STREAM, and write the report to the response stream.", correct: true,
+        why: "With RESPONSE_STREAM, Lambda sends data as it becomes available and allows responses up to 200 MB. Node.js managed runtimes support response streaming." },
+      { text: "Increase the function memory to 10,240 MB.", correct: false,
+        why: "The BUFFERED invoke mode still limits the response to 6 MB. Large reports still fail." },
+      { text: "Invoke the function asynchronously from the browser.", correct: false,
+        why: "An asynchronous invocation returns no function response to the caller, so users cannot download the report." },
+      { text: "Increase the function timeout to 900 seconds.", correct: false,
+        why: "The failure is caused by the 6 MB response limit, not by time. Large reports still fail." }
+    ],
+    explanation: "Function URLs use BUFFERED (default, 6 MB response) or RESPONSE_STREAM (InvokeWithResponseStream, up to 200 MB). Streaming improves time to first byte." },
 
   { id: "m01-007", topic: "lambda-invocation", domain: 1,
     stem: "Amazon EventBridge invokes a Lambda function asynchronously to send price alerts to customers. An alert that is more than 15 minutes old has no value. If the function returns an error, Lambda must not run the same alert again, because a retry can send a duplicate message. Which actions should the developer take to meet these requirements? (Choose two.)",
@@ -114,20 +128,6 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
         why: "S3 Lifecycle rules transition or expire objects. They do not invoke Lambda functions." }
     ],
     explanation: "Lambda can deliver the same asynchronous event more than one time, even with no errors. Make the function code idempotent." },
-
-  { id: "m01-009", topic: "lambda-destinations", domain: 1,
-    stem: "Amazon S3 invokes a Lambda function asynchronously. When the function succeeds, its result must go to an Amazon EventBridge event bus so that other teams can use it. The developer must not add code that calls EventBridge. Which solution will meet these requirements?",
-    options: [
-      { text: "Configure an on-success destination that is the EventBridge event bus.", correct: true,
-        why: "An on-success destination sends a record with the function response for each successful asynchronous invocation. No code change is needed." },
-      { text: "Configure a dead-letter queue that is the EventBridge event bus.", correct: false,
-        why: "A dead-letter queue receives only failed events, and it supports only an SQS queue or an SNS topic." },
-      { text: "Configure an on-failure destination that is the EventBridge event bus.", correct: false,
-        why: "An on-failure destination receives records only for failed invocations. Successful results do not go to the event bus." },
-      { text: "Create an event source mapping from the EventBridge event bus to the function.", correct: false,
-        why: "This connects the bus as an input to the function, not as an output. Event source mappings also do not support EventBridge as a source." }
-    ],
-    explanation: "Destinations route asynchronous invocation records. On-success sends the result of successful invocations without extra code." },
 
   { id: "m01-010", topic: "lambda-destinations", domain: 1,
     stem: "Amazon SNS invokes a Lambda function asynchronously. When an event fails after all retries, the operations team needs one record in an Amazon SQS standard queue. The record must contain the original event, the error message, and the number of attempts. Which solution will meet these requirements?",
@@ -163,7 +163,7 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
       { text: "Set the queue visibility timeout to at least 360 seconds.", correct: true,
         why: "AWS recommends a visibility timeout of at least 6 times the function timeout. Messages then stay hidden while Lambda processes and retries a batch." },
       { text: "Set the function timeout to 120 seconds.", correct: false,
-        why: "The function timeout must not be more than the visibility timeout. Lambda returns an error for this configuration, and the ratio gets worse." },
+        why: "The function timeout must not be more than the queue visibility timeout. Lambda rejects this setup when you create or update the event source mapping. Messages also become visible again while they are still in progress, so duplicates increase." },
       { text: "Set maxReceiveCount on the queue redrive policy to 1.", correct: false,
         why: "Messages move to the dead-letter queue after one receive. Messages that could succeed on a retry are not processed, and the cause of duplicates stays." },
       { text: "Turn on content-based deduplication on the queue.", correct: false,
@@ -203,36 +203,36 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
     ],
     explanation: "By default, a stream batch is retried until the records expire, which blocks the shard. Use BisectBatchOnFunctionError, a retry or age limit, and an on-failure destination." },
 
-  { id: "m01-015", topic: "lambda-esm", domain: 1,
-    stem: "Three Amazon SQS queues use event source mappings to invoke one Lambda function. The function has a reserved concurrency of 100. When one queue has a large backlog, messages from the other two queues wait a long time. Each queue must use a maximum of 30 concurrent invocations. Which solution will meet these requirements?",
+  { id: "m01-044", topic: "lambda-esm", domain: 4,
+    stem: "An Amazon SQS queue receives order events with a JSON message body. A Lambda function needs only events where the status field is CANCELLED. Today the function code ignores all other events. The function must not be invoked for other events, and the producers must not change. Which solution will meet these requirements with the LEAST operational overhead?",
     options: [
-      { text: "Set the maximum concurrency of each SQS event source mapping to 30.", correct: true,
-        why: "Maximum concurrency limits the concurrent invocations of one event source. Each queue gets at most 30, and the total of 90 fits within the reserved concurrency of 100." },
-      { text: "Set the reserved concurrency of the function to 30.", correct: false,
-        why: "Reserved concurrency limits the whole function to 30. All three queues share the 30, so one queue can still use all of it." },
-      { text: "Set the batch size of each event source mapping to 30.", correct: false,
-        why: "Batch size controls how many messages each invocation gets. It does not limit the number of concurrent invocations for each queue." },
-      { text: "Configure provisioned concurrency of 30 for the function.", correct: false,
-        why: "Provisioned concurrency initializes environments in advance. It does not limit how much concurrency one queue uses." }
+      { text: "Add filter criteria to the SQS event source mapping with the pattern { \"body\": { \"status\": [ \"CANCELLED\" ] } }.", correct: true,
+        why: "Lambda sends only matching messages to the function. For SQS, Lambda removes messages that do not match from the queue." },
+      { text: "Increase the batch size of the event source mapping to 10,000.", correct: false,
+        why: "Bigger batches reduce the number of invocations, but the function still receives events with other statuses." },
+      { text: "Publish the events to an Amazon SNS topic with a subscription filter policy instead of the queue.", correct: false,
+        why: "This changes how producers send events. It fails the requirement to not change the producers." },
+      { text: "Set the maximum concurrency of the event source mapping to 2.", correct: false,
+        why: "Maximum concurrency limits parallel invocations. It does not choose which events reach the function." }
     ],
-    explanation: "SQS event source mappings have a maximum concurrency setting (2 to 1,000) for each queue. It is separate from reserved concurrency, which applies to the whole function." },
+    explanation: "Event source mapping filter criteria (up to 5 filters by default) use EventBridge pattern syntax. For SQS, filter on the body key; messages that do not match are removed from the queue." },
 
-  { id: "m01-016", topic: "lambda-concurrency", domain: 1,
-    stem: "A Lambda function writes to an Amazon RDS database that accepts a maximum of 50 concurrent connections. Each invocation opens one connection. During traffic spikes, the database rejects connections. The developer must stop the function from using more than 50 connections at the same time without changing code. Which solution will meet these requirements?",
+  { id: "m01-045", topic: "lambda-esm", domain: 1,
+    stem: "A Lambda function reads click events from an Amazon Kinesis data stream. The function must count clicks for each page in fixed 5-minute windows and write one total for each window. The team does not want an external database to keep the counts between invocations. Which solution will meet these requirements?",
     options: [
-      { text: "Set the reserved concurrency of the function to 50.", correct: true,
-        why: "Reserved concurrency is a maximum for the function. At most 50 invocations run at the same time, so at most 50 connections open." },
-      { text: "Set the provisioned concurrency of the function alias to 50.", correct: false,
-        why: "Provisioned concurrency is not a maximum. When traffic goes above 50, extra requests use on-demand concurrency and open more connections." },
-      { text: "Reduce the function timeout to 5 seconds.", correct: false,
-        why: "A shorter timeout does not limit the number of concurrent invocations. A spike can still open more than 50 connections." },
-      { text: "Request an increase of the account concurrency quota.", correct: false,
-        why: "A higher quota allows more concurrent invocations, which opens more connections, not fewer." }
+      { text: "Set TumblingWindowInSeconds to 300 on the event source mapping. Return the running counts in the state property, and write the totals when isFinalInvokeForWindow is true.", correct: true,
+        why: "Tumbling windows pass state from one invocation to the next within each window, so no external database is needed." },
+      { text: "Set MaximumBatchingWindowInSeconds to 300 on the event source mapping.", correct: false,
+        why: "The batching window only waits to fill a batch. It does not keep counts between invocations or make fixed time windows." },
+      { text: "Keep the counts in global variables in the function code.", correct: false,
+        why: "Different execution environments do not share global variables, and Lambda can end an environment at any time. Counts are lost or split." },
+      { text: "Set ParallelizationFactor to 10 on the event source mapping.", correct: false,
+        why: "This adds concurrent batches for each shard. It does not aggregate counts across invocations." }
     ],
-    explanation: "Reserved concurrency sets a maximum number of concurrent executions for a function. Use it to protect a downstream system with limited capacity." },
+    explanation: "Tumbling windows (TumblingWindowInSeconds, up to 900 seconds) let a stream function keep state of up to 1 MB for each shard across invocations in the same window." },
 
   { id: "m01-017", topic: "lambda-concurrency", domain: 4,
-    stem: "An account runs many Lambda functions in one Region with the default concurrency quota. During a marketing event, a payment function that Amazon API Gateway invokes returns HTTP 429 errors. At the same time, a batch function in the same account runs with very high concurrency. The payment function must always be able to scale to 200 concurrent executions at the lowest cost. Which solution will meet these requirements?",
+    stem: "An account runs many Lambda functions in one Region with the default concurrency quota. During a marketing event, Amazon API Gateway invokes a payment function, Lambda returns TooManyRequestsException errors, and the Throttles metric increases for the payment function. At the same time, a batch function in the same account runs with very high concurrency. The payment function must always be able to scale to 200 concurrent executions at the lowest cost. Which solution will meet these requirements?",
     options: [
       { text: "Set the reserved concurrency of the payment function to 200.", correct: true,
         why: "Reserved concurrency keeps 200 executions for the payment function only, so other functions cannot use them. Reserved concurrency has no extra charge." },
@@ -305,19 +305,19 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
     ],
     explanation: "A weighted alias points to a maximum of two published versions. Both must have the same execution role and the same dead-letter queue configuration." },
 
-  { id: "m01-022", topic: "lambda-versions", domain: 4,
-    stem: "A weighted alias sends 20 percent of traffic to version 6 and 80 percent to version 5 of a Lambda function. The Errors metric for the alias increases. The developer must find out which version causes the errors. Which solution will meet these requirements?",
+  { id: "m01-046", topic: "lambda-versions", domain: 3,
+    stem: "A team runs integration tests in a staging environment. The staging API must always call the function version that QA approved, while developers continue to deploy new code to the function. When QA approves a new version, the team must switch staging to it without changing the API configuration. Which solution will meet these requirements?",
     options: [
-      { text: "View the alias Errors metric in CloudWatch, split by the ExecutedVersion dimension.", correct: true,
-        why: "For alias invocations, the ExecutedVersion dimension shows metrics for each version that ran, so the errors are visible for each version." },
-      { text: "View the CloudWatch metrics for $LATEST.", correct: false,
-        why: "Requests through the alias run versions 5 and 6, not $LATEST. The $LATEST metrics do not show these errors." },
-      { text: "View the alias configuration in the Lambda console.", correct: false,
-        why: "The alias configuration shows the routing weights. It does not show which version returned errors." },
-      { text: "Change the X-Ray sampling rate for the function to 100 percent.", correct: false,
-        why: "You cannot change the X-Ray sampling rate for Lambda functions. The change is not possible." }
+      { text: "Create a staging alias that points to the approved version. Configure the API to call the alias ARN, and update the alias when QA approves a new version.", correct: true,
+        why: "The API always calls the same alias ARN. Moving the alias to a new version is one update, and the API configuration does not change." },
+      { text: "Configure the API to call the unqualified function ARN.", correct: false,
+        why: "The unqualified ARN invokes $LATEST, which changes with every deployment. Staging would run code that QA did not approve." },
+      { text: "Configure the API to call the ARN of the approved version number.", correct: false,
+        why: "Each approval needs a new version ARN in the API configuration. It fails the requirement to not change the API." },
+      { text: "Create a weighted alias that sends 50 percent of traffic to the newest version.", correct: false,
+        why: "Half of the staging traffic would go to a version that QA did not approve." }
     ],
-    explanation: "With a weighted alias, use the ExecutedVersion metric dimension, the version in the START log line, or the x-amz-executed-version response header to find the version that ran." },
+    explanation: "Use an alias as a stable pointer to an approved version for each environment. Callers use the alias ARN, and you move the alias when a new version is approved." },
 
   { id: "m01-023", topic: "lambda-versions", domain: 3,
     stem: "A team uses AWS SAM and AWS CodeDeploy for gradual Lambda deployments. Before any production traffic moves to a new version, the team must run integration tests against that version. If the tests fail, the deployment must stop. Which solution will meet these requirements?",
@@ -332,20 +332,6 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
         why: "Destinations send records of asynchronous invocations. They do not control CodeDeploy traffic shifting." }
     ],
     explanation: "In a SAM DeploymentPreference, the PreTraffic hook runs before traffic shifts, and the PostTraffic hook runs after. Each hook reports success or failure to CodeDeploy." },
-
-  { id: "m01-024", topic: "lambda-packaging", domain: 3,
-    stem: "Five Python Lambda functions, deployed as .zip archives, use the same internal library. The team must update the library in one place, and each deployment package must stay small. Which solution will meet these requirements?",
-    options: [
-      { text: "Publish the library as a Lambda layer, and add the layer version to each function.", correct: true,
-        why: "A layer shares dependencies between functions. You update the library in one layer, and the function packages do not contain it." },
-      { text: "Copy the library into the deployment package of each function.", correct: false,
-        why: "Each package gets bigger, and the team must update the library in five places." },
-      { text: "Store the library code in an environment variable.", correct: false,
-        why: "Environment variables are limited to 4 KB in total, and they are not a way to load a code library." },
-      { text: "Store the library in the /tmp directory of one function.", correct: false,
-        why: "Each execution environment has its own /tmp. Other functions cannot read it, and the content does not persist." }
-    ],
-    explanation: "Layers are .zip archives that Lambda extracts to /opt. Use them to share libraries between .zip functions. A function can use up to 5 layers." },
 
   { id: "m01-025", topic: "lambda-packaging", domain: 3,
     stem: "A Lambda function is deployed as a container image. The function must use a monitoring library that another team publishes as a Lambda layer. When the developer tries to add the layer to the function, the update fails. Which solution will meet these requirements?",
@@ -376,20 +362,20 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
     explanation: "Use sam local invoke -e event.json to test a function locally with a test event. Use sam local start-api to run a local API." },
 
   { id: "m01-027", topic: "lambda-packaging", domain: 3,
-    stem: "A developer deploys an AWS SAM template with the aws cloudformation deploy command. The template has an AWS::Serverless::Function resource with no Role property. The deployment fails with a RequiresCapabilities error. Which values must the developer add to the --capabilities option? (Choose two.)",
+    stem: "A developer creates a stack directly from an AWS SAM template with the aws cloudformation create-stack command, without a change set. The template has an AWS::Serverless::Function resource with no Role property. The request fails with an InsufficientCapabilities error. Which values must the developer add to the --capabilities option? (Choose two.)",
     options: [
       { text: "CAPABILITY_IAM", correct: true,
         why: "SAM creates an IAM execution role for the function. CloudFormation requires this capability to create IAM resources." },
       { text: "CAPABILITY_AUTO_EXPAND", correct: true,
-        why: "The SAM transform is a macro. CloudFormation requires this capability to expand it." },
-      { text: "--no-execute-changeset", correct: false,
-        why: "This option creates a change set without running it. It does not acknowledge any capability, so the error stays." },
-      { text: "--force-upload", correct: false,
-        why: "This option uploads artifacts again. It does not acknowledge any capability, so the error stays." },
+        why: "The AWS::Serverless transform is a macro. When you create a stack directly from a template with a macro, without a change set, CloudFormation requires this capability." },
       { text: "--disable-rollback", correct: false,
-        why: "This option keeps resources after a failure. It does not acknowledge any capability, so the error stays." }
+        why: "This option keeps resources after a failure. It does not acknowledge any capability, so the error stays." },
+      { text: "--enable-termination-protection", correct: false,
+        why: "This option protects the stack from deletion. It does not acknowledge any capability, so the error stays." },
+      { text: "--on-failure DELETE", correct: false,
+        why: "This option deletes the stack if creation fails. It does not acknowledge any capability, so the error stays." }
     ],
-    explanation: "A SAM template deployed through CloudFormation needs CAPABILITY_AUTO_EXPAND for the transform and CAPABILITY_IAM when SAM creates a role." },
+    explanation: "CreateStack needs CAPABILITY_IAM for IAM resources and CAPABILITY_AUTO_EXPAND for a macro such as the SAM transform. Change-set deployments (sam deploy, aws cloudformation deploy) review the processed template in a change set instead." },
 
   { id: "m01-028", topic: "lambda-security", domain: 2,
     stem: "A developer must allow one Amazon S3 bucket in the same account to invoke a Lambda function when objects are created. The permission must follow the principle of least privilege. Which solution will meet these requirements?",
@@ -481,7 +467,7 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
     stem: "A developer updates an existing Lambda function to attach it to a VPC. The update fails with an error that the execution role does not have permission to call ec2:CreateNetworkInterface. Which solution will resolve the error and follow the principle of least privilege?",
     options: [
       { text: "Attach the AWSLambdaVPCAccessExecutionRole managed policy to the function execution role.", correct: true,
-        why: "This policy contains only the EC2 network interface permissions that Lambda needs to connect the function to the VPC." },
+        why: "This AWS managed policy grants the EC2 network interface permissions that Lambda needs for VPC access, plus CloudWatch Logs write permissions. It grants nothing broader." },
       { text: "Add ec2:CreateNetworkInterface to the function resource-based policy.", correct: false,
         why: "The resource-based policy controls who can invoke the function. Lambda uses the execution role to create network interfaces." },
       { text: "Attach the AmazonEC2FullAccess managed policy to the function execution role.", correct: false,
@@ -491,8 +477,22 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
     ],
     explanation: "A VPC function needs EC2 network interface permissions in its execution role. The AWSLambdaVPCAccessExecutionRole managed policy contains them." },
 
+  { id: "m01-047", topic: "lambda-vpc", domain: 4,
+    stem: "A Lambda function in a VPC connects to an Amazon RDS for PostgreSQL database. During traffic spikes, thousands of concurrent invocations open new connections, and the database returns too many connections errors. The function must continue to scale with traffic. Which solution will meet these requirements?",
+    options: [
+      { text: "Create an Amazon RDS Proxy for the database, and connect the function to the proxy endpoint.", correct: true,
+        why: "RDS Proxy keeps a pool of shared database connections, so the function can reach high concurrency without exhausting connections." },
+      { text: "Set the reserved concurrency of the function to a low value.", correct: false,
+        why: "This protects the database but stops the function from scaling with traffic. It fails the scaling requirement." },
+      { text: "Add a NAT gateway to the VPC.", correct: false,
+        why: "A NAT gateway gives internet access. It does not change how many database connections the function opens." },
+      { text: "Create a gateway VPC endpoint for Amazon RDS.", correct: false,
+        why: "Gateway endpoints support only Amazon S3 and DynamoDB, and an endpoint does not pool database connections." }
+    ],
+    explanation: "AWS recommends RDS Proxy for Lambda functions that open many short database connections. The proxy pools connections so that the function can scale." },
+
   { id: "m01-035", topic: "lambda-observability", domain: 4,
-    stem: "A Lambda function is managed with AWS CloudFormation and has no tracing. A developer must see a service map and the latency of each AWS SDK call that the function makes to downstream services. Which actions should the developer take to meet these requirements? (Choose three.)",
+    stem: "A Lambda function is defined as an AWS::Lambda::Function resource in an AWS CloudFormation template and has no tracing. A developer must see a service map and the latency of each AWS SDK call that the function makes to downstream services. Which actions should the developer take to meet these requirements? (Choose three.)",
     options: [
       { text: "Set TracingConfig Mode to Active on the function.", correct: true,
         why: "Active tracing makes Lambda send trace segments for sampled invocations to X-Ray, which builds the service map." },
@@ -566,7 +566,7 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
     explanation: "Lambda allocates CPU in proportion to memory (one vCPU at 1,769 MB). Test several memory sizes to find the best mix of duration and cost." },
 
   { id: "m01-040", topic: "lambda-performance", domain: 1,
-    stem: "A Python 3.13 Lambda function uses SnapStart. The initialization code creates a random seed that the function uses to make unique order IDs. After SnapStart was turned on, the team finds duplicate order IDs from different execution environments. Which solution will meet these requirements?",
+    stem: "A Python 3.13 Lambda function uses SnapStart. The initialization code creates a random seed that the function uses to make unique order IDs. After SnapStart was turned on, the team finds duplicate order IDs from different execution environments. Order IDs must be unique. Which solution will meet these requirements?",
     options: [
       { text: "Create the random seed after restore, in the handler or in an after-restore runtime hook.", correct: true,
         why: "Every environment restored from the same snapshot has the same Init state. A seed made after restore is different in each environment." },
