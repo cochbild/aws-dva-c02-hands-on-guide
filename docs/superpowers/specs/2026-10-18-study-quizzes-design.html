@@ -155,6 +155,7 @@
   registry.js                list of sets: id, title, paths, topic list
 tools/
   validate-study.*           data checker (see section 11)</pre>
+<p><strong>Update (2026-10-18, builder check):</strong> Firefox scopes <code>localStorage</code> for <code>file://</code> pages per file or folder. Thus all quiz, weak-topics, exam, and home views are hash routes in one page, <code>study/index.html</code>. Study sheets stay as separate pages because they do not use storage. The plan's Global Constraints give the exact routes.</p>
 <p>Pages that need every bank (home, weak topics, final exam) load <code>registry.js</code> and each <code>questions.js</code> with script tags.</p>
 
 <h2>10. Delivery order</h2>
