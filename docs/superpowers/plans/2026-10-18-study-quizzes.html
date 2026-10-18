@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Study Quizzes Plan</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 56rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.55; color: #1b1f24; background: #fff; }
+  code, pre { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; }
+  pre { background: #f4f5f7; padding: 0.75rem; overflow-x: auto; }
+  h3 { margin-top: 2.2rem; border-top: 1px solid #ccd; padding-top: 1rem; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e6e8eb; background: #16181c; }
+    pre { background: #22252b; }
+    h3 { border-color: #3a3f48; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Study Sheets and Quizzes — Implementation Plan</h1>
+
+<blockquote><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use <code>[ ]</code> markers for tracking.</blockquote>
+
+<p><strong>Goal:</strong> Static HTML study sheets and exam-style quizzes for DVA-C02, with topic-level weak-area tracking, a weak-topics quiz, and a 65-question practice exam.</p>
+<p><strong>Architecture:</strong> One shared engine (<code>study/assets/quiz.js</code>) holds pure logic (pick, score, stats) plus DOM rendering. Each set has a <code>sheet.html</code>, a thin <code>quiz.html</code>, and a <code>questions.js</code> data file loaded by a script tag. <code>study/registry.js</code> lists every set and its topics. Progress lives in <code>localStorage</code>.</p>
+<p><strong>Tech stack:</strong> Plain HTML, CSS, and browser JavaScript (ES2020, no modules, so <code>file://</code> works). Tests and the data checker run on Node 22 with <code>node:test</code> and <code>node:vm</code>. No dependencies.</p>
+<p><strong>Spec:</strong> <code>docs/superpowers/specs/2026-10-18-study-quizzes-design.html</code></p>
+
+<h2>Global Constraints</h2>
+<ul>
+  <li>No build step, no frameworks, no npm packages, no CDN, no web fonts. Pages work offline from <code>file://</code>.</li>
+  <li>No <code>fetch()</code> for data. Data loads with <code>&lt;script src&gt;</code>.</li>
+  <li>Every <code>localStorage</code> read and write is inside <code>try/catch</code>. Storage key: <code>dva-study-history-v1</code>.</li>
+  <li>No <code>alert()</code>, <code>confirm()</code>, or <code>prompt()</code>. Use in-page confirmation.</li>
+  <li>Light and dark themes through <code>prefers-color-scheme</code>.</li>
+  <li>Study sheet prose: ASD-STE100 by intent. Quiz stems: AWS exam style ("Which solution will meet these requirements?"). All questions original.</li>
+  <li>Accuracy over volume. Any fact a reviewer cannot confirm against AWS documentation is fixed or removed.</li>
+  <li>Topic weak threshold: accuracy below 0.8 over the most recent 5 answers for the topic.</li>
+  <li>Set quiz: 15 questions per attempt. Bank: 30 to 40 questions per set, at least 2 per topic, 6 to 15 topics per set, about 20 to 25 percent multiple response.</li>
+  <li>Exam: 65 questions, 130 minutes, domain weights 1: 0.32, 2: 0.26, 3: 0.24, 4: 0.18 (confirm against the official guide in Task 13).</li>
+  <li>Commit author: <code>Dale C &lt;dalecochran1968@gmail.com&gt;</code>. Work on <code>feature/study-quizzes</code>. Do not push.</li>
+</ul>
+
+<h2>Review Focus</h2>
+<ol>
+  <li><strong>Storage not available</strong> (private window, blocked site data, <code>file://</code> restrictions): every page renders and a quiz can be taken and scored; progress shows as "not tested". Test in Task 1.</li>
+  <li><strong>Special characters in content</strong> (<code>&lt;</code>, <code>&amp;</code>, <code>${...}</code>, JSON snippets in stems): text displays literally, never as HTML. Render with <code>textContent</code>. Test in Task 4.</li>
+  <li><strong>Bank smaller than requested count</strong> (weak-topics pool of 3, a gap set with 12 questions): the picker returns all available, no duplicates, no hang. Test in Task 1.</li>
+  <li><strong>Submit with unanswered questions</strong>: the page lists the unanswered question numbers and asks for an in-page second click; unanswered counts as wrong. Test in Task 4.</li>
+  <li><strong>Exam timer while the tab sleeps or the laptop suspends</strong>: remaining time comes from the start timestamp, not from a tick counter; at zero the exam submits. Test in Task 14.</li>
+</ol>
+
+<h2>File Structure</h2>
+<pre>study/
+  index.html              home: sets, latest scores, weak topics, reset (Task 4)
+  registry.js             window.STUDY_SETS (Task 3, extended by each content task)
+  weak-topics.html        (Task 5)
+  final-exam.html         (Task 14)
+  coverage.html           exam guide → sets (Task 13)
+  assets/study.css        (Task 4)
+  assets/quiz.js          engine: logic (Task 1) + rendering (Task 4)
+  sets/&lt;set-id&gt;/sheet.html, quiz.html, questions.js
+tools/
+  validate-study.js       data checker (Task 2)
+  tests/quiz-engine.test.js
+  tests/validate-study.test.js
+  tests/fixtures/         small fake study tree for checker tests</pre>
+
+<h2>Data Formats (shared by all tasks)</h2>
+<pre>// study/registry.js
+window.STUDY_SETS = [
+  { id: "m01-lambda", title: "Module 1 — Lambda", kind: "module",   // kind: "module" | "gap"
+    path: "sets/m01-lambda/", lab: "../module-01-lambda-fundamentals/README.md",
+    topics: [ { id: "lambda-lifecycle", title: "Execution lifecycle and cold starts" }, ... ] },
+];
+
+// study/sets/&lt;set-id&gt;/questions.js
+window.QUESTION_BANKS = window.QUESTION_BANKS || [];
+window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
+  { id: "m01-001", topic: "lambda-lifecycle", domain: 4,
+    stem: "A developer ... Which solution will meet these requirements?",
+    options: [ { text: "...", correct: true,  why: "..." },
+               { text: "...", correct: false, why: "..." } ],
+    explanation: "One or two sentences: the rule this question tests." } ] });
+// Multiple response = more than one correct option. Stem ends "(Choose two.)" or "(Choose three.)".
+
+// localStorage "dva-study-history-v1": JSON array of
+{ q: "m01-001", set: "m01-lambda", topic: "lambda-lifecycle", ok: true, t: 1760000000000 }</pre>
+<p>Topic IDs are unique across all sets. Question IDs are <code>&lt;set prefix&gt;-NNN</code>, unique across all sets.</p>
+
+<h1>Phase 1 — Engine and Module 1</h1>
+
+<h3>Task 1: Engine logic</h3>
+<p><strong>Files:</strong> Create <code>study/assets/quiz.js</code>, <code>tools/tests/quiz-engine.test.js</code>.</p>
+<p><strong>Interfaces — Produces</strong> (on <code>window.StudyQuiz</code> in the browser, and <code>module.exports</code> when <code>module</code> exists):</p>
+<ul>
+  <li><code>shuffle(arr, rng = Math.random) -&gt; new array</code></li>
+  <li><code>pickBalanced(questions, count, rng) -&gt; Question[]</code>: round-robin across topics (topics in random order, questions within a topic in random order), length <code>min(count, questions.length)</code>, no duplicates.</li>
+  <li><code>isCorrect(question, selected: number[]) -&gt; boolean</code>: exact set match of correct option indexes.</li>
+  <li><code>scoreAttempt(questions, answers: {[qid]: number[]}) -&gt; { correct, total, byTopic: {[topic]: {correct,total}}, byDomain: {[d]: {correct,total}}, results: [{question, selected, ok}] }</code>. Missing answer = wrong.</li>
+  <li><code>topicStats(history, n = 5) -&gt; {[topic]: {accuracy, count}}</code>: uses the most recent <code>n</code> entries per topic by <code>t</code>.</li>
+  <li><code>weakTopics(stats, threshold = 0.8) -&gt; string[]</code>: accuracy below threshold, worst first.</li>
+  <li><code>pickWeak(allQuestions, history, count = 15, rng) -&gt; Question[]</code>: only weak-topic questions; order of preference: last answer wrong, never seen, last answer right.</li>
+  <li><code>pickExam(allQuestions, count = 65, weights, rng) -&gt; Question[]</code>: per-domain quota by largest remainder (floor of <code>count*w</code>, then +1 to the largest fractional parts until the sum is <code>count</code>); balanced by topic inside each domain; if a domain is short, fill from other domains.</li>
+  <li><code>loadHistory() -&gt; Entry[]</code>, <code>appendHistory(entries) -&gt; boolean</code>, <code>resetHistory() -&gt; boolean</code>: return <code>[]</code> / <code>false</code> when storage throws or holds bad JSON.</li>
+  <li><code>historyEntries(scoreResult, setIdOf: (qid) =&gt; string, now) -&gt; Entry[]</code></li>
+</ul>
+<ul>
+  <li>[ ] <strong>Step 1: Write failing tests</strong> with a seeded RNG (for example mulberry32). Required cases:
+    <ul>
+      <li><code>pickBalanced</code>: 3 topics × 10 questions, count 15 → 5 per topic; 4 questions, count 15 → 4 unique.</li>
+      <li><code>isCorrect</code>: single correct; multi <code>[1,3]</code> vs <code>[3,1]</code> true, vs <code>[1]</code> false, vs <code>[1,3,4]</code> false; <code>[]</code> false.</li>
+      <li><code>scoreAttempt</code>: unanswered counts in <code>total</code> and not in <code>correct</code>; <code>byTopic</code> and <code>byDomain</code> sums.</li>
+      <li><code>topicStats</code>: 7 entries for a topic, oldest 2 wrong, newest 5 right → accuracy 1, count 5.</li>
+      <li><code>weakTopics</code>: 0.8 is not weak, 0.6 is weak, order worst first.</li>
+      <li><code>pickWeak</code>: no weak topics → <code>[]</code>; prefers missed over unseen over right.</li>
+      <li><code>pickExam</code>: 400 questions spread over 4 domains → exactly 21/17/15/12; domain 4 with 5 questions → 5 from domain 4, total still 65.</li>
+      <li>Storage: with a fake <code>localStorage</code> whose methods throw, <code>loadHistory()</code> returns <code>[]</code> and <code>appendHistory</code> returns <code>false</code> without throwing; corrupt JSON → <code>[]</code>.</li>
+    </ul></li>
+  <li>[ ] <strong>Step 2:</strong> Run <code>node --test tools/tests/</code>. Expected: FAIL (module missing).</li>
+  <li>[ ] <strong>Step 3:</strong> Implement the functions above in <code>study/assets/quiz.js</code> inside one IIFE. Storage functions read <code>globalThis.localStorage</code> at call time so tests can inject a fake.</li>
+  <li>[ ] <strong>Step 4:</strong> Run <code>node --test tools/tests/</code>. Expected: all PASS.</li>
+  <li>[ ] <strong>Step 5:</strong> Commit: <code>Add quiz engine logic with tests</code>.</li>
+</ul>
+
+<h3>Task 2: Data checker</h3>
+<p><strong>Files:</strong> Create <code>tools/validate-study.js</code>, <code>tools/tests/validate-study.test.js</code>, <code>tools/tests/fixtures/</code>.</p>
+<p><strong>Interfaces — Produces:</strong> <code>validateStudy(studyDir) -&gt; { errors: string[], stats: { sets, questions, byDomain } }</code>, exported. CLI: <code>node tools/validate-study.js [studyDir]</code> (default <code>study</code>) prints errors and stats, exits 1 on any error.</p>
+<p>Loads <code>registry.js</code> and every <code>sets/*/questions.js</code> in one <code>vm</code> context with a <code>window</code> object. Checks:</p>
+<ol>
+  <li>Set IDs, topic IDs, and question IDs are unique (across all sets).</li>
+  <li>Each bank's <code>setId</code> is in the registry; each registry set has a bank, a <code>sheet.html</code>, and a <code>quiz.html</code>.</li>
+  <li>Each question's <code>topic</code> belongs to its set in the registry.</li>
+  <li>Each registry topic has an element with <code>id="&lt;topic&gt;"</code> in the set's <code>sheet.html</code>.</li>
+  <li>Each topic has at least 2 questions.</li>
+  <li><code>domain</code> is 1, 2, 3, or 4.</li>
+  <li>4 to 6 options; at least 1 correct; every option has non-empty <code>text</code> and <code>why</code>; <code>explanation</code> non-empty.</li>
+  <li>More than one correct → stem contains "(Choose two.)" or "(Choose three.)" matching the count. Exactly one correct → stem has no "(Choose".</li>
+</ol>
+<ul>
+  <li>[ ] <strong>Step 1: Write failing tests</strong>: a valid fixture tree → <code>errors.length === 0</code>; one test per check above with a fixture (or an in-test mutated copy) that breaks only that rule, asserting an error that names the question or topic ID.</li>
+  <li>[ ] <strong>Step 2:</strong> Run <code>node --test tools/tests/</code>. Expected: new tests FAIL.</li>
+  <li>[ ] <strong>Step 3:</strong> Implement <code>validateStudy</code> and the CLI.</li>
+  <li>[ ] <strong>Step 4:</strong> Run <code>node --test tools/tests/</code>. Expected: all PASS.</li>
+  <li>[ ] <strong>Step 5:</strong> Commit: <code>Add study data checker</code>.</li>
+</ul>
+
+<h3>Task 3: Module 1 content (Lambda) — the template for every content task</h3>
+<p><strong>Files:</strong> Create <code>study/registry.js</code>, <code>study/sets/m01-lambda/sheet.html</code>, <code>study/sets/m01-lambda/questions.js</code>, <code>study/sets/m01-lambda/quiz.html</code>.</p>
+<p><strong>Interfaces — Consumes:</strong> data formats above; Task 2 checker. <strong>Produces:</strong> the sheet structure and the <code>quiz.html</code> stub that every later content task copies.</p>
+<p><strong>Sources:</strong> <code>module-01-lambda-fundamentals/README.md</code> and its lab READMEs, the official DVA-C02 exam guide, and AWS documentation. The module README is a source, not a limit: add every Lambda fact the exam tests.</p>
+<p><strong>Sheet structure</strong> (exact, for all sets):</p>
+<pre>&lt;link rel="stylesheet" href="../../assets/study.css"&gt;
+header: set title, links "Home" (../../index.html) and "Take the quiz" (quiz.html)
+nav.toc: one link per topic
+section id="&lt;topic-id&gt;" per topic:
+  h2 topic title
+  key facts (lists), numbers to memorize, comparison tables
+  div.exam-signals: "Exam signals" list of stem phrases → answer
+  p.refs: AWS doc links for numbers that are easy to get wrong; related lab README link
+footer: "Take the quiz" link</pre>
+<p><strong>quiz.html stub</strong> (exact, for all sets): loads <code>../../assets/study.css</code>, <code>../../registry.js</code>, <code>questions.js</code>, <code>../../assets/quiz.js</code>, has <code>&lt;main id="app"&gt;&lt;/main&gt;</code>, and calls <code>StudyQuiz.mountSetQuiz("m01-lambda", document.getElementById("app"))</code>. (<code>mountSetQuiz</code> comes from Task 4; until then the page is blank, which is expected.)</p>
+<p><strong>Question rules:</strong> 30 to 40 questions; each a scenario with a requirement (lowest cost, least operational overhead, most secure, fewest code changes, and so on); every distractor is a real feature that fails one stated requirement, and its <code>why</code> names that requirement; domain tag is the exam domain the question tests, not the module's main domain.</p>
+<ul>
+  <li>[ ] <strong>Step 1:</strong> Write <code>registry.js</code> with the m01 entry and its topic list (6 to 15 topics).</li>
+  <li>[ ] <strong>Step 2:</strong> Write <code>sheet.html</code>.</li>
+  <li>[ ] <strong>Step 3:</strong> Write <code>questions.js</code> and <code>quiz.html</code>.</li>
+  <li>[ ] <strong>Step 4:</strong> Run <code>node tools/validate-study.js</code>. Expected: 0 errors; stats show 30 to 40 questions.</li>
+  <li>[ ] <strong>Step 5: Fact review.</strong> A separate reviewer (not the author) checks every number and behavior claim in the sheet and every answer key against AWS documentation, and confirms each question has exactly one defensible answer set. Fix or remove each finding. Re-run the checker.</li>
+  <li>[ ] <strong>Step 6:</strong> Commit: <code>Add Lambda study sheet and question bank</code>.</li>
+</ul>
+
+<h3>Task 4: Styles, set quiz page, results, home page</h3>
+<p><strong>Files:</strong> Create <code>study/assets/study.css</code>, <code>study/index.html</code>. Modify <code>study/assets/quiz.js</code> (add rendering), <code>tools/tests/quiz-engine.test.js</code>, <code>README.md</code> (one link to <code>study/index.html</code> in a short "Study sheets and quizzes" section).</p>
+<p><strong>Interfaces — Consumes:</strong> Task 1 logic, Task 3 registry and bank. <strong>Produces:</strong></p>
+<ul>
+  <li><code>allQuestions() -&gt; Question[]</code> (flatten <code>window.QUESTION_BANKS</code>, each question gets <code>setId</code>).</li>
+  <li><code>setById(id)</code>, <code>topicById(id) -&gt; {set, topic}</code> from <code>window.STUDY_SETS</code>.</li>
+  <li><code>renderQuiz(container, questions, { title, onSubmit(answers), timer? })</code>: one question per card, radio buttons for single, checkboxes for multiple with the "(Choose N.)" hint; all text through <code>textContent</code>; submit button; unanswered check (lists numbers, needs a second in-page click).</li>
+  <li><code>renderResults(container, scoreResult, { showDomains })</code>: total and percent; topic table sorted worst first, each topic linked to <code>&lt;set path&gt;sheet.html#&lt;topic&gt;</code> (path relative to the current page, passed in); then every question with the user's selection, the correct options marked, each option's <code>why</code>, and the <code>explanation</code>; buttons "Retake" and "Home".</li>
+  <li><code>mountSetQuiz(setId, container)</code>: start screen (bank size, "Start 15-question quiz", "Full bank") → <code>renderQuiz</code> → score → <code>appendHistory</code> → <code>renderResults</code>. Shows a one-line notice when <code>appendHistory</code> returns <code>false</code>: "Progress is not saved in this browser."</li>
+  <li><code>mountHome(container)</code>: one row per set (title, kind, latest set score from history, links to sheet and quiz); weak topics list across all sets, worst first, with accuracy and sheet link; "not tested" count; reset with in-page confirm. (Tasks 5, 13, and 14 add the links to the weak-topics quiz, coverage table, and final exam.)</li>
+</ul>
+<p><code>index.html</code> loads <code>registry.js</code>, every set's <code>questions.js</code>, and <code>quiz.js</code>, then calls <code>mountHome</code>. Each content task adds its script tag here.</p>
+<ul>
+  <li>[ ] <strong>Step 1: Write failing tests</strong> for the logic that rendering depends on: <code>allQuestions</code> adds <code>setId</code>; <code>topicById</code> finds a topic in the second set. Use a <code>vm</code> context with fake <code>window.STUDY_SETS</code> and <code>window.QUESTION_BANKS</code>.</li>
+  <li>[ ] <strong>Step 2:</strong> Run <code>node --test tools/tests/</code>. Expected: new tests FAIL.</li>
+  <li>[ ] <strong>Step 3:</strong> Implement the functions above, <code>study.css</code> (readable measure, tables, light and dark tokens on <code>:root</code>, a visible focus style, correct/incorrect colors plus a text marker so color is not the only signal), and <code>index.html</code>.</li>
+  <li>[ ] <strong>Step 4:</strong> Run <code>node --test tools/tests/</code> and <code>node tools/validate-study.js</code>. Expected: all PASS, 0 errors.</li>
+  <li>[ ] <strong>Step 5: Browser check</strong> from <code>file://</code>:
+    <ol>
+      <li>Open <code>study/sets/m01-lambda/sheet.html</code>: TOC links jump to sections; dark mode readable.</li>
+      <li>Take the m01 quiz. Leave two unanswered and submit: the page lists both numbers. Submit again: results show, unanswered marked wrong.</li>
+      <li>Click a weak topic link: it opens the sheet at that section.</li>
+      <li>Open <code>study/index.html</code>: m01 latest score and weak topics appear. Reset with in-page confirm: list clears.</li>
+      <li>Temporarily add a test question whose stem contains <code>&lt;b&gt;x&lt;/b&gt; &amp; ${y}</code>: it shows literally. Remove it.</li>
+      <li>In a private window: quiz works, notice "Progress is not saved in this browser." appears if storage throws (if the browser allows storage there, note it and move on).</li>
+    </ol></li>
+  <li>[ ] <strong>Step 6:</strong> Commit: <code>Add quiz and home pages</code>.</li>
+  <li>[ ] <strong>Step 7: Checkpoint.</strong> Stop. Ask the user to try module 1 and give feedback on format before Phase 2.</li>
+</ul>
+
+<h1>Phase 2 — Weak topics and modules 2 to 5</h1>
+
+<h3>Task 5: Weak-topics quiz page</h3>
+<p><strong>Files:</strong> Create <code>study/weak-topics.html</code>. Modify <code>study/assets/quiz.js</code> (add <code>mountWeakQuiz(container)</code>), <code>study/index.html</code> (link), <code>tools/tests/quiz-engine.test.js</code>.</p>
+<p><code>mountWeakQuiz</code>: no weak topics → message "No weak topics yet. Take a set quiz first." with a home link; otherwise list the weak topics, then <code>pickWeak(allQuestions(), loadHistory(), 15)</code> → <code>renderQuiz</code> → score → <code>appendHistory</code> → <code>renderResults</code> (topic links point to <code>sets/&lt;set&gt;/sheet.html#&lt;topic&gt;</code>).</p>
+<ul>
+  <li>[ ] <strong>Step 1:</strong> Test: <code>pickWeak</code> with a history where 3 of the weak topic's questions exist → returns 3 (already covered in Task 1; add a case across two sets if missing). Run, expect FAIL only if new.</li>
+  <li>[ ] <strong>Step 2:</strong> Implement <code>mountWeakQuiz</code> and the page; add the link on the home page.</li>
+  <li>[ ] <strong>Step 3:</strong> Browser check: with no history → the message; after a poor m01 attempt → a quiz from weak topics only; result links open the sheet section.</li>
+  <li>[ ] <strong>Step 4:</strong> Commit: <code>Add weak-topics quiz</code>.</li>
+</ul>
+
+<h3>Tasks 6 to 9: Module content sets</h3>
+<p>Each task follows Task 3 exactly (registry entry, sheet, bank, quiz stub, checker, fact review, commit) and also adds the set's <code>questions.js</code> script tag to <code>index.html</code>, <code>weak-topics.html</code>, and (later) <code>final-exam.html</code>.</p>
+<ul>
+  <li>[ ] <strong>Task 6:</strong> <code>m02-databases</code> — source <code>module-02-dynamodb-deep-dive/</code> (DynamoDB, RDS, Aurora Serverless, ElastiCache, MemoryDB, DAX, caching strategies).</li>
+  <li>[ ] <strong>Task 7:</strong> <code>m03-s3</code> — source <code>module-03-s3-patterns/</code>.</li>
+  <li>[ ] <strong>Task 8:</strong> <code>m04-api-cognito</code> — source <code>module-04-api-gateway-cognito/</code>.</li>
+  <li>[ ] <strong>Task 9:</strong> <code>m05-messaging</code> — source <code>module-05-messaging-events/</code>.</li>
+</ul>
+
+<h1>Phase 3 — Modules 6 to 9</h1>
+<ul>
+  <li>[ ] <strong>Task 10:</strong> <code>m06-step-functions</code> — source <code>module-06-step-functions/</code>.</li>
+  <li>[ ] <strong>Task 11:</strong> <code>m07-secrets-kms</code> — source <code>module-07-secrets-config/</code>.</li>
+  <li>[ ] <strong>Task 12a:</strong> <code>m08-cicd</code> — source <code>module-08-cicd-pipelines/</code>.</li>
+  <li>[ ] <strong>Task 12b:</strong> <code>m09-observability</code> — source <code>module-09-observability/</code>.</li>
+</ul>
+<p>Same steps as Task 3 for each.</p>
+
+<h1>Phase 4 — Coverage and gap sets</h1>
+
+<h3>Task 13: Coverage table and gap list</h3>
+<p><strong>Files:</strong> Create <code>study/coverage.html</code>. Modify <code>study/index.html</code> (link).</p>
+<ul>
+  <li>[ ] <strong>Step 1:</strong> Read the current official DVA-C02 exam guide (AWS Certification site). Record its version, the domain weights, every task statement, and the in-scope services list.</li>
+  <li>[ ] <strong>Step 2:</strong> Write <code>coverage.html</code>: a table with one row per task statement (domain, task, skills) and the set IDs and topic IDs that cover it; a second table of in-scope services with the covering set or "gap".</li>
+  <li>[ ] <strong>Step 3:</strong> Decide the gap sets from the "gap" rows. Start from the spec's candidate list (section 6.2: IAM and STS; infrastructure as code; SDK and development practices; architecture patterns; containers and compute extras). Merge thin candidates; drop candidates already covered. Record the final list at the bottom of <code>coverage.html</code>.</li>
+  <li>[ ] <strong>Step 4:</strong> If the guide's domain weights differ from the Global Constraints, update the weights constant in <code>quiz.js</code> and note it in the commit message.</li>
+  <li>[ ] <strong>Step 5:</strong> Commit: <code>Add exam guide coverage table</code>.</li>
+</ul>
+
+<h3>Tasks G1 to Gn: Gap content sets</h3>
+<p>One task per gap set from Task 13, IDs prefixed <code>g-</code> (for example <code>g-iam-sts</code>), <code>kind: "gap"</code>, <code>lab: null</code>. Same steps as Task 3, with the exam guide and AWS documentation as sources. After the last gap set, update <code>coverage.html</code> so no row says "gap".</p>
+
+<h1>Phase 5 — Final practice exam</h1>
+
+<h3>Task 14: Final exam page</h3>
+<p><strong>Files:</strong> Create <code>study/final-exam.html</code>. Modify <code>study/assets/quiz.js</code> (add <code>mountExam(container)</code>, timer), <code>tools/validate-study.js</code> (domain capacity check), <code>study/index.html</code> (link), tests.</p>
+<ul>
+  <li><code>remainingMs(startedAt, durationMs, now) -&gt; number</code> (never below 0) — exported, pure.</li>
+  <li><code>mountExam</code>: start screen (65 questions, 130 minutes, no feedback until the end) → <code>pickExam</code> → <code>renderQuiz</code> with timer and a "Flag for review" toggle per question → review screen (answered, unanswered, flagged, each linked to its card) → submit → <code>appendHistory</code> → <code>renderResults(..., { showDomains: true })</code>. The timer updates once per second from <code>remainingMs(startedAt, 130*60*1000, Date.now())</code>; at 0 it submits.</li>
+  <li>Checker: error when any domain has fewer questions than its quota for 65 (21, 17, 15, 12 at current weights).</li>
+</ul>
+<ul>
+  <li>[ ] <strong>Step 1: Write failing tests:</strong> <code>remainingMs(0, 1000, 400) === 600</code>; <code>remainingMs(0, 1000, 5000) === 0</code>; checker reports a domain-capacity error for a fixture with 5 domain-4 questions.</li>
+  <li>[ ] <strong>Step 2:</strong> Run <code>node --test tools/tests/</code>. Expected: new tests FAIL.</li>
+  <li>[ ] <strong>Step 3:</strong> Implement.</li>
+  <li>[ ] <strong>Step 4:</strong> Run tests and <code>node tools/validate-study.js</code>. Expected: all PASS, 0 errors, all four domains above quota.</li>
+  <li>[ ] <strong>Step 5: Browser check:</strong> start the exam; flag two questions; the review screen lists them; set the duration to 60 seconds in the console (or a <code>?minutes=1</code> query parameter used only for this check), wait, and confirm auto-submit; domain scores appear; home page progress updates.</li>
+  <li>[ ] <strong>Step 6:</strong> Commit: <code>Add final practice exam</code>.</li>
+</ul>
+
+<h3>Task 15: Whole-branch review</h3>
+<ul>
+  <li>[ ] Run <code>node --test tools/tests/</code> and <code>node tools/validate-study.js</code>. Expected: all PASS, 0 errors.</li>
+  <li>[ ] Final review of the branch against the spec, including a sample fact check across sets.</li>
+</ul>
+
+</body>
+</html>
