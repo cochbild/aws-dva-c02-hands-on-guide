@@ -606,12 +606,12 @@
 <p><strong>Skills:</strong> 3.1.1 (container images), 3.1.4, 4.2.8, 4.3.3, 4.3.7. <strong>Services:</strong> EC2, Elastic Load Balancing, EKS, ECR, Systems Manager. <strong>Domains:</strong> 3, 4.</p>
 <div class="topic"><code>compute-ec2-dev</code>: EC2 for developers
 <ul><li>User data runs at first boot as root by default. Use it for setup scripts.</li>
-<li>Instance metadata service: IMDSv2 needs a session token (PUT request, then GET with the token header). Hop limit 2 for containers on the instance.</li>
+<li>Instance metadata service: IMDSv2 needs a session token (PUT request, then GET with the token header). Hop limit default is 1; set 2 so containers on the instance can reach IMDSv2.</li>
 <li>Instance profile credentials (link to <code>iam-compute-roles</code>). Systems Manager Session Manager for shell access without SSH.</li></ul></div>
 <div class="topic"><code>compute-elb</code>: Elastic Load Balancing
 <ul><li>ALB: layer 7, path and host rules, Lambda targets. NLB: layer 4, static IP addresses, very high throughput.</li>
 <li>Target groups, deregistration delay, sticky sessions, <code>X-Forwarded-For</code>.</li>
-<li>ALB errors: 502 (bad response from target), 503 (no healthy targets), 504 (target timeout).</li></ul></div>
+<li>ALB errors: 502 (bad response from target), 503 (target group has no registered targets), 504 (target timeout).</li></ul></div>
 <div class="topic"><code>compute-health-checks</code>: Health checks and readiness probes
 <ul><li>Target group health checks: path, interval, healthy and unhealthy thresholds.</li>
 <li>ECS container health checks and the service health check grace period.</li>

@@ -607,6 +607,7 @@
       el("p", {}, notTested + " of " + topicIds.length + " topics not tested."),
       el("h2", {}, "Final practice exam"),
       el("p", {}, el("a", { href: "#exam" }, "Take the final practice exam"), " — 65 questions, 130 minutes."),
+      el("p", {}, el("a", { href: "coverage.html" }, "Exam guide coverage table")),
       el("h2", {}, "Progress"),
       resetArea);
   }
