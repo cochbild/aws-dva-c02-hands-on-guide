@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Module 9 — Observability: study sheet</title>
+<link rel="stylesheet" href="../../assets/study.css">
+</head>
+<body>
+<header>
+  <h1>Module 9 — Observability</h1>
+  <p>Study sheet for the AWS Certified Developer – Associate (DVA-C02) exam. Facts checked against AWS documentation in October 2026.</p>
+  <nav class="links">
+    <a href="../../index.html">Home</a>
+    <a href="../../index.html#quiz/m09-observability">Take the quiz</a>
+  </nav>
+</header>
+
+<nav class="toc">
+  <h2>Topics</h2>
+  <ol>
+    <li><a href="#cw-logs-basics">Log groups, retention, and structured logging</a></li>
+    <li><a href="#cw-logs-filters">Metric filters, subscription filters, and export</a></li>
+    <li><a href="#cw-logs-insights">Logs Insights queries and finding bottlenecks</a></li>
+    <li><a href="#cw-logs-security">Log encryption and sensitive data masking</a></li>
+    <li><a href="#cw-metrics">Metrics, dimensions, resolution, and retention</a></li>
+    <li><a href="#cw-custom-metrics">Custom metrics: PutMetricData, EMF, and the CloudWatch agent</a></li>
+    <li><a href="#cw-alarms">Metric alarms and missing data</a></li>
+    <li><a href="#cw-alarms-advanced">Alarm actions, notifications, composite alarms, and anomaly detection</a></li>
+    <li><a href="#cw-app-monitoring">Dashboards, Application Signals, Synthetics, and Insights features</a></li>
+    <li><a href="#xray-concepts">X-Ray traces, segments, annotations, and metadata</a></li>
+    <li><a href="#xray-setup">X-Ray instrumentation, daemon, sampling, and permissions</a></li>
+    <li><a href="#trail-events">CloudTrail events, trails, and Event history</a></li>
+    <li><a href="#trail-security">CloudTrail integrity, encryption, Insights, and EventBridge</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="cw-logs-basics">
+  <h2>Log groups, retention, and structured logging</h2>
+  <h3>Which service answers which question</h3>
+  <table>
+    <tr><th>Question</th><th>Service</th></tr>
+    <tr><td>What did the application write?</td><td>CloudWatch Logs</td></tr>
+    <tr><td>How does the system perform over time?</td><td>CloudWatch metrics and alarms</td></tr>
+    <tr><td>Where did one request go, and which call was slow?</td><td>AWS X-Ray</td></tr>
+    <tr><td>Who called which AWS API, and when?</td><td>AWS CloudTrail</td></tr>
+  </table>
+  <h3>Key facts</h3>
+  <ul>
+    <li>A <strong>log event</strong> is one record. A <strong>log stream</strong> is a sequence of events from one source. A <strong>log group</strong> holds streams that share retention, monitoring, and access settings.</li>
+    <li>You set retention, encryption, metric filters, and subscription filters on the log group.</li>
+    <li>By default, CloudWatch Logs keeps log data <strong>indefinitely</strong> (Never expire). Set a retention policy to control storage cost.</li>
+    <li>Lambda writes to the log group <code>/aws/lambda/&lt;function-name&gt;</code> by default. If Lambda creates the group, the group has no retention policy.</li>
+    <li>To set retention as code, define an <code>AWS::Logs::LogGroup</code> with the same name and <code>RetentionInDays</code> in your template.</li>
+    <li>CloudWatch Logs does not delete expired events immediately. Deletion typically occurs up to 72 hours after the retention period ends.</li>
+    <li>To remove a retention policy (Never expire), call <code>DeleteRetentionPolicy</code>.</li>
+    <li>Sources: AWS services (for example, Lambda), the CloudWatch agent on EC2 and on-premises servers, and the <code>PutLogEvents</code> API.</li>
+    <li>Log classes: Standard and Infrequent Access. Metric filters, subscription filters, and field discovery need the Standard class.</li>
+  </ul>
+  <h3>Numbers to memorize</h3>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>Default retention</td><td>Never expire</td></tr>
+    <tr><td>Retention values</td><td>1 day to 3,653 days (10 years), from a fixed list</td></tr>
+    <tr><td>Maximum log event size</td><td>1 MB (1,024 KB)</td></tr>
+    <tr><td>Maximum <code>PutLogEvents</code> batch</td><td>1 MB</td></tr>
+  </table>
+  <h3>Structured logging</h3>
+  <ul>
+    <li>Write each log event as one JSON object. Logs Insights then discovers the fields automatically, and filters can match on fields.</li>
+    <li>Add a correlation ID (for example, the request ID or an order ID) to every log event. You can then follow one request across services.</li>
+    <li>Lambda advanced logging controls: log format <code>Text</code> (default) or <code>JSON</code>. Set them on the function (<code>LoggingConfig</code>). No code change is necessary for supported runtimes and logging methods.</li>
+    <li>Log-level filtering needs the <strong>JSON</strong> log format. Application levels: TRACE, DEBUG, INFO, WARN, ERROR, FATAL (default INFO). System levels: DEBUG, INFO, WARN (default INFO).</li>
+    <li>Lambda sends logs at the selected level and less detailed levels. Example: level WARN drops INFO and DEBUG output.</li>
+    <li>A log level that the code sets (for example, Python <code>setLevel()</code>) takes precedence over the function setting.</li>
+    <li>Powertools for AWS Lambda (Logger) writes structured JSON logs with Lambda context fields.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Send only ERROR logs from production, no code change" → JSON log format, application log level ERROR.</li>
+      <li>"Follow one order through several services in the logs" → structured JSON logs with a correlation ID.</li>
+      <li>"Log storage cost grows every month" → set a retention policy on the log group.</li>
+      <li>"Set retention for a Lambda log group in the template" → declare <code>AWS::Logs::LogGroup</code> named <code>/aws/lambda/&lt;name&gt;</code> with <code>RetentionInDays</code>.</li>
+      <li>"Which IAM user deleted the table?" → CloudTrail, not CloudWatch Logs.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html">Log groups and streams, retention</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_PutRetentionPolicy.html">PutRetentionPolicy (valid values)</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/cloudwatch_limits_cwl.html">CloudWatch Logs quotas</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/monitoring-cloudwatchlogs-log-level.html">Lambda log-level filtering</a>. Lab: <a href="../../../module-09-observability/lab-01-cloudwatch-logs-basics/README.md">Lab 9.1 CloudWatch Logs basics</a>.</p>
+</section>
+
+<section id="cw-logs-filters">
+  <h2>Metric filters, subscription filters, and export</h2>
+  <h3>Comparison</h3>
+  <table>
+    <tr><th>Feature</th><th>What it does</th><th>Use it for</th></tr>
+    <tr><td>Metric filter</td><td>Matches a filter pattern in new log events and publishes a CloudWatch metric</td><td>Count errors, extract a number, then alarm on it</td></tr>
+    <tr><td>Subscription filter</td><td>Sends matching log events in near real time to a destination</td><td>Stream logs to Lambda, Kinesis Data Streams, Amazon Data Firehose, or OpenSearch Service</td></tr>
+    <tr><td>Export task (<code>CreateExportTask</code>)</td><td>Copies log data in a time range to an S3 bucket</td><td>One-time or batch archive. Not real time.</td></tr>
+  </table>
+  <h3>Metric filters</h3>
+  <ul>
+    <li>Filters do not apply to old data. They publish data points only for events that arrive after you create the filter.</li>
+    <li>The metric value is a fixed number (for example, 1 for each match) or a value from the log event.</li>
+    <li><strong>Default value</strong>: the value to report for a period with logs but no matches. Set it to 0 to avoid gaps. You cannot set a default value if the filter has dimensions.</li>
+    <li>You can add dimensions and a unit. A change of unit later has no effect.</li>
+    <li>Metric filters deliver at least once. Duplicate data points can occur.</li>
+  </ul>
+  <h3>Subscription filters</h3>
+  <ul>
+    <li>CloudWatch Logs sends events base64-encoded and gzip-compressed. A Lambda destination reads them from <code>awslogs.data</code>, then decodes and decompresses them.</li>
+    <li>Events usually arrive in less than three minutes after ingestion.</li>
+    <li>A Lambda destination needs a resource-based policy that allows CloudWatch Logs to invoke it.</li>
+    <li>Delivery is at least once. CloudWatch Logs retries retryable errors for up to 24 hours.</li>
+    <li>Cross-account delivery is supported (cross-account cross-Region subscriptions).</li>
+  </ul>
+  <h3>Numbers to memorize</h3>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>Metric filters for each log group</td><td>100</td></tr>
+    <tr><td>Subscription filters for each log group</td><td>5 (older material says 2)</td></tr>
+    <tr><td>Account-level subscription filters</td><td>1 for each Region</td></tr>
+    <tr><td>Active export tasks</td><td>1 for each account</td></tr>
+  </table>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Alarm when the word ERROR appears more than 10 times in 5 minutes" → metric filter, then a CloudWatch alarm.</li>
+      <li>"New metric filter shows no data for last week" → filters do not apply to past events. Use Logs Insights for past data.</li>
+      <li>"Stream logs in near real time to Amazon S3 or OpenSearch" → subscription filter to Firehose.</li>
+      <li>"Lambda subscriber gets unreadable data" → base64-decode and gunzip <code>awslogs.data</code>.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/MonitoringLogData.html">Metric filters</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Subscriptions.html">Subscriptions</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/cloudwatch_limits_cwl.html">CloudWatch Logs quotas</a>. Lab: <a href="../../../module-09-observability/lab-01-cloudwatch-logs-basics/README.md">Lab 9.1 CloudWatch Logs basics</a>.</p>
+</section>
+
+<section id="cw-logs-insights">
+  <h2>Logs Insights queries and finding bottlenecks</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Logs Insights runs interactive queries on log data. It is read-only. It does not change stored logs.</li>
+    <li>Languages: Logs Insights QL, OpenSearch PPL, and OpenSearch SQL.</li>
+    <li>Commands are joined with the pipe character (<code>|</code>). Main commands: <code>fields</code>, <code>filter</code>, <code>stats</code>, <code>sort</code>, <code>limit</code>, <code>parse</code>, <code>display</code>, <code>dedup</code>.</li>
+    <li><code>parse</code> extracts fields from unstructured text. It supports glob patterns (<code>*</code>) and regular expressions with named groups.</li>
+    <li><code>stats</code> functions include <code>count()</code>, <code>sum()</code>, <code>avg()</code>, <code>min()</code>, <code>max()</code>, and <code>pct(field, 99)</code>. Use <code>bin(5m)</code> for time buckets.</li>
+    <li>System fields: <code>@message</code>, <code>@timestamp</code>, <code>@ingestionTime</code>, <code>@logStream</code>, <code>@log</code>.</li>
+    <li>Lambda logs also give <code>@requestId</code>, <code>@duration</code>, <code>@billedDuration</code>, <code>@type</code>, <code>@maxMemoryUsed</code>, and <code>@memorySize</code>.</li>
+    <li>JSON log fields are discovered automatically. Use dot notation for nested fields (<code>userIdentity.type</code>).</li>
+    <li>Cost is based on the amount of data scanned. Use a narrow time range and only the log groups you need.</li>
+    <li>From the API: <code>StartQuery</code> returns a <code>queryId</code>. Then call <code>GetQueryResults</code>.</li>
+  </ul>
+  <h3>Numbers to memorize</h3>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>Query timeout</td><td>60 minutes (the lab README says 60 seconds; that is wrong)</td></tr>
+    <tr><td>Log groups in one query (<code>logGroupNames</code>)</td><td>50</td></tr>
+    <tr><td>Concurrent Logs Insights QL queries</td><td>100 for each account, including dashboard queries</td></tr>
+    <tr><td>Query results kept</td><td>7 days</td></tr>
+  </table>
+  <h3>Find performance bottlenecks in logs</h3>
+  <ul>
+    <li>Each Lambda invocation writes a <code>REPORT</code> line with Duration, Billed Duration, Memory Size, and Max Memory Used. Init Duration shows only after a cold start.</li>
+    <li>p99 duration: <code>filter @type = "REPORT" | stats pct(@duration, 99) by bin(5m)</code></li>
+    <li>Memory headroom: <code>filter @type = "REPORT" | stats max(@maxMemoryUsed), max(@memorySize)</code>. Max memory near memory size means the function needs more memory.</li>
+    <li>Slowest requests: <code>filter @type = "REPORT" | sort @duration desc | limit 20</code>, then search <code>@requestId</code> for the application log lines.</li>
+    <li>Use X-Ray traces with the logs to see which downstream call is slow. See the X-Ray topics.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Query logs to find the cause of errors, with no new infrastructure" → Logs Insights.</li>
+      <li>"Extract a value from unstructured log text" → <code>parse</code>.</li>
+      <li>"Find p95 or p99 latency from Lambda REPORT lines" → <code>stats pct(@duration, 99)</code>.</li>
+      <li>"Queries are slow and expensive" → narrow the time range and the log groups.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/AnalyzingLogData.html">Logs Insights (timeout, results, concurrency)</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_StartQuery.html">StartQuery</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CWL_QuerySyntax.html">Query syntax</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CWL_AnalyzeLogData-discoverable-fields.html">Discovered fields</a>. Lab: <a href="../../../module-09-observability/lab-02-logs-insights-queries/README.md">Lab 9.2 Logs Insights queries</a>.</p>
+</section>
+
+<section id="cw-logs-security">
+  <h2>Log encryption and sensitive data masking</h2>
+  <h3>Encryption with AWS KMS</h3>
+  <ul>
+    <li>CloudWatch Logs always encrypts log data at rest. By default it uses server-side encryption (AES-GCM, 256-bit).</li>
+    <li>To control the key, associate a <strong>customer managed KMS key</strong> with the log group: <code>create-log-group --kms-key-id</code> or <code>associate-kms-key</code>.</li>
+    <li>CloudWatch Logs supports only <strong>symmetric</strong> KMS keys.</li>
+    <li>The key policy must allow the CloudWatch Logs service principal (<code>logs.&lt;region&gt;.amazonaws.com</code>) in the same Region as the key.</li>
+    <li>Use the condition key <code>kms:EncryptionContext:aws:logs:arn</code> to limit the key to one log group.</li>
+    <li>Only new data uses the key. Association can take up to 5 minutes.</li>
+    <li>If you disable or delete the key, or remove CloudWatch Logs access, CloudWatch Logs cannot read the encrypted data.</li>
+    <li>You cannot associate a KMS key with an existing log group in the console. Use the CLI or API.</li>
+  </ul>
+  <h3>Data protection policies (masking)</h3>
+  <ul>
+    <li>A data protection policy finds sensitive data (for example, credit card numbers, AWS secret keys, PII, PHI) with managed or custom data identifiers.</li>
+    <li>Matching data is masked in all outputs: the console, Logs Insights, metric filters, and subscription filters.</li>
+    <li>Only principals with the <code>logs:Unmask</code> permission can see unmasked data.</li>
+    <li>Masking applies at ingestion. Events ingested before the policy stay unmasked.</li>
+    <li>Scope: one policy for each log group, or an account-level policy for all existing and future log groups.</li>
+    <li>CloudWatch Logs emits the <code>LogEventsWithFindings</code> metric in the <code>AWS/Logs</code> namespace.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Logs contain credit card numbers. Only auditors can see them" → data protection policy, and <code>logs:Unmask</code> only for auditors.</li>
+      <li>"Encrypt logs with a key that the company controls" → associate a customer managed symmetric KMS key.</li>
+      <li>"associate-kms-key fails with an access error" → add the CloudWatch Logs service principal to the key policy.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/encrypt-log-data-kms.html">Encrypt log data with AWS KMS</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/mask-sensitive-log-data.html">Mask sensitive log data</a>. Lab: <a href="../../../module-09-observability/README.md">Module 9 overview</a>.</p>
+</section>
+
+<section id="cw-metrics">
+  <h2>Metrics, dimensions, resolution, and retention</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>A metric is a time-ordered set of data points. A name, a namespace, and zero or more dimensions identify it.</li>
+    <li>AWS namespaces use <code>AWS/&lt;service&gt;</code>. Do not start a custom namespace with <code>AWS/</code>.</li>
+    <li>A <strong>dimension</strong> is a name/value pair. Each unique combination of dimensions is a separate metric. Do not use high-cardinality values (request ID, user ID) as dimensions.</li>
+    <li>CloudWatch does not aggregate custom metrics across dimensions. Retrieve them with the same dimensions you published.</li>
+    <li>Metrics exist only in the Region where you create them. You cannot delete a metric. It expires after 15 months with no new data.</li>
+    <li>Data point time stamps: up to 2 weeks in the past and up to 2 hours in the future.</li>
+    <li>A new metric can take up to 15 minutes to appear in <code>ListMetrics</code>.</li>
+    <li>Percentile statistics need raw data points. They are not available if a metric has negative values.</li>
+  </ul>
+  <h3>Resolution and retention</h3>
+  <table>
+    <tr><th>Data point period</th><th>Kept for</th></tr>
+    <tr><td>Less than 60 seconds (high resolution)</td><td>3 hours</td></tr>
+    <tr><td>60 seconds</td><td>15 days</td></tr>
+    <tr><td>300 seconds (5 minutes)</td><td>63 days</td></tr>
+    <tr><td>3,600 seconds (1 hour)</td><td>455 days (15 months)</td></tr>
+  </table>
+  <ul>
+    <li>CloudWatch aggregates older data to the next longer period. It does not delete it at once.</li>
+    <li>Standard resolution = 1-minute granularity. High resolution = 1-second granularity (custom metrics only).</li>
+    <li>Read high-resolution data with a period of 1, 5, 10, 30 seconds, or a multiple of 60 seconds.</li>
+  </ul>
+  <h3>Amazon EC2 metrics</h3>
+  <table>
+    <tr><th>Monitoring type</th><th>Period</th><th>Cost</th></tr>
+    <tr><td>Basic (default)</td><td>5 minutes (status checks 1 minute)</td><td>No charge</td></tr>
+    <tr><td>Detailed</td><td>1 minute</td><td>Charged for each metric</td></tr>
+  </table>
+  <ul>
+    <li><code>AWS/EC2</code> has no memory or disk-space utilization metric. Install the CloudWatch agent to collect them.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"EC2 memory utilization is not in CloudWatch" → CloudWatch agent.</li>
+      <li>"Need 1-minute EC2 metrics" → detailed monitoring.</li>
+      <li>"Need 1-second data from last week" → not possible. High-resolution data points are kept for 3 hours only.</li>
+      <li>"Metric bill grew after a code change" → a high-cardinality dimension creates many metrics.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch_concepts.html">Metrics concepts (retention, dimensions, resolution)</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/manage-detailed-monitoring.html">EC2 basic and detailed monitoring</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/viewing_metrics_with_cloudwatch.html">EC2 instance metrics</a>. Lab: <a href="../../../module-09-observability/lab-03-custom-metrics-and-emf/README.md">Lab 9.3 Custom metrics and EMF</a>.</p>
+</section>
+
+<section id="cw-custom-metrics">
+  <h2>Custom metrics: PutMetricData, EMF, and the CloudWatch agent</h2>
+  <h3>Comparison</h3>
+  <table>
+    <tr><th>Method</th><th>How it works</th><th>Best for</th></tr>
+    <tr><td><code>PutMetricData</code> API</td><td>The code makes a synchronous API call. Each call has a request charge. Needs <code>cloudwatch:PutMetricData</code>.</td><td>Code that cannot write structured logs</td></tr>
+    <tr><td>Embedded metric format (EMF)</td><td>The code writes a JSON log event. CloudWatch Logs extracts the metrics. No metric API call from the code.</td><td>Lambda and containers that already send logs. Metrics and log context stay together.</td></tr>
+    <tr><td>CloudWatch agent</td><td>Collects in-guest system metrics (memory, disk), logs, StatsD and collectd metrics, and traces</td><td>EC2 instances and on-premises servers</td></tr>
+  </table>
+  <h3>PutMetricData limits</h3>
+  <ul>
+    <li>Up to 1,000 different metrics in one request. Request size up to 1 MB (gzip compression supported).</li>
+    <li>Up to 150 values for each metric with the <code>Values</code> and <code>Counts</code> arrays. This method keeps percentile statistics.</li>
+    <li>A <strong>statistic set</strong> (Sum, Minimum, Maximum, SampleCount) reduces calls. It loses percentiles unless all values are equal.</li>
+    <li>Up to 30 dimensions for each metric. <code>StorageResolution</code> 1 = high resolution; 60 = standard (default).</li>
+  </ul>
+  <h3>EMF rules</h3>
+  <ul>
+    <li>The log event must be one valid JSON object with a root member <code>_aws</code>.</li>
+    <li><code>_aws</code> contains <code>Timestamp</code> (milliseconds since epoch) and <code>CloudWatchMetrics</code>, an array of directives.</li>
+    <li>Each directive has <code>Namespace</code>, <code>Dimensions</code> (an array of dimension sets), and <code>Metrics</code> (Name, optional Unit, optional StorageResolution).</li>
+    <li>Metric values and dimension values must be members at the <strong>root</strong> of the JSON object. Nested members do not work.</li>
+    <li>Each dimension set creates a separate metric. A dimension set has up to 30 keys.</li>
+    <li>Up to 100 metric definitions in one log event. A metric value array has up to 100 values.</li>
+    <li>Time stamp: no more than 14 days in the past or 2 hours in the future.</li>
+    <li>If the JSON is not valid EMF, the event stays a normal log line and no metric is created.</li>
+    <li>Cost: you pay for log ingestion and storage and for the custom metrics. You do not pay <code>PutMetricData</code> request charges.</li>
+    <li>Libraries such as Powertools for AWS Lambda write EMF for you.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Lambda custom metrics with no extra latency and no API calls" → EMF.</li>
+      <li>"EMF lines are in the logs but the metric does not appear" → check the <code>_aws</code> structure and that targets are root members.</li>
+      <li>"Too many PutMetricData calls" → batch data points, or use statistic sets or <code>Values</code>/<code>Counts</code>.</li>
+      <li>"Collect memory and disk metrics from EC2 or on-premises servers" → CloudWatch agent.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_PutMetricData.html">PutMetricData (limits)</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/publishingMetrics.html">Publish custom metrics</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Embedded_Metric_Format_Specification.html">EMF specification</a>, <a href="https://docs.aws.amazon.com/wellarchitected/latest/serverless-applications-lens/logging-ingestion-and-storage.html">EMF cost (Serverless Lens)</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Install-CloudWatch-Agent.html">CloudWatch agent</a>. Lab: <a href="../../../module-09-observability/lab-03-custom-metrics-and-emf/README.md">Lab 9.3 Custom metrics and EMF</a>.</p>
+</section>
+
+<section id="cw-alarms">
+  <h2>Metric alarms and missing data</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>A metric alarm watches one metric or one metric math expression and compares it to a threshold.</li>
+    <li>States: <code>OK</code>, <code>ALARM</code>, <code>INSUFFICIENT_DATA</code>. There are no other states.</li>
+    <li><strong>Period</strong>: the length of one data point. <strong>Evaluation Periods</strong> (N): how many recent data points to evaluate. <strong>Datapoints to Alarm</strong> (M): how many of them must breach.</li>
+    <li>"M out of N": 3 of the last 5 periods breach → <code>EvaluationPeriods</code> 5, <code>DatapointsToAlarm</code> 3.</li>
+    <li>An alarm performs actions only when its state changes. Auto Scaling actions repeat each minute while the state stays.</li>
+    <li>Use a period equal to or longer than the metric resolution. Example: at least 300 seconds for EC2 basic monitoring.</li>
+    <li>High-resolution alarm: period 10 or 30 seconds, on a high-resolution metric only. Extra charge.</li>
+    <li>Test actions with <code>SetAlarmState</code>. The state lasts until the next evaluation.</li>
+    <li>You can create an alarm for a custom metric before the metric exists. Include all of its dimensions.</li>
+    <li>Alarm history is kept for 30 days.</li>
+  </ul>
+  <h3>Missing data (<code>TreatMissingData</code>)</h3>
+  <table>
+    <tr><th>Value</th><th>Behavior</th></tr>
+    <tr><td><code>missing</code> (default)</td><td>If all data points in the evaluation range are missing, the alarm goes to <code>INSUFFICIENT_DATA</code></td></tr>
+    <tr><td><code>notBreaching</code></td><td>Missing points count as good (within the threshold)</td></tr>
+    <tr><td><code>breaching</code></td><td>Missing points count as bad (breaching)</td></tr>
+    <tr><td><code>ignore</code></td><td>The alarm keeps its current state</td></tr>
+  </table>
+  <ul>
+    <li>For a metric that reports data only when a problem occurs, use <code>notBreaching</code>.</li>
+    <li>For a heartbeat metric where silence means failure, use <code>breaching</code>.</li>
+    <li>Alarms on <code>AWS/DynamoDB</code> metrics default to <code>ignore</code>.</li>
+  </ul>
+  <h3>Lambda metrics to alarm on</h3>
+  <ul>
+    <li><code>Errors</code> counts function errors only: exceptions from your code and runtime errors such as timeouts.</li>
+    <li>A handler that returns a normal response with an error status code (for example, <code>statusCode: 500</code>) is not a function error. <code>Errors</code> does not increase.</li>
+    <li><code>Throttles</code> is separate. Throttled requests do not count as <code>Invocations</code> or <code>Errors</code>.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Alarm stays in INSUFFICIENT_DATA because the metric has gaps" → <code>TreatMissingData</code> <code>notBreaching</code>.</li>
+      <li>"Alarm only if 3 of 5 minutes breach" → <code>EvaluationPeriods</code> 5, <code>DatapointsToAlarm</code> 3.</li>
+      <li>"Errors stays 0 but users see failures" → the code catches errors and returns a response. Throw, or publish a custom metric.</li>
+      <li>"Test the notification without a real failure" → <code>SetAlarmState</code>.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/alarms-and-missing-data.html">Missing data</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/AlarmThatSendsEmail.html">Using alarms</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/monitoring-metrics-types.html">Lambda metrics</a>. Lab: <a href="../../../module-09-observability/lab-05-alarms/README.md">Lab 9.5 Alarms</a>.</p>
+</section>
+
+<section id="cw-alarms-advanced">
+  <h2>Alarm actions, notifications, composite alarms, and anomaly detection</h2>
+  <h3>Alarm actions</h3>
+  <table>
+    <tr><th>Action</th><th>Metric alarm</th><th>Composite alarm</th></tr>
+    <tr><td>Amazon SNS notification</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>Invoke a Lambda function</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>EC2 action (stop, terminate, reboot, recover)</td><td>Yes (EC2 metrics)</td><td>No</td></tr>
+    <tr><td>EC2 Auto Scaling action</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Systems Manager OpsItem or Incident Manager incident</td><td>Yes (ALARM state only)</td><td>Yes (ALARM state only)</td></tr>
+  </table>
+  <ul>
+    <li>A Lambda alarm action invokes the function <strong>asynchronously</strong>.</li>
+    <li>The function needs a resource-based policy that allows the principal <code>lambda.alarms.cloudwatch.amazonaws.com</code>. Limit it with <code>AWS:SourceAccount</code> or <code>AWS:SourceArn</code>.</li>
+    <li>Alarms also send state-change events to Amazon EventBridge.</li>
+  </ul>
+  <h3>Notifications for deployments and quotas</h3>
+  <ul>
+    <li>CodeDeploy sends state-change events to EventBridge, for example <code>CodeDeploy Deployment State-change Notification</code> with states such as SUCCESS and FAILURE. Create a rule with an SNS topic or a Lambda function as the target.</li>
+    <li>Developer Tools console <strong>notification rules</strong> notify on events in CodeBuild, CodeCommit, CodeDeploy, and CodePipeline. Targets: SNS topics and chat applications (AWS Chatbot). A notification rule creates an EventBridge rule for you.</li>
+    <li>Quota limits: many services publish usage metrics in the <code>AWS/Usage</code> namespace. Use the metric math function <code>SERVICE_QUOTA(m1)</code>. Alarm on <code>m1/SERVICE_QUOTA(m1)*100</code>, for example above 80 percent.</li>
+  </ul>
+  <h3>Composite alarms</h3>
+  <ul>
+    <li>A composite alarm uses a rule expression over the states of other alarms: <code>ALARM()</code>, <code>OK()</code>, <code>INSUFFICIENT_DATA()</code>, with <code>AND</code>, <code>OR</code>, <code>NOT</code>, <code>TRUE</code>, <code>FALSE</code>.</li>
+    <li>The rule can include metric alarms and other composite alarms. It cannot use a metric directly.</li>
+    <li>Use it to reduce alarm noise: remove actions from the child alarms and put one action on the composite alarm.</li>
+    <li>An actions suppressor alarm can stop composite alarm actions, for example during maintenance.</li>
+    <li>Cross-account composite alarms are not supported.</li>
+  </ul>
+  <h3>Anomaly detection</h3>
+  <ul>
+    <li>CloudWatch trains a model on up to two weeks of metric data. You can turn it on before two weeks of data exist.</li>
+    <li>The model includes trends and hourly, daily, and weekly patterns.</li>
+    <li>The alarm compares the metric to a band of expected values (<code>ANOMALY_DETECTION_BAND</code>). A higher threshold value makes the band wider.</li>
+    <li>You can alarm above the band, below the band, or outside the band.</li>
+    <li>You can exclude time periods (for example, a deployment) from training.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Two alarms send two notifications for one incident" → composite alarm with <code>AND</code>, actions only on the composite.</li>
+      <li>"Metric has a daily pattern, static threshold gives false alarms" → anomaly detection alarm.</li>
+      <li>"Alarm must run custom remediation code" → Lambda alarm action with a resource-based policy.</li>
+      <li>"Composite alarm must reboot an instance" → not possible. Put the EC2 action on a metric alarm.</li>
+      <li>"Email the team when a deployment fails" → EventBridge rule on CodeDeploy state change, or a notification rule, to SNS.</li>
+      <li>"Warn before the account reaches a service quota" → alarm on the usage metric with <code>SERVICE_QUOTA</code>.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/alarm-actions.html">Alarm actions</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/alarms-and-actions-Lambda.html">Lambda alarm action</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Create_Composite_Alarm.html">Composite alarms</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Anomaly_Detection.html">Anomaly detection</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/monitoring-cloudwatch-events.html">CodeDeploy events</a>, <a href="https://docs.aws.amazon.com/dtconsole/latest/userguide/welcome.html">Developer Tools notifications</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Quotas-Visualize-Alarms.html">Service quota alarms</a>. Lab: <a href="../../../module-09-observability/lab-05-alarms/README.md">Lab 9.5 Alarms</a>.</p>
+</section>
+
+<section id="cw-app-monitoring">
+  <h2>Dashboards, Application Signals, Synthetics, and Insights features</h2>
+  <h3>Comparison</h3>
+  <table>
+    <tr><th>Feature</th><th>What it does</th><th>Use it when</th></tr>
+    <tr><td>Dashboards</td><td>Automatic (pre-built) and custom views of metrics, alarms, and Logs Insights results. Can show several Regions, and several accounts with cross-account observability.</td><td>One shared view of application health</td></tr>
+    <tr><td>Application Signals</td><td>Collects metrics and traces automatically (with the CloudWatch agent and ADOT). Shows call volume, availability, latency, faults, and errors. Supports service level objectives (SLOs) and an application map.</td><td>Service health and SLOs without custom code or dashboards</td></tr>
+    <tr><td>Synthetics canaries</td><td>Scripts (Node.js, Python, or Java) that run on a schedule, as often as once each minute. They act like a customer on URLs, APIs, and web pages. They run as Lambda functions in your account.</td><td>Find failures before customers do, even with no traffic</td></tr>
+    <tr><td>Contributor Insights</td><td>Rules analyze log events in real time and show the top-N contributors and the number of unique contributors</td><td>Find the IP addresses, URLs, or hosts that cause the most errors or traffic</td></tr>
+    <tr><td>Lambda Insights</td><td>An extension (Lambda layer) that collects system-level metrics: CPU time, memory, disk, network, cold starts. It uses EMF.</td><td>Find memory or CPU problems in Lambda functions</td></tr>
+    <tr><td>Container Insights</td><td>Collects metrics and logs from Amazon ECS, Amazon EKS, and Kubernetes on EC2, including Fargate</td><td>CPU, memory, and restart data for containers</td></tr>
+  </table>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Create dashboards in the console, with the CLI, or with the <code>PutDashboard</code> API (dashboard body in JSON).</li>
+    <li>Canaries create metrics in the <code>CloudWatchSynthetics</code> namespace. You can alarm on them. Canaries can store screenshots and load times.</li>
+    <li>Turn on X-Ray active tracing for a canary to see it on the trace map and in Application Signals.</li>
+    <li>Contributor Insights charges for each log event that matches a rule. Built-in rules exist for some AWS services.</li>
+    <li>Lambda Insights needs the <code>CloudWatchLambdaInsightsExecutionRolePolicy</code> on the execution role. The console adds it when you turn on enhanced monitoring.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Test the login page every 5 minutes, even at night with no users" → Synthetics canary.</li>
+      <li>"Which client IP addresses cause the most 5xx errors" → Contributor Insights rule on the access logs.</li>
+      <li>"Track availability and latency against an SLO, with little setup" → Application Signals.</li>
+      <li>"One view of metrics from several accounts and Regions" → CloudWatch dashboard with cross-account observability.</li>
+      <li>"Lambda memory and CPU usage for each function" → Lambda Insights.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Dashboards.html">Dashboards</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Application-Monitoring-Sections.html">Application Signals</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Synthetics_Canaries.html">Synthetics canaries</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/ContributorInsights.html">Contributor Insights</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/monitoring-insights.html">Lambda Insights</a>, <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/ContainerInsights.html">Container Insights</a>. Lab: <a href="../../../module-09-observability/README.md">Module 9 overview</a>.</p>
+</section>
+
+<section id="xray-concepts">
+  <h2>X-Ray traces, segments, annotations, and metadata</h2>
+  <h3>Key facts</h3>
+  <ul>
+    <li>A <strong>segment</strong> records the work of one service for a request: host, request, response, timing, errors.</li>
+    <li>A <strong>subsegment</strong> records finer work inside a segment, such as a call to DynamoDB, an HTTP API, or a SQL database.</li>
+    <li>A <strong>trace</strong> collects all segments for one request. A trace ID connects them.</li>
+    <li>The trace ID and sampling decision travel in the HTTP header <code>X-Amzn-Trace-Id</code>.</li>
+    <li>For services that do not send segments (for example, DynamoDB), X-Ray builds <strong>inferred segments</strong> from your subsegments.</li>
+    <li>X-Ray builds a <strong>service graph</strong> from the segments. The console shows it as the service map (trace map).</li>
+    <li>Error types: <code>Error</code> = 4xx, <code>Fault</code> = 5xx, <code>Throttle</code> = 429.</li>
+    <li><strong>Filter expressions</strong> find traces. <strong>Groups</strong> use a filter expression and publish CloudWatch metrics every minute.</li>
+    <li>Choose a node or an edge on the trace map to see a <strong>latency histogram</strong>. Select a duration range to see only the slow traces. A node histogram does not include network time. An edge histogram does.</li>
+  </ul>
+  <h3>Annotations and metadata</h3>
+  <table>
+    <tr><th>Item</th><th>Annotation</th><th>Metadata</th></tr>
+    <tr><td>Indexed for filter expressions</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Value types</td><td>Simple key-value pairs</td><td>Any type, including objects and lists</td></tr>
+    <tr><td>Limit</td><td>X-Ray indexes up to 50 annotations for each trace</td><td>Limited by the 64 KB segment document size</td></tr>
+    <tr><td>Use for</td><td>Values you search on: customer tier, order ID, game ID</td><td>Debug data: full request or response bodies</td></tr>
+  </table>
+  <h3>Numbers to memorize</h3>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>Segment document size</td><td>64 KB</td></tr>
+    <tr><td>Trace data and service graph retention</td><td>30 days</td></tr>
+  </table>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Search traces by customer ID" → annotation (not metadata).</li>
+      <li>"Store the full payload with the trace, no search needed" → metadata.</li>
+      <li>"Find which downstream call adds latency" → subsegments on the trace timeline and the service map.</li>
+      <li>"Requests from one service do not join the upstream trace" → propagate the <code>X-Amzn-Trace-Id</code> header.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-concepts.html">X-Ray concepts (annotations, segment size, retention)</a>, <a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-console-histograms.html">Latency histograms</a>. Lab: <a href="../../../module-09-observability/lab-04-xray-tracing/README.md">Lab 9.4 X-Ray tracing</a>.</p>
+</section>
+
+<section id="xray-setup">
+  <h2>X-Ray instrumentation, daemon, sampling, and permissions</h2>
+  <h3>Turn on tracing</h3>
+  <table>
+    <tr><th>Service</th><th>How</th></tr>
+    <tr><td>Lambda</td><td>Active tracing (<code>TracingConfig Mode: Active</code>, SAM <code>Tracing: Active</code>). Lambda runs the daemon for you.</td></tr>
+    <tr><td>API Gateway</td><td>Turn on X-Ray tracing on the stage</td></tr>
+    <tr><td>Elastic Beanstalk</td><td><code>XRayEnabled</code> option runs the daemon on the instances</td></tr>
+    <tr><td>Amazon ECS</td><td>Run the daemon (or the CloudWatch agent) as a sidecar container</td></tr>
+    <tr><td>Amazon EC2 or on-premises</td><td>Install and run the daemon or the CloudWatch agent</td></tr>
+  </table>
+  <h3>Daemon</h3>
+  <ul>
+    <li>The X-Ray daemon listens on <strong>UDP port 2000</strong>, collects segments, and sends them in batches to the X-Ray API.</li>
+    <li>On ECS with bridge networking, set <code>AWS_XRAY_DAEMON_ADDRESS</code> in the application container to point to the daemon container.</li>
+    <li>On ECS, attach the write policy to the <strong>task role</strong>. On EC2 and Elastic Beanstalk, attach it to the instance profile role.</li>
+    <li>CloudWatch agent version 1.300025.0 and later can collect X-Ray and OpenTelemetry traces. You then need no separate daemon.</li>
+    <li>The X-Ray SDKs and daemon entered maintenance mode on February 25, 2026 (security fixes only). AWS recommends OpenTelemetry, for example AWS Distro for OpenTelemetry (ADOT).</li>
+  </ul>
+  <h3>Instrumentation (X-Ray SDK)</h3>
+  <ul>
+    <li>Instrument AWS SDK clients and HTTP clients to record subsegments for downstream calls. For example, Python <code>patch_all()</code>.</li>
+    <li>Create custom subsegments for your own code blocks.</li>
+    <li>Add annotations and metadata to segments or subsegments.</li>
+  </ul>
+  <h3>Sampling</h3>
+  <ul>
+    <li>Default: the first request each second (the <strong>reservoir</strong>) and 5 percent of additional requests (the <strong>rate</strong>).</li>
+    <li>Rule fields: priority (1 to 9999, lower is evaluated first), reservoir, rate, service name, service type, host, HTTP method, URL path, resource ARN.</li>
+    <li>Rules in the X-Ray service apply without a redeploy. X-Ray shares the reservoir across all instances.</li>
+    <li>Local rules in a JSON file need a redeploy to change. Each instance applies its own reservoir.</li>
+    <li>The first X-Ray-enabled service makes the sampling decision. Downstream services follow it.</li>
+    <li>For Lambda, you cannot change the sampling rate.</li>
+  </ul>
+  <h3>IAM managed policies</h3>
+  <table>
+    <tr><th>Policy</th><th>Allows</th></tr>
+    <tr><td><code>AWSXRayDaemonWriteAccess</code></td><td><code>xray:PutTraceSegments</code>, <code>xray:PutTelemetryRecords</code>, and reading sampling rules and targets</td></tr>
+    <tr><td><code>AWSXrayReadOnlyAccess</code></td><td>Read traces, service graphs, groups, and sampling rules (console users)</td></tr>
+    <tr><td><code>AWSXrayFullAccess</code></td><td>All X-Ray APIs, including sampling rules and encryption settings</td></tr>
+  </table>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Lambda active tracing is on but no traces arrive" → execution role needs <code>AWSXRayDaemonWriteAccess</code> permissions.</li>
+      <li>"Trace an ECS application" → daemon sidecar on UDP 2000, task role with write access.</li>
+      <li>"Trace all checkout requests without redeploying" → sampling rule in X-Ray with a high priority and rate 100 percent.</li>
+      <li>"New instrumentation that AWS still develops" → OpenTelemetry (ADOT), not the X-Ray SDK.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-daemon.html">X-Ray daemon (port, maintenance notice)</a>, <a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-daemon-ecs.html">Daemon on ECS</a>, <a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-console-sampling.html">Sampling rules</a>, <a href="https://docs.aws.amazon.com/xray/latest/devguide/security_iam_id-based-policy-examples.html">X-Ray managed policies</a>. Lab: <a href="../../../module-09-observability/lab-04-xray-tracing/README.md">Lab 9.4 X-Ray tracing</a>.</p>
+</section>
+
+<section id="trail-events">
+  <h2>CloudTrail events, trails, and Event history</h2>
+  <h3>Event types</h3>
+  <table>
+    <tr><th>Type</th><th>Examples</th><th>Logged by default?</th></tr>
+    <tr><td>Management events (control plane)</td><td><code>CreateBucket</code>, <code>RunInstances</code>, <code>CreateUser</code>, <code>ConsoleLogin</code></td><td>Yes</td></tr>
+    <tr><td>Data events (data plane)</td><td>S3 <code>GetObject</code> and <code>PutObject</code>, Lambda <code>Invoke</code>, DynamoDB <code>PutItem</code></td><td>No. Add them to a trail. Extra charge.</td></tr>
+    <tr><td>Network activity events</td><td>API calls through VPC endpoints</td><td>No. Extra charge.</td></tr>
+    <tr><td>Insights events</td><td>Unusual API call rate or error rate</td><td>No. Extra charge.</td></tr>
+  </table>
+  <h3>Event history and trails</h3>
+  <ul>
+    <li><strong>Event history</strong> is on by default. It shows the past <strong>90 days</strong> of management events in one Region. No charge. No trail needed.</li>
+    <li>Event history filters on one attribute at a time. Use <code>lookup-events</code> (<code>LookupEvents</code>) from the CLI or API.</li>
+    <li>A <strong>trail</strong> delivers events to an S3 bucket. Optional: CloudWatch Logs and Amazon EventBridge.</li>
+    <li>Keep events longer than 90 days with a trail (or a CloudTrail Lake event data store). Use S3 Lifecycle rules to archive or delete.</li>
+    <li>A trail records events from the time you create it. It does not add past events.</li>
+    <li>CloudTrail delivers log files about every 5 minutes. The average delay is about 5 minutes. It is not guaranteed.</li>
+    <li>One copy of ongoing management events in a trail has no CloudTrail charge. S3 storage is charged.</li>
+    <li><strong>Multi-Region trail</strong>: records events in all enabled Regions. Trails created in the console are multi-Region. AWS recommends this.</li>
+    <li>Trails created with the CLI or API are single-Region by default.</li>
+    <li><strong>Organization trail</strong>: logs events for all accounts in an AWS Organizations organization. Member accounts cannot change it.</li>
+    <li>Send a trail to CloudWatch Logs to use metric filters and alarms on API activity.</li>
+    <li>Each event includes <code>eventName</code>, <code>eventSource</code>, <code>userIdentity</code>, <code>sourceIPAddress</code>, <code>requestParameters</code>, and <code>responseElements</code>.</li>
+  </ul>
+  <h3>Numbers to memorize</h3>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>Event history</td><td>90 days, management events only</td></tr>
+    <tr><td>Trails for each Region</td><td>5 (a multi-Region trail counts as one in each Region)</td></tr>
+    <tr><td>Log file delivery</td><td>About every 5 minutes</td></tr>
+  </table>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Who deleted the resource two days ago, no trail exists" → CloudTrail Event history.</li>
+      <li>"S3 GetObject calls do not appear in CloudTrail" → data events are off by default. Add them to the trail.</li>
+      <li>"Keep API activity for 7 years" → trail to S3, with S3 Lifecycle rules.</li>
+      <li>"Capture activity in every Region" → multi-Region trail.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-concepts.html">CloudTrail concepts (event types, trails, limits)</a>, <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/how-cloudtrail-works.html">How CloudTrail works (Event history, delivery time)</a>. Lab: <a href="../../../module-09-observability/lab-06-cloudtrail/README.md">Lab 9.6 CloudTrail</a>.</p>
+</section>
+
+<section id="trail-security">
+  <h2>CloudTrail integrity, encryption, Insights, and EventBridge</h2>
+  <h3>Log file integrity validation</h3>
+  <ul>
+    <li>Turn on log file integrity validation on the trail. CloudTrail then creates a hash for every log file.</li>
+    <li>Every hour, CloudTrail delivers a <strong>digest file</strong>. It contains the hashes of the last hour's log files and is signed with a private key.</li>
+    <li>Algorithms: SHA-256 for hashing, SHA-256 with RSA for signing.</li>
+    <li>Validation tells you if a log file was changed, deleted, or not changed after delivery. Validate with the AWS CLI (<code>aws cloudtrail validate-logs</code>).</li>
+    <li>Digest files go to the same bucket, in a separate folder.</li>
+  </ul>
+  <h3>Encryption</h3>
+  <ul>
+    <li>Trails created in the console use SSE-KMS by default. If you do not use SSE-KMS, CloudTrail uses SSE-S3.</li>
+    <li>The KMS key must be in the same Region as the S3 bucket.</li>
+    <li>To read SSE-KMS log files, a user needs S3 read permission <strong>and</strong> decrypt permission on the KMS key.</li>
+    <li>The key policy must allow CloudTrail to use the key.</li>
+  </ul>
+  <h3>CloudTrail Insights</h3>
+  <ul>
+    <li>Insights analyzes management events and finds unusual <strong>API call rates</strong> (write APIs) and unusual <strong>API error rates</strong> (read and write APIs).</li>
+    <li>Turn it on for a trail or event data store. Extra charge.</li>
+    <li>For a trail, Insights events can take up to 36 hours to start after you turn it on.</li>
+  </ul>
+  <h3>EventBridge integration</h3>
+  <ul>
+    <li>CloudTrail sends events to the default event bus with <code>detail-type</code> <code>AWS API Call via CloudTrail</code>. Sign-in events use <code>AWS Console Signin via CloudTrail</code>.</li>
+    <li>A trail with logging turned on is required.</li>
+    <li>Rules in the default <code>ENABLED</code> state match write management events and data events.</li>
+    <li>Read-only management events (<code>Get*</code>, <code>List*</code>, <code>Describe*</code>) match only rules in the <code>ENABLED_WITH_ALL_CLOUDTRAIL_MANAGEMENT_EVENTS</code> state.</li>
+    <li>Use an EventBridge rule to react in near real time, for example to invoke a Lambda function with the event details.</li>
+  </ul>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Prove that log files were not changed" → log file integrity validation.</li>
+      <li>"Company must control the key for trail logs" → SSE-KMS with a customer managed key. Readers need <code>kms:Decrypt</code>.</li>
+      <li>"Detect an unusual spike in API calls or errors" → CloudTrail Insights.</li>
+      <li>"Run code when someone deletes a bucket" → EventBridge rule on <code>AWS API Call via CloudTrail</code>.</li>
+    </ul>
+  </div>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-intro.html">Log file integrity validation</a>, <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/encrypting-cloudtrail-log-files-with-aws-kms.html">SSE-KMS for CloudTrail</a>, <a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/how-cloudtrail-works.html">CloudTrail Insights</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-service-event-cloudtrail.html">EventBridge and CloudTrail events</a>. Lab: <a href="../../../module-09-observability/lab-06-cloudtrail/README.md">Lab 9.6 CloudTrail</a>.</p>
+</section>
+
+</main>
+
+<footer>
+  <a href="../../index.html#quiz/m09-observability">Take the quiz</a>
+</footer>
+</body>
+</html>
