@@ -34,26 +34,27 @@
   <h2>EC2 for developers</h2>
   <h3>User data</h3>
   <ul>
-    <li>User data passes a shell script or cloud-init directives to an instance at launch.</li>
-    <li>By default, user data runs only during the first boot cycle of the instance.</li>
+    <li>User data is text that you give to an instance at launch to configure it automatically, for example to install and start a web server. It can be a shell script or cloud-init directives. cloud-init is the package on Amazon Linux that reads the user data at boot and runs it.</li>
+    <li>By default, user data runs only during the first boot cycle of the instance. A reboot or a stop and start does not run it again.</li>
     <li>On Linux, the script runs as the root user. Do not use <code>sudo</code> in the script.</li>
-    <li>The script must not need user input. For example, use <code>yum update -y</code>.</li>
-    <li>To find script errors, read <code>/var/log/cloud-init-output.log</code> on the instance.</li>
-    <li>To change user data, stop the instance first. When you start it again, the new script does not run by default.</li>
-    <li>If the script calls AWS APIs, attach an instance profile (IAM role). Do not put access keys in the script.</li>
+    <li>The script does not run interactively, so no person can answer a prompt. A command that waits for input does not complete. Use the non-interactive form of each command, for example <code>yum update -y</code>.</li>
+    <li>To find script errors, read <code>/var/log/cloud-init-output.log</code> on the instance. This file captures the console output of the script, with its error messages.</li>
+    <li>To change user data, stop the instance first. When you start it again, the new script does not run by default, because user data runs only at the first boot.</li>
+    <li>If the script calls AWS APIs, attach an instance profile. An instance profile attaches an IAM role to the instance, and the CLI and SDKs get temporary credentials for that role automatically. Do not put access keys in the script.</li>
     <li>Any process on the instance can read user data from the instance metadata service. Do not put secrets in user data.</li>
   </ul>
   <h3>Instance metadata service (IMDS)</h3>
   <ul>
-    <li>IMDS is at <code>169.254.169.254</code>. The AWS SDKs get instance profile credentials from IMDS.</li>
-    <li><strong>IMDSv1</strong> is request and response. <strong>IMDSv2</strong> uses a session token.</li>
+    <li>The instance metadata service (IMDS) is an HTTP endpoint at <code>169.254.169.254</code> that software on the instance can call. It returns data about the instance, for example the instance ID, the AMI ID, and the user data. It also returns the temporary credentials of the instance profile role. The AWS SDKs get these credentials from IMDS automatically.</li>
+    <li><strong>IMDSv1</strong> answers any plain <code>GET</code> request, with no token. <strong>IMDSv2</strong> first requires a session token from a <code>PUT</code> request. Each <code>GET</code> must then send that token.</li>
     <li>IMDSv2 step 1: send a <code>PUT</code> to <code>/latest/api/token</code> with the header <code>X-aws-ec2-metadata-token-ttl-seconds</code>.</li>
     <li>IMDSv2 step 2: send each <code>GET</code> with the header <code>X-aws-ec2-metadata-token</code>.</li>
     <li>To require IMDSv2, set <code>HttpTokens</code> to <code>required</code> (<code>--http-tokens required</code>). Then IMDSv1 calls fail.</li>
     <li>When IMDSv2 is required, a request without a valid token gets <code>401 - Unauthorized</code>.</li>
-    <li>IMDS rejects a token <code>PUT</code> that has an <code>X-Forwarded-For</code> header. The session token adds protection against SSRF and open reverse proxies.</li>
+    <li>Server-side request forgery (SSRF) is a flaw in which an attacker makes your application send an HTTP request to a URL that the attacker chooses. With IMDSv1, one SSRF <code>GET</code> to the credentials path returns the role credentials. With IMDSv2, the attacker must also send a <code>PUT</code> with a special header, and most SSRF flaws can send only a <code>GET</code>.</li>
+    <li>IMDS rejects a token <code>PUT</code> that has an <code>X-Forwarded-For</code> header. Proxies add this header. Thus an open reverse proxy on the instance (a proxy that forwards requests from outside) cannot get a token for an attacker.</li>
     <li>The token works only on the instance that created it.</li>
-    <li>The <code>MetadataNoToken</code> CloudWatch metric counts IMDSv1 calls. Use it before you require IMDSv2.</li>
+    <li>The <code>MetadataNoToken</code> CloudWatch metric counts IMDSv1 calls. Check it before you require IMDSv2. If the count is not zero, some software still uses IMDSv1, and its calls fail with 401 after the change.</li>
   </ul>
   <table>
     <tr><th>Item</th><th>Value</th></tr>
@@ -61,23 +62,24 @@
     <tr><td>PUT response hop limit, default</td><td>1. It is 2 if the AMI has <code>ImdsSupport: v2.0</code> or the account default sets 2. Amazon Linux 2023 AMIs have <code>ImdsSupport: v2.0</code> (IMDSv2 only, hop limit 2).</td></tr>
     <tr><td>Hop limit for containers on the instance</td><td>AWS recommends 2 in a container environment when IMDSv2 is required. A container that adds a network hop can fail to get a token with hop limit 1.</td></tr>
   </table>
+  <p>The PUT response hop limit is the IP time to live of the token response. Each network hop, for example the bridge network of a container, lowers it by 1. When it reaches 0, the response is dropped. With hop limit 1, the token reaches processes on the host but not a container one hop further. The token request then times out.</p>
   <h3>Shell access with Session Manager</h3>
   <ul>
-    <li>Session Manager (AWS Systems Manager) gives shell access with no open inbound ports, no bastion hosts, and no SSH keys.</li>
+    <li>Session Manager (AWS Systems Manager) gives shell access with no open inbound ports, no bastion hosts, and no SSH keys. A bastion host is a server in a public subnet that you connect to with SSH first, to reach private instances.</li>
     <li>IAM policies control who can start a session on which instance.</li>
     <li>You can log session data to Amazon S3 or CloudWatch Logs. CloudTrail records the Session Manager API calls.</li>
-    <li>The instance needs SSM Agent and an instance profile with the needed permissions. <code>AmazonSSMManagedInstanceCore</code> gives them.</li>
-    <li>The instance needs outbound HTTPS (port 443) to the <code>ssm</code>, <code>ssmmessages</code>, and <code>ec2messages</code> endpoints.</li>
-    <li>For a private subnet with no internet access, create interface VPC endpoints for these three services.</li>
+    <li>The instance needs SSM Agent and an instance profile with the needed permissions. SSM Agent is the program on the instance that connects it to Systems Manager. <code>AmazonSSMManagedInstanceCore</code> gives the needed permissions.</li>
+    <li>The instance needs outbound HTTPS (port 443) to the <code>ssm</code>, <code>ssmmessages</code>, and <code>ec2messages</code> endpoints. SSM Agent opens these connections from the instance, so no inbound rule is necessary.</li>
+    <li>For a private subnet with no internet access, create interface VPC endpoints for these three services. An interface VPC endpoint puts a private IP address for an AWS service in your subnet, so traffic does not use the internet.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Protect instance credentials from SSRF" → require IMDSv2 (<code>HttpTokens required</code>).</li>
-      <li>"After IMDSv2 was required, the script gets 401" → get a token with <code>PUT</code>, then send it in the header.</li>
-      <li>"Container on EC2 cannot get IMDSv2 credentials" → set the PUT response hop limit to 2.</li>
-      <li>"Shell access, no port 22, no bastion, audit the sessions" → Session Manager with session logging.</li>
-      <li>"User data script did not work" → read <code>/var/log/cloud-init-output.log</code>.</li>
+      <li>"Protect instance credentials from SSRF" → require IMDSv2 (<code>HttpTokens required</code>), because an SSRF <code>GET</code> cannot get the session token first.</li>
+      <li>"After IMDSv2 was required, the script gets 401" → get a token with <code>PUT</code>, then send it in the header, because IMDSv2 rejects requests without a token.</li>
+      <li>"Container on EC2 cannot get IMDSv2 credentials" → set the PUT response hop limit to 2, because the container network adds one hop.</li>
+      <li>"Shell access, no port 22, no bastion, audit the sessions" → Session Manager with session logging, because SSM Agent connects outbound and IAM controls who can connect.</li>
+      <li>"User data script did not work" → read <code>/var/log/cloud-init-output.log</code>, because it holds the script output and errors.</li>
     </ul>
   </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html">User data</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-v2-how-it-works.html">How IMDSv2 works</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-new-instances.html">IMDS options for new instances (hop limit defaults)</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-existing-instances.html">IMDS options for existing instances</a>, <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-prerequisites.html">Session Manager prerequisites</a>. Instance profiles and the credential chain are in the IAM gap set (topic <code>iam-compute-roles</code>).</p>
@@ -94,10 +96,11 @@
     <tr><td>Static IP addresses</td><td>You cannot assign your own Elastic IP addresses.</td><td>One static IP address in each Availability Zone. You can attach one Elastic IP address for each subnet.</td></tr>
     <tr><td>Scale</td><td>Scales automatically</td><td>Millions of requests each second</td></tr>
   </table>
+  <p>An ALB reads each HTTP request, so it can route by the URL path, host name, or headers. An NLB does not read HTTP content. For TCP, it calculates a flow hash from the protocol, source and destination IP addresses and ports, and the TCP sequence number. All packets of one connection then go to the same target. Choose an ALB to route HTTP requests by content. Choose an NLB for TCP or UDP traffic, static IP addresses, or extreme throughput.</p>
   <ul>
     <li>An ALB needs subnets in at least two Availability Zones.</li>
-    <li>A target group with type <code>lambda</code> holds one Lambda function.</li>
-    <li>Cross-zone load balancing is always on for an ALB at the load balancer level. You can turn it off for a target group.</li>
+    <li>A target group with type <code>lambda</code> holds one Lambda function. To route to several functions, create one target group for each function and use listener rules.</li>
+    <li>Cross-zone load balancing lets each load balancer node send traffic to targets in all enabled Availability Zones. When it is off, each node sends traffic only to targets in its own Availability Zone. For an ALB, it is always on at the load balancer level. You can turn it off for a target group.</li>
   </ul>
   <h3>Target group attributes</h3>
   <table>
@@ -109,40 +112,43 @@
     <tr><td>ALB idle timeout (load balancer attribute)</td><td>60 seconds</td><td>—</td></tr>
   </table>
   <ul>
-    <li><strong>Deregistration delay</strong>: the target is <code>draining</code>. The ALB sends no new requests to it, and in-flight requests can complete.</li>
-    <li><strong>Sticky sessions</strong>: duration-based stickiness uses the ALB cookie <code>AWSALB</code>. Application-based stickiness follows a cookie that your application sets.</li>
+    <li><strong>Deregistration delay</strong>: when you deregister a target, for example during a deployment or a scale-in, the target is <code>draining</code> for this time. The ALB sends no new requests to it, and in-flight requests can complete. When the delay ends, a request that is still in progress fails with 502. Set the delay longer than your longest request.</li>
+    <li><strong>Slow start</strong>: a new healthy target gets a share of requests that increases linearly over the slow start duration. Use it when a new target needs time to warm up, for example to fill a cache. You cannot use it with least outstanding requests or weighted random.</li>
+    <li><strong>Routing algorithm</strong>: round robin sends requests to the targets in turn. Use it when requests are similar. Least outstanding requests sends each request to the target with the fewest requests in progress. Use it when request times vary. Weighted random supports Automatic Target Weights anomaly mitigation, which sends less traffic to a target with a high error rate.</li>
+    <li><strong>Idle timeout</strong>: the ALB closes a connection when no data moves on it for this time. If a target takes longer than the idle timeout to respond, the client gets 504.</li>
+    <li><strong>Sticky sessions</strong> (session affinity): the ALB sends all requests from one client to the same target, so the target can keep session data in memory. The client must accept cookies. Duration-based stickiness uses the ALB cookie <code>AWSALB</code> with a duration that you set. Application-based stickiness follows a cookie that your application sets. Choose it when your application already has its own session cookie.</li>
     <li>Sticky sessions do not work when cross-zone load balancing is off. Weighted random does not work with sticky sessions.</li>
-    <li>Sticky sessions are a fast fix for in-memory sessions. A shared session store (for example, ElastiCache or DynamoDB) is the better design.</li>
+    <li>Sticky sessions are a fast fix for in-memory sessions, with no code change. But when a target fails or is removed, its users lose their sessions. A shared session store (for example, ElastiCache or DynamoDB) is the better design, because any target can then serve any user.</li>
   </ul>
   <h3>Client information</h3>
   <ul>
-    <li>The target sees the ALB IP address as the source. The ALB puts the client IP address in <code>X-Forwarded-For</code>.</li>
-    <li>Default XFF mode is <code>append</code>. The ALB adds the client IP address to the end of an existing header.</li>
-    <li><code>X-Forwarded-Proto</code> holds the client protocol (HTTP or HTTPS). <code>X-Forwarded-Port</code> holds the client destination port.</li>
+    <li>The ALB opens its own connection to the target, so the target sees the ALB IP address as the source. The ALB puts the client IP address in the <code>X-Forwarded-For</code> (XFF) request header. Read this header to log or check the client address.</li>
+    <li>Default XFF mode is <code>append</code>. The ALB adds the client IP address to the end of an existing header. The <code>remove</code> mode deletes the header, so the target does not get the client address.</li>
+    <li><code>X-Forwarded-Proto</code> holds the client protocol (HTTP or HTTPS). <code>X-Forwarded-Port</code> holds the client destination port. Use them when the ALB ends HTTPS and sends HTTP to the target, for example to find out if the client used HTTPS.</li>
   </ul>
   <h3>HTTP errors that the ALB makes</h3>
   <table>
     <tr><th>Code</th><th>Common causes</th></tr>
     <tr><td>502 Bad Gateway</td><td>Target sent a TCP RST or closed the connection. Malformed response. Deregistration delay ended during a request. Lambda target returned an error, timed out, or sent a body above 1 MB.</td></tr>
-    <tr><td>503 Service Unavailable</td><td>The target group has no registered targets, or all targets are in the <code>unused</code> state.</td></tr>
-    <tr><td>504 Gateway Timeout</td><td>No connection to the target within 10 seconds. Target did not respond before the idle timeout. Network ACL blocks ephemeral ports.</td></tr>
+    <tr><td>503 Service Unavailable</td><td>The target group has no registered targets, or all targets are in the <code>unused</code> state (for example, deregistration is complete).</td></tr>
+    <tr><td>504 Gateway Timeout</td><td>No connection to the target within 10 seconds. Target did not respond before the idle timeout. The network ACL of the subnet blocks traffic from the targets to the load balancer on the ephemeral ports (1024 to 65535).</td></tr>
     <tr><td>413 Payload Too Large</td><td>Lambda target and the request body is above 1 MB.</td></tr>
-    <tr><td>460</td><td>The client closed the connection before the idle timeout.</td></tr>
+    <tr><td>460</td><td>The client closed the connection before the idle timeout. Usually the client timeout is shorter than the time the target needs to respond.</td></tr>
     <tr><td>463</td><td><code>X-Forwarded-For</code> has more than 30 IP addresses.</td></tr>
   </table>
-  <p>Errors that targets send are in <code>HTTPCode_Target_5XX_Count</code>. Errors that the ALB makes are in <code>HTTPCode_ELB_5XX_Count</code>.</p>
+  <p>Errors that targets send are in <code>HTTPCode_Target_5XX_Count</code>. Errors that the ALB makes are in <code>HTTPCode_ELB_5XX_Count</code>. Compare the two metrics to find the source. If only the ELB metric grows, look at connections, timeouts, and registered targets. If the Target metric grows, look at the application logs.</p>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Route /api and /images to different services" or "route by host name" → ALB listener rules.</li>
-      <li>"Static IP addresses for an allow list" or "TCP or UDP, extreme throughput" → NLB.</li>
-      <li>"Application logs show the load balancer IP, not the client" → read <code>X-Forwarded-For</code>.</li>
-      <li>"Users lose their session; sessions are in memory; fewest code changes" → sticky sessions.</li>
-      <li>"502 errors during deployments for long requests" → increase the deregistration delay.</li>
-      <li>"504 errors for slow requests" → target response time is above the idle timeout.</li>
+      <li>"Route /api and /images to different services" or "route by host name" → ALB listener rules, because only the ALB reads the HTTP path and headers.</li>
+      <li>"Static IP addresses for an allow list" or "TCP or UDP, extreme throughput" → NLB, because it has one static IP address in each Availability Zone and works at layer 4.</li>
+      <li>"Application logs show the load balancer IP, not the client" → read <code>X-Forwarded-For</code>, because the ALB puts the client address there.</li>
+      <li>"Users lose their session; sessions are in memory; fewest code changes" → sticky sessions, because the cookie sends each user back to the same target.</li>
+      <li>"502 errors during deployments for long requests" → increase the deregistration delay, because the ALB ends in-flight requests when the delay ends.</li>
+      <li>"504 errors for slow requests" → target response time is above the idle timeout (default 60 seconds). Make the target faster or increase the idle timeout.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-troubleshooting.html">ALB troubleshooting (HTTP error causes)</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html">ALB target groups and attributes</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/edit-target-group-attributes.html">Sticky sessions and routing algorithms</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html">ALB attributes (idle timeout)</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/x-forwarded-headers.html">X-Forwarded headers</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/rule-condition-types.html">Listener rule conditions</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html">What is a Network Load Balancer?</a></p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-troubleshooting.html">ALB troubleshooting (HTTP error causes)</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html">ALB target groups and attributes</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/edit-target-group-attributes.html">Sticky sessions and routing algorithms</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html">ALB attributes (idle timeout)</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/x-forwarded-headers.html">X-Forwarded headers</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/rule-condition-types.html">Listener rule conditions</a>, <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html">What is a Network Load Balancer? (flow hash)</a></p>
 </section>
 
 <section id="compute-health-checks">
@@ -157,10 +163,11 @@
     <tr><td>Unhealthy threshold</td><td>2</td><td>2 to 10</td></tr>
     <tr><td>Success codes (matcher)</td><td>200</td><td>200 to 499</td></tr>
   </table>
+  <p>The healthy threshold is the number of checks in a row that a target must pass to become healthy. The unhealthy threshold is the number of checks in a row that it must fail to become unhealthy. The matcher is the list of HTTP status codes that count as a pass.</p>
   <ul>
     <li>A new target must pass one health check before it gets traffic.</li>
-    <li>If all targets in a target group are unhealthy, the ALB <strong>fails open</strong>. It sends traffic to all of them.</li>
-    <li>The target security group must allow traffic from the load balancer on the health check port.</li>
+    <li>If all targets in a target group are unhealthy, the ALB <strong>fails open</strong>. It sends traffic to all of them. Thus a wrong health check setting does not take the whole application offline. If the targets are really broken, clients get errors from them.</li>
+    <li>The target security group must allow traffic from the load balancer on the health check port. If it does not, the checks get no answer and the targets show <code>Target.Timeout</code>.</li>
   </ul>
   <table>
     <tr><th>Reason code</th><th>Meaning and usual fix</th></tr>
@@ -171,9 +178,9 @@
   </table>
   <h3>EC2 Auto Scaling health checks</h3>
   <ul>
-    <li>By default, Auto Scaling uses only EC2 status checks. They do not see application failures.</li>
+    <li>By default, Auto Scaling uses only EC2 status checks. These checks test the instance and its host, not your application. An instance with a crashed application process passes them and stays in service.</li>
     <li>Turn on Elastic Load Balancing health checks for the group. Then Auto Scaling replaces instances that fail the target group health check.</li>
-    <li>Health check grace period: 300 seconds by default in the console. 0 seconds by default with the AWS CLI or an SDK.</li>
+    <li>Health check grace period: the time after a new instance enters <code>InService</code> during which Auto Scaling does not replace it for failed health checks. Set it to cover the start time of the application. Without it, Auto Scaling can terminate instances that are still starting. The default is 300 seconds in the console and 0 seconds (off) with the AWS CLI or an SDK.</li>
   </ul>
   <h3>Amazon ECS health checks</h3>
   <table>
@@ -184,13 +191,15 @@
     <tr><td><code>startPeriod</code></td><td>Off</td><td>0 to 300 seconds</td></tr>
   </table>
   <ul>
-    <li>The <code>command</code> starts with <code>CMD</code> or <code>CMD-SHELL</code>. Exit code 0 means healthy.</li>
+    <li>A container health check is a command that ECS runs inside the container at each interval. The <code>command</code> starts with <code>CMD</code> (run the command directly) or <code>CMD-SHELL</code> (run it with the default shell of the container). Example: <code>["CMD-SHELL", "curl -f http://localhost/ || exit 1"]</code>. Exit code 0 means healthy.</li>
+    <li><code>retries</code> is the number of failed checks in a row before the container is unhealthy. During <code>startPeriod</code>, failed checks do not count toward <code>retries</code>. Use it to give a slow container time to start.</li>
     <li>ECS monitors only the health check in the task definition. It ignores a <code>HEALTHCHECK</code> in the image.</li>
     <li>In a service, ECS stops an unhealthy task and starts a replacement.</li>
-    <li><code>healthCheckGracePeriodSeconds</code> on the service: the scheduler ignores unhealthy ELB, VPC Lattice, and container health checks after a task starts. Default 0.</li>
+    <li><code>healthCheckGracePeriodSeconds</code> is a service setting. For this number of seconds after a task starts, the scheduler ignores failed ELB, VPC Lattice, and container health checks. Set it longer than the start time of the application. With the default of 0, ECS can stop a slow-starting task before it is ready, and the replacement fails the same way.</li>
     <li><code>startPeriod</code> applies only to the container health check. It does not stop ELB health checks from failing a task.</li>
   </ul>
   <h3>Kubernetes probes (Amazon EKS)</h3>
+  <p>A probe is a check that the kubelet runs on a container at an interval. The kubelet is the Kubernetes agent on each node. Service endpoints are the list of Pod addresses that a Service sends traffic to.</p>
   <table>
     <tr><th>Probe</th><th>Purpose</th><th>On failure</th></tr>
     <tr><td>Liveness</td><td>Find a stuck process, for example a deadlock</td><td>The kubelet restarts the container.</td></tr>
@@ -204,24 +213,25 @@
   <h3>Shallow and deep health checks</h3>
   <ul>
     <li>A <strong>shallow</strong> check confirms that the process answers. Use it for liveness and restart decisions.</li>
-    <li>A <strong>deep</strong> check also tests dependencies. It can remove all targets when one shared dependency fails.</li>
+    <li>A <strong>deep</strong> check also tests dependencies, for example the database. When all targets share that dependency, one database failure makes every target fail its check at the same time. Use a deep check only where removing the target from traffic is the correct result, for example a readiness probe.</li>
   </ul>
   <h3>Route 53 health checks</h3>
   <ul>
+    <li>Route 53 uses health checks for DNS failover. It stops returning a record when the health check of that record is unhealthy.</li>
     <li>Three types: monitor an endpoint, monitor other health checks (calculated), or monitor a CloudWatch alarm.</li>
     <li>HTTP and HTTPS endpoint checks need a 2xx or 3xx status code. String matching searches the first 5,120 bytes of the body.</li>
     <li>Request interval: 30 seconds (standard) or 10 seconds (fast, extra cost).</li>
-    <li>Route 53 cannot check endpoints with private IP addresses. For a private resource, use a health check that monitors a CloudWatch alarm.</li>
+    <li>Route 53 health checkers run in AWS data centers around the world. They cannot reach endpoints with private IP addresses. For a private resource, use a health check that monitors a CloudWatch alarm.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Targets unhealthy, ResponseCodeMismatch, app redirects" → health check path that returns 200.</li>
-      <li>"Targets unhealthy with Target.Timeout, app works locally" → security group does not allow the health check port.</li>
-      <li>"Slow-starting tasks are killed in a loop" → ECS <code>healthCheckGracePeriodSeconds</code>.</li>
-      <li>"Crashed application stays in service in the Auto Scaling group" → turn on ELB health checks for the group.</li>
-      <li>"Database outage restarts all Pods" → move the dependency check from liveness to readiness.</li>
-      <li>"Route 53 failover for a resource with a private IP address" → CloudWatch alarm health check.</li>
+      <li>"Targets unhealthy, ResponseCodeMismatch, app redirects" → health check path that returns 200, because the default matcher accepts only 200, not a 302 redirect.</li>
+      <li>"Targets unhealthy with Target.Timeout, app works locally" → security group does not allow the health check port, because a blocked port gives no answer while the app itself works.</li>
+      <li>"Slow-starting tasks are killed in a loop" → ECS <code>healthCheckGracePeriodSeconds</code>, because ECS ignores failed health checks during the grace period.</li>
+      <li>"Crashed application stays in service in the Auto Scaling group" → turn on ELB health checks for the group, because EC2 status checks do not see the application.</li>
+      <li>"Database outage restarts all Pods" → move the dependency check from liveness to readiness, because a readiness failure stops traffic without a restart.</li>
+      <li>"Route 53 failover for a resource with a private IP address" → CloudWatch alarm health check, because Route 53 health checkers cannot reach private addresses.</li>
     </ul>
   </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html">ALB health checks</a>, <a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/health-check-grace-period.html">Auto Scaling health check grace period</a>, <a href="https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_HealthCheck.html">ECS HealthCheck</a>, <a href="https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_CreateService.html">ECS CreateService (healthCheckGracePeriodSeconds)</a>, <a href="https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/">Kubernetes probes</a>, <a href="https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/health-checks-creating-values.html">Route 53 health check values</a>.</p>
@@ -231,49 +241,51 @@
   <h2>Container images</h2>
   <h3>Dockerfile practice</h3>
   <ul>
-    <li><strong>Layer order</strong>: when a layer changes, Docker rebuilds that layer and all layers after it. Put rarely changed steps first.</li>
-    <li>Copy the dependency file (for example, <code>package.json</code>) and install dependencies before you copy the source code.</li>
-    <li><strong>Multi-stage build</strong>: build in a first stage with compilers and tools. Copy only the build output into a small runtime image.</li>
+    <li><strong>Layer order</strong>: each Dockerfile instruction, for example <code>COPY</code> or <code>RUN</code>, makes a layer. Docker caches the layers and reuses a layer when its inputs did not change. When a layer changes, Docker rebuilds that layer and all layers after it. Put rarely changed steps first.</li>
+    <li>Copy the dependency file (for example, <code>package.json</code>) and install dependencies before you copy the source code. Then a change to the source code does not invalidate the install layer, and Docker reuses the installed dependencies.</li>
+    <li><strong>Multi-stage build</strong>: build in a first stage with compilers and tools. Copy only the build output into a small runtime image. The final image then does not contain the compilers, the build tools, or the source code.</li>
     <li>Use a small base image. A smaller image downloads faster and has fewer packages to attack.</li>
-    <li>Do not put secrets in an image. Get them at run time, for example from Secrets Manager.</li>
+    <li>Do not put secrets in an image. Anyone who can pull the image can read the files in its layers. Get secrets at run time, for example from Secrets Manager.</li>
   </ul>
   <h3>Amazon ECS image practice</h3>
   <ul>
-    <li>Put all dependencies in the image. Build a new image for each change.</li>
-    <li>Run one application process in each container. Handle <code>SIGTERM</code> for a clean shutdown.</li>
-    <li>Write logs to <code>stdout</code> and <code>stderr</code>.</li>
-    <li>Tag each build with a unique tag, for example the git commit SHA. Use <code>latest</code> only for tests.</li>
+    <li>Put all dependencies in the image. Build a new image for each change. Then each task starts with the same complete content, with no installs at start time.</li>
+    <li>Run one application process in each container. The container lives as long as that process runs, and ECS replaces a crashed process.</li>
+    <li>Handle <code>SIGTERM</code> for a clean shutdown. When ECS stops a task, it first sends <code>SIGTERM</code> and later <code>SIGKILL</code>. On <code>SIGTERM</code>, the application must stop taking new work and finish or save the work in progress.</li>
+    <li>Write logs to <code>stdout</code> and <code>stderr</code>. Then the log configuration of the task, not the application code, decides where the logs go. For example, the <code>awslogs</code> log driver sends them to CloudWatch Logs.</li>
+    <li>Tag each build with a unique tag, for example the git commit SHA. Then you can see which code each task runs. The <code>latest</code> tag moves to each new build, so use it only for tests.</li>
   </ul>
   <h3>Amazon ECR</h3>
   <ul>
     <li>Log in: <code>aws ecr get-login-password --region &lt;region&gt; | docker login --username AWS --password-stdin &lt;account&gt;.dkr.ecr.&lt;region&gt;.amazonaws.com</code></li>
     <li>Then <code>docker tag</code> the image with the repository URI and <code>docker push</code> it.</li>
-    <li>The authorization token is valid for <strong>12 hours</strong>. Get a new token for each registry.</li>
+    <li>Docker cannot use IAM credentials directly. <code>get-login-password</code> gets an ECR authorization token, and <code>docker login</code> stores it for Docker.</li>
+    <li>The authorization token is valid for <strong>12 hours</strong>. After that, pushes and pulls fail until you log in again. To use several registries, run <code>docker login</code> for each registry.</li>
     <li>To push, the principal needs <code>ecr:GetAuthorizationToken</code> and the layer upload actions: <code>ecr:BatchCheckLayerAvailability</code>, <code>ecr:InitiateLayerUpload</code>, <code>ecr:UploadLayerPart</code>, <code>ecr:CompleteLayerUpload</code>, <code>ecr:PutImage</code>, <code>ecr:BatchGetImage</code>. <code>ecr:GetAuthorizationToken</code> uses the resource <code>*</code>.</li>
-    <li><strong>Tag immutability</strong>: a push of a tag that already exists fails with <code>ImageTagAlreadyExistsException</code>.</li>
-    <li>An image digest (<code>sha256:...</code>) always identifies the same image content.</li>
+    <li><strong>Tag immutability</strong>: after you push a tag, no later push can move that tag to a different image. A push of a tag that already exists fails with <code>ImageTagAlreadyExistsException</code>. Use it so that a release tag always means the same image.</li>
+    <li>An image digest (<code>sha256:...</code>) is a hash of the image content, so it always identifies the same image content. Deploy by digest when you must run an exact image, even if a tag moves.</li>
   </ul>
   <h3>Lambda container images</h3>
-  <p>Lambda runs container images up to 10 GB. Use an AWS base image, or add the runtime interface client to your own image. Module 1 covers this in topic <code>lambda-packaging</code>.</p>
+  <p>Lambda runs container images up to 10 GB. Use an AWS base image, or add the runtime interface client to your own image. The runtime interface client is the library that gets invocation events from Lambda and passes them to your code. Module 1 covers this in topic <code>lambda-packaging</code>.</p>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Every code change reinstalls all dependencies" → copy and install dependencies before the source code.</li>
-      <li>"Image is large and contains compilers" → multi-stage build with a small runtime base image.</li>
-      <li>"A tag must never point to a different image" → ECR tag immutability.</li>
-      <li>"Push fails: no basic auth credentials" or "push fails after 12 hours" → run <code>get-login-password</code> and <code>docker login</code> again.</li>
+      <li>"Every code change reinstalls all dependencies" → copy and install dependencies before the source code, because Docker then reuses the cached install layer.</li>
+      <li>"Image is large and contains compilers" → multi-stage build with a small runtime base image, because only the build output goes into the final image.</li>
+      <li>"A tag must never point to a different image" → ECR tag immutability, because ECR then rejects a push that reuses a tag.</li>
+      <li>"Push fails: no basic auth credentials" or "push fails after 12 hours" → run <code>get-login-password</code> and <code>docker login</code> again, because Docker has no valid ECR token.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html">Push an image to ECR (12-hour token)</a>, <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-tag-mutability.html">ECR tag immutability</a>, <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-push-iam.html">ECR push permissions</a>, <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/container-considerations.html">ECS container image best practices</a>, <a href="https://docs.docker.com/build/building/multi-stage/">Docker multi-stage builds</a>, <a href="https://docs.docker.com/build/cache/">Docker build cache</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html">Push an image to ECR (12-hour token)</a>, <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/registry_auth.html">ECR registry authentication</a>,<a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-tag-mutability.html">ECR tag immutability</a>, <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-push-iam.html">ECR push permissions</a>, <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/container-considerations.html">ECS container image best practices</a>, <a href="https://docs.docker.com/build/building/multi-stage/">Docker multi-stage builds</a>, <a href="https://docs.docker.com/build/cache/">Docker build cache</a>.</p>
 </section>
 
 <section id="compute-eks">
   <h2>Amazon EKS basics</h2>
   <h3>Concepts</h3>
   <ul>
-    <li>Amazon EKS runs and manages the Kubernetes control plane for you. You run the workloads on EC2 nodes or on AWS Fargate.</li>
+    <li>Amazon EKS runs and manages the Kubernetes control plane for you. The control plane is the Kubernetes API server and the components that schedule Pods and store the cluster state. You run the workloads on EC2 nodes or on AWS Fargate.</li>
     <li>A <strong>Pod</strong> is one or more containers that run together. A <strong>Deployment</strong> keeps a set number of Pod replicas running.</li>
-    <li>A <strong>Service</strong> gives a stable network endpoint for a set of Pods.</li>
+    <li>A <strong>Service</strong> gives a stable network endpoint for a set of Pods. Pods get new IP addresses when they are replaced, so clients call the Service, not a Pod.</li>
   </ul>
   <h3>Choose EKS or ECS</h3>
   <ul>
@@ -281,27 +293,29 @@
     <li>Choose <strong>ECS</strong> for a simpler, AWS native orchestrator with less cluster management.</li>
   </ul>
   <h3>AWS permissions for Pods</h3>
+  <p>A Kubernetes service account is the identity that the processes in a Pod run as. Both methods below map a service account to an IAM role, so the Pods that use that service account get temporary credentials for the role. IRSA needs an IAM OIDC provider: an IAM identity provider that trusts the tokens that one cluster issues.</p>
   <table>
     <tr><th>Item</th><th>EKS Pod Identity</th><th>IAM roles for service accounts (IRSA)</th></tr>
     <tr><td>Setup</td><td>EKS Pod Identity Agent add-on, then an association: role to namespace and service account</td><td>IAM OIDC provider for each cluster, then a service account annotation with the role ARN</td></tr>
-    <tr><td>Role trust policy</td><td>Service principal <code>pods.eks.amazonaws.com</code>. No change for new clusters.</td><td>The OIDC provider of each cluster, with <code>sts:AssumeRoleWithWebIdentity</code></td></tr>
+    <tr><td>Role trust policy</td><td>Service principal <code>pods.eks.amazonaws.com</code>. You set it once. The role then works in new clusters with no trust policy change.</td><td>The OIDC provider of each cluster, with <code>sts:AssumeRoleWithWebIdentity</code></td></tr>
     <tr><td>Fargate Pods</td><td>Not supported</td><td>Supported</td></tr>
     <tr><td>Where</td><td>Amazon EKS only, Linux EC2 nodes</td><td>EKS and other Kubernetes on AWS</td></tr>
   </table>
   <ul>
-    <li>AWS recommends EKS Pod Identity when possible.</li>
+    <li>AWS recommends EKS Pod Identity when possible. It needs no OIDC provider for each cluster, and you set the role trust policy only once.</li>
+    <li>Choose IRSA for Pods on Fargate, or for Kubernetes on AWS that is not Amazon EKS.</li>
     <li>Both give least privilege: only Pods that use the service account get the role.</li>
-    <li>If IMDS is not restricted on the node, containers can also get the node IAM role credentials.</li>
-    <li>To restrict IMDS on EC2 nodes, require IMDSv2 and set the PUT response hop limit to 1. Pod Identity and IRSA credentials do not come from IMDS, so Pod roles keep working. Do not disable IMDS.</li>
+    <li>If IMDS is not restricted on the node, containers can also get the node IAM role credentials. Then every Pod on the node has all the permissions of the node role, and least privilege fails.</li>
+    <li>To restrict IMDS on EC2 nodes, require IMDSv2 and set the PUT response hop limit to 1. A Pod that has its own Pod network is one hop away from the node, so the token response does not reach it. Pod Identity and IRSA credentials do not come from IMDS, so Pod roles keep working. Do not disable IMDS, because node components, for example the node termination handler, need it.</li>
     <li>Fargate Pods cannot use IMDS. The Fargate Pod execution role is for image pulls and logs. Containers cannot use it.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Each Pod gets its own permissions; no OIDC provider" → EKS Pod Identity.</li>
-      <li>"Pods on Fargate need AWS permissions" → IRSA.</li>
-      <li>"Pods use the node role; stop that" → require IMDSv2 with hop limit 1 on the nodes, and give Pods their own role.</li>
-      <li>"Team already uses Kubernetes manifests and Helm" → EKS.</li>
+      <li>"Each Pod gets its own permissions; no OIDC provider" → EKS Pod Identity, because only IRSA needs an OIDC provider.</li>
+      <li>"Pods on Fargate need AWS permissions" → IRSA, because EKS Pod Identity does not support Fargate.</li>
+      <li>"Pods use the node role; stop that" → require IMDSv2 with hop limit 1 on the nodes, and give Pods their own role. The token response then cannot reach the Pods.</li>
+      <li>"Team already uses Kubernetes manifests and Helm" → EKS, because it runs standard Kubernetes and the team keeps its tools.</li>
     </ul>
   </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html">EKS Pod Identity</a>, <a href="https://docs.aws.amazon.com/eks/latest/userguide/service-accounts.html">Pod Identity compared with IRSA</a>, <a href="https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html">IAM roles for service accounts</a>, <a href="https://docs.aws.amazon.com/eks/latest/userguide/fargate.html">EKS on Fargate considerations</a>, <a href="https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html">EKS best practices: restrict IMDS on nodes</a>, <a href="https://docs.aws.amazon.com/decision-guides/latest/containers-on-aws-how-to-choose/choosing-aws-container-service.html">Choosing an AWS container service</a>.</p>
@@ -313,7 +327,7 @@
   <table>
     <tr><th>Compute</th><th>What you set</th></tr>
     <tr><td>Lambda</td><td>Memory only. CPU grows with memory. See Module 1, topic <code>lambda-limits</code>.</td></tr>
-    <tr><td>ECS on Fargate</td><td>Task-level CPU and memory are required. Only some pairs are valid.</td></tr>
+    <tr><td>ECS on Fargate</td><td>Task-level CPU and memory are required. Only some pairs are valid. An invalid pair makes the task definition fail. CPU is in units: 1024 units = 1 vCPU.</td></tr>
     <tr><td>EC2</td><td>The instance type. The family sets the ratio of vCPU to memory.</td></tr>
   </table>
   <table>
@@ -333,31 +347,32 @@
     <tr><td>Memory optimized (for example, R)</td><td>Large in-memory data</td></tr>
     <tr><td>Burstable (T)</td><td>Low average CPU with short peaks</td></tr>
   </table>
+  <p>Choose the family that matches the resource that limits your application. If you choose a family by the wrong resource, you pay for CPU or memory that the application does not use. Burstable instances earn CPU credits while CPU use is below a baseline level. They spend the credits to run above the baseline during peaks.</p>
   <h3>Find the minimum size (skill 4.3.3)</h3>
   <ul>
     <li>Run a load test at the expected peak. Measure CPU, memory, and latency or duration.</li>
-    <li>EC2 does not send memory metrics by default. Install the CloudWatch agent to collect memory use.</li>
-    <li>Choose the smallest size that meets the latency goal with some headroom.</li>
+    <li>EC2 does not send memory metrics by default. Install the CloudWatch agent to collect memory use. Without memory data, you can choose a size that has too little memory.</li>
+    <li>Choose the smallest size that meets the latency goal and still has spare capacity for peaks.</li>
   </ul>
   <h3>Optimize resource usage (skill 4.3.7)</h3>
   <ul>
-    <li><strong>AWS Compute Optimizer</strong> gives rightsizing recommendations. You must opt in first.</li>
+    <li><strong>AWS Compute Optimizer</strong> gives rightsizing recommendations. Rightsizing means changing a resource to the smallest size that still meets the needs of the workload. You must opt in first. Compute Optimizer makes no recommendations before you opt in.</li>
     <li>It covers EC2 instances, Auto Scaling groups, EBS volumes, Lambda functions, ECS services on Fargate, and more.</li>
     <li>It analyzes the last <strong>14 days</strong> of metrics by default. Enhanced infrastructure metrics (paid) extend this to <strong>93 days</strong>.</li>
-    <li>Rightsizing preferences also allow a free 32-day lookback for monthly cycles.</li>
+    <li>A 14-day window can miss a peak that comes once a month. Rightsizing preferences also allow a free 32-day lookback, which includes a full monthly cycle.</li>
     <li>For EC2 memory recommendations, install the CloudWatch agent on the instances.</li>
-    <li>Scale on the metric that limits the application. For a web tier behind an ALB, request count for each target can be a better signal than CPU.</li>
+    <li>Scale on the metric that limits the application. For a web tier behind an ALB, request count for each target (<code>ALBRequestCountPerTarget</code>) can be a better signal than CPU. For example, an application that waits on I/O can be overloaded while its CPU stays low.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Fargate task definition fails: invalid CPU or memory" → use a valid task CPU and memory pair.</li>
-      <li>"Rightsizing recommendations with the least effort" → AWS Compute Optimizer.</li>
-      <li>"Recommendations ignore memory" → install the CloudWatch agent.</li>
-      <li>"Monthly peak is outside the analysis window" → 32-day lookback (free) or enhanced infrastructure metrics (93 days, paid).</li>
+      <li>"Fargate task definition fails: invalid CPU or memory" → use a valid task CPU and memory pair, because Fargate accepts only the pairs in the table.</li>
+      <li>"Rightsizing recommendations with the least effort" → AWS Compute Optimizer, because it analyzes the metrics and recommends sizes for you.</li>
+      <li>"Recommendations ignore memory" → install the CloudWatch agent, because EC2 does not publish memory metrics by default.</li>
+      <li>"Monthly peak is outside the analysis window" → 32-day lookback (free) or enhanced infrastructure metrics (93 days, paid), because the default 14 days can miss the peak.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-tasks-services.html">Fargate task CPU and memory</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/what-is-compute-optimizer.html">What is Compute Optimizer?</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/metrics.html">Metrics analyzed (14 and 93 days)</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/ec2-metrics-analyzed.html">EC2 memory with the CloudWatch agent</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/rightsizing-preferences.html">Rightsizing preferences (14, 32, and 93 days)</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-tasks-services.html">Fargate task CPU and memory</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/what-is-compute-optimizer.html">What is Compute Optimizer?</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/metrics.html">Metrics analyzed (14 and 93 days)</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/ec2-metrics-analyzed.html">EC2 memory with the CloudWatch agent</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/rightsizing-preferences.html">Rightsizing preferences (14, 32, and 93 days)</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/burstable-credits-baseline-concepts.html">Burstable instance CPU credits</a>, <a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/as-scaling-target-tracking.html">Target tracking metrics (ALBRequestCountPerTarget)</a>.</p>
 </section>
 
 </main>
