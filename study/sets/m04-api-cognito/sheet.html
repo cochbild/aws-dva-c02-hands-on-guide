@@ -74,7 +74,7 @@
     <tr><td>Idle connection timeout</td><td>10 minutes</td></tr>
     <tr><td>Message payload</td><td>128 KB (frames of 32 KB maximum)</td></tr>
   </table>
-  <p>API Gateway closes a connection after 2 hours, or after 10 minutes with no messages. The client must detect the close and connect again. To keep an idle connection open, the client can send a small message (a heartbeat) more often than every 10 minutes.</p>
+  <p>API Gateway closes a connection after 2 hours, or after 10 minutes with no messages. AWS documents the 10-minute idle limit but not what resets it. Apps usually send a small message (a heartbeat) before the 10 minutes end, and reconnect when the connection closes.</p>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
@@ -98,7 +98,7 @@
     <tr><td><code>HTTP</code></td><td>HTTP endpoint with mapping templates.</td></tr>
     <tr><td><code>MOCK</code></td><td>API Gateway returns a response without a backend.</td></tr>
   </table>
-  <p>Choose a proxy type (<code>AWS_PROXY</code>, <code>HTTP_PROXY</code>) when the backend can read the request as it is and build its own response. This is the least configuration. Choose a non-proxy type (<code>AWS</code>, <code>HTTP</code>) when API Gateway must change the request or response, for example to rename fields, to set status codes from errors, or to call an AWS service such as Amazon SQS directly without a Lambda function.</p>
+  <p>Choose a proxy type (<code>AWS_PROXY</code>, <code>HTTP_PROXY</code>) when the backend can read the request as it is and build its own response. This is the least configuration. Choose a non-proxy type (<code>AWS</code>, <code>HTTP</code>) when API Gateway must change the request or response. Examples: rename fields, or set status codes from backend errors. A non-proxy <code>AWS</code> integration can also call an AWS service such as Amazon SQS directly, with no Lambda function.</p>
   <h3>Lambda proxy response format</h3>
   <ul>
     <li>The function must return <code>statusCode</code>, and optionally <code>headers</code>, <code>multiValueHeaders</code>, <code>body</code> (a string), and <code>isBase64Encoded</code>. The body must be a string, so convert a JSON object first, for example with <code>JSON.stringify()</code>.</li>
@@ -118,7 +118,7 @@
     <li>For long work, return at once and process in the background. In a Lambda custom integration, set the integration request header <code>X-Amz-Invocation-Type</code> to <code>'Event'</code> (the quotes mean a fixed value). Lambda then queues the event and runs the function asynchronously. API Gateway responds to the client at once, without the function result. The client must get the result later, for example from a status endpoint.</li>
     <li>A <strong>mock integration</strong> returns a response from a mapping template with no backend. Use it to test clients or prototype an API before the backend exists. The CORS <code>OPTIONS</code> method also uses it.</li>
     <li><code>{proxy+}</code> is a greedy path variable: one resource that matches every path below it, for example <code>/orders/7/items</code>. With the <code>ANY</code> method, it sends all paths and methods to one integration. Use it when one Lambda function does its own routing.</li>
-    <li>API Gateway needs permission to invoke the function (Lambda resource-based policy or an IAM role). Without it, the client gets 500 Internal Server Error, and the execution log shows "Invalid permissions on Lambda function". The console adds the permission when you choose the function. Infrastructure as code and the CLI do not.</li>
+    <li>API Gateway needs permission to invoke the function (Lambda resource-based policy or an IAM role). Without it, the client gets 500 Internal Server Error, and the execution log shows "Invalid permissions on Lambda function". The console adds the permission when you choose the function. With the CLI or a plain CloudFormation template, add the permission yourself.</li>
   </ul>
   <h3>Private integrations (VPC links)</h3>
   <ul>
@@ -199,7 +199,7 @@
     <li><code>$input.body</code> returns the raw body as a string. <code>$input.json('$.x')</code> returns the value at JSON path <code>$.x</code> as a JSON string, ready to put into a JSON template. <code>$input.path('$.x')</code> returns the value as an object, so the template can read its fields or loop over it.</li>
     <li><code>$input.params('x')</code> returns the request parameter <code>x</code>. It looks in the path first, then the query string, then the headers.</li>
     <li>Useful variables: <code>$context.requestId</code> (the unique ID of the request), <code>$context.identity.sourceIp</code> (the client IP address), <code>$context.authorizer.claims.sub</code> (the Cognito user ID from the token), and <code>$stageVariables.name</code> (a stage variable).</li>
-    <li>Helper functions: <code>$util.escapeJavaScript()</code> escapes quotes and other characters so that a string is safe inside JSON. <code>$util.parseJson()</code> turns a JSON string into an object. <code>$util.base64Encode()</code> and <code>$util.urlEncode()</code> encode values.</li>
+    <li>Helper functions: <code>$util.escapeJavaScript()</code> escapes a string with JavaScript rules. Use it to stop injection from request parameters. Its escaped single quotes (<code>\'</code>) are not valid JSON, so replace <code>\'</code> with <code>'</code> in a JSON template. <code>$util.parseJson()</code> turns a JSON string into an object. <code>$util.base64Encode()</code> and <code>$util.urlEncode()</code> encode values.</li>
     <li><code>$context.responseOverride.status</code> sets the response status code from a template. Use it, for example, to return 201 or 404 based on the backend data.</li>
   </ul>
   <h3>Status codes from a non-proxy Lambda integration</h3>
@@ -243,7 +243,7 @@
     <li>A key can be in more than one usage plan, but only in one usage plan for each stage. API Gateway must know which one set of limits to apply to the key on that stage.</li>
     <li>Clients do not always send the key themselves. With API key source <code>AUTHORIZER</code>, a Lambda authorizer finds the key for the caller (for example, from the tenant in the token) and returns it in <code>usageIdentifierKey</code>. API Gateway then applies the usage plan of that key.</li>
     <li><strong>API keys are not authentication.</strong> AWS says: do not use API keys to control access. A key is a fixed string in a header. Anyone who copies it can use it, and it does not prove who the caller is. Use IAM, Cognito, or a Lambda authorizer.</li>
-    <li>Do not rely on usage plans to control cost. Use AWS Budgets, and AWS WAF to manage requests.</li>
+    <li>Do not rely on usage plans to control cost, because limits are best effort and some requests pass. Use AWS Budgets, and AWS WAF to manage requests.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
@@ -392,7 +392,7 @@
     <li><strong>Execution logs</strong> (REST API): how API Gateway processed the request, with errors and traces. Levels: ERROR or INFO. Optional full request and response data. Use them to debug, for example to see mapping template output or authorizer results.</li>
     <li><strong>Access logs</strong>: one line for each request, in a format you choose with <code>$context</code> variables. REST and HTTP APIs. Use them to record who called the API and the result, for audits and traffic analysis.</li>
     <li>To write logs, set an IAM role with <code>AmazonAPIGatewayPushToCloudWatchLogs</code> as <code>cloudWatchRoleArn</code> in the API Gateway account settings. Do this in each Region. API Gateway writes the logs with this role. Without it, no execution logs appear, even when logging is on for the stage.</li>
-    <li>X-Ray tracing: turn it on for a REST API stage. HTTP APIs do not support X-Ray.</li>
+    <li>X-Ray tracing: turn it on for a REST API stage. X-Ray shows the time in each hop (API Gateway, Lambda, DynamoDB) for one request. HTTP APIs do not support X-Ray.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
@@ -423,9 +423,9 @@
   </table>
   <p>Send the access token when the API checks OAuth scopes, because only the access token carries them. Send the ID token when the backend needs facts about the user, such as the email address, or when a Cognito user pool authorizer method has no scopes. The app keeps the refresh token and uses it to get new ID and access tokens without a new sign-in.</p>
   <ul>
-    <li>Verify a JWT (JSON Web Token): check the signature with the public keys (the JWKS) at <code>https://cognito-idp.{region}.amazonaws.com/{userPoolId}/.well-known/jwks.json</code>. A valid signature proves that your user pool issued the token and nobody changed it. Then check <code>exp</code> (not expired), <code>iss</code> (your user pool), <code>token_use</code> (<code>id</code> or <code>access</code>, so nobody can use an ID token as an access token), and <code>aud</code> (ID token) or <code>client_id</code> (access token) for your app client.</li>
+    <li>Verify a JWT (JSON Web Token): check the signature with the public keys (the JWKS) at <code>https://cognito-idp.{region}.amazonaws.com/{userPoolId}/.well-known/jwks.json</code>. A valid signature proves that your user pool issued the token and nobody changed it. Then check <code>exp</code> (not expired) and <code>iss</code> (your user pool). Check <code>token_use</code> (<code>id</code> or <code>access</code>), so that nobody can use an ID token as an access token. Last, check that <code>aud</code> (ID token) or <code>client_id</code> (access token) is your app client.</li>
     <li><code>GlobalSignOut</code> and <code>AdminUserGlobalSignOut</code> revoke all refresh, ID, and access tokens of a user. <code>RevokeToken</code> revokes one refresh token and the access tokens that it issued. Cognito APIs reject revoked tokens. A service that only checks the signature and expiry still accepts them until they expire, so keep access token validity short.</li>
-    <li>Refresh token rotation (optional) issues a new refresh token at each refresh. It does not extend the original validity.</li>
+    <li>Refresh token rotation (optional) issues a new refresh token at each refresh. It does not extend the original validity. Rotation limits the damage from a stolen refresh token, because the old token stops working after the next refresh (after an optional grace period of up to 60 seconds).</li>
   </ul>
   <h3>Sign-in and features</h3>
   <ul>
@@ -537,7 +537,7 @@
   <h3>S3 origin access</h3>
   <ul>
     <li>Use <strong>origin access control (OAC)</strong>. With OAC, CloudFront signs its requests to S3, and the bucket stays private. Users cannot read objects directly from S3, so they cannot skip CloudFront rules such as signed URLs or AWS WAF. Origin access identity (OAI) is legacy.</li>
-    <li>OAC supports SSE-KMS, all Regions, and <code>PUT</code> and <code>DELETE</code> requests.</li>
+    <li>OAC supports SSE-KMS buckets, all Regions, and <code>PUT</code> and <code>DELETE</code> requests. OAI does not, which is why OAI is legacy.</li>
     <li>The bucket policy allows <code>cloudfront.amazonaws.com</code> with an <code>AWS:SourceArn</code> condition for the distribution. For SSE-KMS, the KMS key policy must also allow CloudFront.</li>
     <li>An S3 website endpoint is a custom origin. OAC does not work with it, because a website endpoint needs public read access and does not accept signed requests.</li>
   </ul>
@@ -546,7 +546,7 @@
     <li>Signed URLs and signed cookies give access to private content for a limited time. Your application signs a policy (expiry time, paths) with a private key. CloudFront checks the signature with the matching public key in a trusted key group. A request with no valid signature gets 403.</li>
     <li><strong>Signed URLs</strong>: choose them for one file, or for clients that do not support cookies. The signature is in the URL query string, so each file URL changes.</li>
     <li><strong>Signed cookies</strong>: choose them for many files (for example, all video segments), when URLs must not change.</li>
-    <li>Viewer protocol policy: redirect HTTP to HTTPS, or HTTPS only.</li>
+    <li>The viewer protocol policy sets what CloudFront does with an HTTP request: redirect it to HTTPS (browsers), or reject it with 403 (APIs that must never use HTTP).</li>
     <li>Field-level encryption encrypts selected form fields at the edge with a public key. Only the application that has the private key can decrypt them. Use it for data such as card numbers that other services in the request path must not read.</li>
     <li>Geographic restrictions allow or block countries for the whole distribution.</li>
   </ul>
@@ -569,7 +569,7 @@
       <li>"Lightweight header rewrite at high scale" → CloudFront Functions, because they are cheaper and faster than Lambda@Edge for simple viewer request changes.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/controlling-the-cache-key.html">Cache policies</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/controlling-origin-requests.html">Origin request policies</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html">OAC</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-choosing-signed-urls-cookies.html">Signed URLs or signed cookies</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/edge-functions-choosing.html">CloudFront Functions and Lambda@Edge</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/PayingForInvalidation.html">Pay for file invalidation</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cloudfront-limits.html#limits-lambda-at-edge">Lambda@Edge quotas</a>. Lab: <a href="../../../module-04-api-gateway-cognito/lab-07-cloudfront-in-front-of-api/README.md">Lab 4.7 CloudFront in front of API</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/controlling-the-cache-key.html">Cache policies</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/controlling-origin-requests.html">Origin request policies</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html">OAC</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-choosing-signed-urls-cookies.html">Signed URLs or signed cookies</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/edge-functions-choosing.html">CloudFront Functions and Lambda@Edge</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/PayingForInvalidation.html">Pay for file invalidation</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-https-viewers-to-cloudfront.html">Viewer protocol policy</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cloudfront-limits.html#limits-lambda-at-edge">Lambda@Edge quotas</a>. Lab: <a href="../../../module-04-api-gateway-cognito/lab-07-cloudfront-in-front-of-api/README.md">Lab 4.7 CloudFront in front of API</a>.</p>
 </section>
 
 <section id="edge-route53-waf">
@@ -586,7 +586,6 @@
     <tr><td>IP-based</td><td>Answer by the source IP range (CIDR) of the user</td></tr>
     <tr><td>Multivalue answer</td><td>Up to 8 healthy records, selected at random. Use it to spread clients across several servers and skip unhealthy ones, when you have no load balancer.</td></tr>
   </table>
-  <p>Geolocation answers by where the user is (for example, users in France get the French site). Latency answers by the fastest Region for the user. Failover keeps a standby resource for when the primary fails.</p>
   <ul>
     <li>An <strong>alias record</strong> points to an AWS resource (CloudFront, API Gateway, load balancer, S3 website). It works at the zone apex: the domain name with no subdomain, for example <code>example.com</code>. A CNAME does not, because DNS rules do not allow a CNAME at the zone apex.</li>
   </ul>
