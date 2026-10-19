@@ -57,7 +57,7 @@ window.QUESTION_BANKS.push({ setId: "g-iac", questions: [
       { text: "Use Fn::GetAZs to select the AMI for the current Region.", correct: false,
         why: "Fn::GetAZs returns a list of Availability Zones. It does not return AMI IDs." }
     ],
-    explanation: "Systems Manager parameter types resolve a Parameter Store key at create or update time. Public parameters give the latest AMI ID in each Region." },
+    explanation: "Systems Manager parameter types resolve a Parameter Store key at create or update time. AWS publishes public parameters, for example /aws/service/ami-amazon-linux-latest/..., and updates them in each Region when it releases a new AMI." },
 
   { id: "g-iac-005", topic: "iac-cfn-intrinsics", domain: 3,
     stem: "A template creates an AWS::SQS::Queue named WorkQueue and a Lambda function. The function code needs the queue URL in an environment variable. The function execution role needs an IAM policy statement whose Resource is the queue. Which values should the developer use in the template?",
@@ -387,7 +387,7 @@ window.QUESTION_BANKS.push({ setId: "g-iac", questions: [
       { text: "Run cdk watch in the project folder.", correct: false,
         why: "cdk watch works with AWS CDK apps. This project uses an AWS SAM template." }
     ],
-    explanation: "sam sync --watch gives fast cloud iteration for development stacks. It causes drift, so use sam deploy or a pipeline for production." },
+    explanation: "sam sync --watch pushes code changes to a development stack in seconds through service APIs, not through CloudFormation. The stack then no longer matches its template (drift), so use sam deploy or a pipeline for production." },
 
   { id: "g-iac-028", topic: "iac-sam-cli", domain: 3,
     stem: "A developer builds a Python SAM application on a Windows laptop. One dependency includes native compiled code. After deployment, the function fails because the compiled library does not work in the Lambda environment. Which solution will meet these requirements?",
@@ -439,7 +439,7 @@ window.QUESTION_BANKS.push({ setId: "g-iac", questions: [
       { text: "DeploymentPreference", correct: true,
         why: "DeploymentPreference sets the traffic shift type and makes SAM create the CodeDeploy application and deployment group." },
       { text: "ProvisionedConcurrencyConfig", correct: false,
-        why: "Provisioned concurrency removes cold starts. Traffic shifting does not need it." },
+        why: "Provisioned concurrency keeps execution environments ready, so requests do not wait for a new environment to start (a cold start). Traffic shifting does not need it." },
       { text: "A Hooks PostTraffic function", correct: false,
         why: "Hooks are optional. Traffic shifting works without a PostTraffic function." },
       { text: "A separate AWS::CodeDeploy::Application resource", correct: false,
