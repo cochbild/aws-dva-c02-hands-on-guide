@@ -383,7 +383,7 @@
   <ul>
     <li>Limit a service principal with <code>aws:SourceArn</code> or <code>aws:SourceAccount</code>. A statement for a service principal such as <code>sns.amazonaws.com</code> with no condition lets any resource of that service invoke the function. <code>aws:SourceArn</code> limits it to one resource, for example one topic. For Amazon S3, also add <code>aws:SourceAccount</code>: a bucket ARN has no account ID, and another account can create a bucket with the same name after you delete yours.</li>
     <li>You can attach the policy to the function, a version, or an alias.</li>
-    <li><code>AWSLambdaBasicExecutionRole</code> gives permission to write CloudWatch Logs. Without it, the function runs but writes no log lines, so the log group stays empty.</li>
+    <li><code>AWSLambdaBasicExecutionRole</code> gives permission to write CloudWatch Logs. Without it, the function runs but Lambda cannot write its logs to CloudWatch Logs.</li>
     <li>For an event source mapping, Lambda reads the source with the <strong>execution role</strong>, not with a resource-based policy, because Lambda reads the source for the function. Example: <code>AWSLambdaSQSQueueExecutionRole</code>.</li>
   </ul>
   <h3>Environment variables and secrets</h3>
@@ -468,7 +468,7 @@
     <li>Turn on <strong>active tracing</strong>: <code>TracingConfig</code> <code>Mode: Active</code>, or <code>Tracing: Active</code> in SAM. Lambda then sends trace data for sampled requests to X-Ray, which builds a service map.</li>
     <li>The execution role needs <code>xray:PutTraceSegments</code> and <code>xray:PutTelemetryRecords</code> (<code>AWSXRayDaemonWriteAccess</code>).</li>
     <li>Sampling: 1 request each second plus 5 percent of other requests. You cannot change the sampling rate for Lambda. So you do not see a trace for every request.</li>
-    <li>Lambda records two segments: <code>AWS::Lambda</code> (the service) and <code>AWS::Lambda::Function</code> (your code). Compare them: time in the service segment but not in the function segment is queue or cold-start time, not your code.</li>
+    <li>Lambda records two segments: <code>AWS::Lambda</code> (the service) and <code>AWS::Lambda::Function</code> (your code). The service segment shows the time that Lambda uses to prepare the environment: it schedules, creates or unfreezes the environment, and downloads the code. The function segment shows your code, including Init as an Initialization subsegment after a cold start (the newer trace format names it Init).</li>
     <li>To see each downstream call, instrument the SDK clients with the X-Ray SDK or AWS Distro for OpenTelemetry. Each call then gets a <strong>subsegment</strong> with its own latency.</li>
     <li>Annotations are indexed key-value pairs: use them in filter expressions to search traces, for example by customer ID. Metadata stores any data with the trace, but X-Ray does not index it, so you cannot search on it.</li>
     <li>Tracing mode is locked in a published version.</li>
