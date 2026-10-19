@@ -171,15 +171,15 @@
     <li>Many event sources deliver <strong>at least once</strong>: they promise to deliver each event, but they can deliver the same event more than one time. Examples: SQS standard queues, Lambda asynchronous invocation, EventBridge, and SDK retries after a timeout. A handler can run two times for one event. Without idempotency, the second run repeats the action, for example a second card charge.</li>
     <li>An <strong>idempotency key</strong> is a value that is the same for every copy of one logical request, for example an order ID or a hash of the payload. The handler uses it to recognize a copy.</li>
     <li>Record "already done" with a conditional write, for example DynamoDB <code>PutItem</code> with <code>attribute_not_exists(pk)</code>. The first write with a key succeeds. A later write with the same key fails with <code>ConditionalCheckFailedException</code>, which means "duplicate: skip the action".</li>
-    <li>Some APIs take a <strong>client token</strong>. The service remembers the token. When a request arrives again with the same token, the service returns the result of the first request and does not repeat the action. Amazon EC2 <code>RunInstances</code> takes <code>ClientToken</code> (up to 64 ASCII characters). DynamoDB <code>TransactWriteItems</code> takes <code>ClientRequestToken</code>.</li>
+    <li>Some APIs take a <strong>client token</strong>. The service remembers the token. When a request arrives again with the same token and parameters, the retry succeeds without a new action (the result can show updated status). Amazon EC2 <code>RunInstances</code> takes <code>ClientToken</code> (up to 64 ASCII characters). DynamoDB <code>TransactWriteItems</code> takes <code>ClientRequestToken</code>.</li>
     <li>EC2: the same client token with different parameters fails with <code>IdempotentParameterMismatch</code>. A token belongs to one request, so new parameters need a new token.</li>
   </ul>
   <h3>Powertools for AWS Lambda idempotency utility</h3>
   <ul>
     <li>Stores a record for each idempotency key in a DynamoDB table (partition key attribute <code>id</code> by default).</li>
     <li>A repeated event returns the saved result. The function code does not run again.</li>
-    <li>Records expire after 1 hour (3,600 seconds) by default. Change it with <code>expires_after_seconds</code>.</li>
-    <li><code>event_key_jmespath</code> selects the part of the event that makes the key.</li>
+    <li>Records expire after 1 hour (3,600 seconds) by default. Change it with <code>expires_after_seconds</code>. A duplicate that arrives after the record expired runs the code again. Set the window longer than the longest expected resend delay.</li>
+    <li><code>event_key_jmespath</code> selects the part of the event that makes the key, for example the order ID in the body. By default, the whole event is the key. Some fields change between copies of one request: a redelivered SQS message has a new receipt handle and receive count, and a message that the producer sends again has a new message ID. A key from the whole event then does not match.</li>
     <li>A duplicate that arrives while the first run is in progress raises <code>IdempotencyAlreadyInProgressError</code>. The first run has no saved result yet, so the utility stops the copy instead of running the code two times at once.</li>
     <li>If the function raises an unhandled exception, the utility deletes the record, so a retry can run.</li>
   </ul>
@@ -214,7 +214,7 @@
   </table>
   <ul>
     <li>A circuit breaker stops retries that are unlikely to succeed. The caller does not wait for timeouts, and its threads stay free. The failing service gets no extra load while it recovers.</li>
-    <li>AWS sample: a Step Functions workflow stores the circuit status in a DynamoDB table. The status must be in a shared store because each Lambda invocation can run in a different environment. After repeated failures, the workflow writes an "open" record with an expiry time. While that record is not expired, calls fail at once. After the expiry time, the workflow ignores the record and calls the service again. DynamoDB Time to Live (TTL) deletes the expired records later.</li>
+    <li>AWS sample: a Step Functions workflow stores the circuit status in a DynamoDB table. The status must be in a shared store because every workflow execution must read the same status. After repeated failures, the workflow writes an "open" record with an expiry time. While that record is not expired, calls fail at once. After the expiry time, the workflow ignores the record and calls the service again. DynamoDB Time to Live (TTL) deletes the expired records later.</li>
   </ul>
   <h3>Where to put retries</h3>
   <ul>
@@ -238,7 +238,7 @@
   <h3>Profiles and options</h3>
   <ul>
     <li>Files: <code>~/.aws/credentials</code> (access keys) and <code>~/.aws/config</code> (Region, output, roles, IAM Identity Center).</li>
-    <li>In <code>config</code>, a named profile section is <code>[profile dev]</code>. In <code>credentials</code>, it is <code>[dev]</code>.</li>
+    <li>In <code>config</code>, a named profile section is <code>[profile dev]</code>. In <code>credentials</code>, it is <code>[dev]</code>. If you write <code>[dev]</code> in <code>config</code>, the CLI does not read it as a profile and reports that the profile does not exist.</li>
     <li>Global options: <code>--profile</code>, <code>--region</code>, <code>--output</code> (<code>json</code>, <code>yaml</code>, <code>yaml-stream</code>, <code>text</code>, <code>table</code>), <code>--debug</code>.</li>
     <li><code>--cli-input-json</code> reads all parameters from a JSON file. <code>--generate-cli-skeleton</code> makes a template for that file. Use them for a command with many parameters that you run again and again, or that you keep in source control.</li>
   </ul>
@@ -247,7 +247,7 @@
   <ol>
     <li>Command line options</li>
     <li>Environment variables (<code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_SESSION_TOKEN</code>, <code>AWS_PROFILE</code>)</li>
-    <li>Assume role, then assume role with web identity</li>
+    <li>Assume role, then assume role with web identity. An assume-role profile sets <code>role_arn</code> and <code>source_profile</code>. The CLI calls AWS STS with the source profile credentials and uses the temporary role credentials that STS returns.</li>
     <li>IAM Identity Center (<code>aws configure sso</code>, then <code>aws sso login</code>)</li>
     <li>Credentials file</li>
     <li>Custom process (the <code>credential_process</code> setting runs an external program that prints credentials)</li>
@@ -267,8 +267,8 @@
     <li>IMDSv1 answers any simple <code>GET</code>. IMDSv2 is session-oriented: a client must first get a session token. First send <code>PUT http://169.254.169.254/latest/api/token</code> with the header <code>X-aws-ec2-metadata-token-ttl-seconds</code>.</li>
     <li>The token lives from 1 second to 6 hours (21,600 seconds). Send it in the <code>X-aws-ec2-metadata-token</code> header on each <code>GET</code>.</li>
     <li>When IMDSv2 is required (<code>HttpTokens</code> = <code>required</code>), a request without a valid token gets <code>401 - Unauthorized</code>.</li>
-    <li>The hop limit is the number of network hops that the token response can travel. The default hop limit for the <code>PUT</code> response is 1, or 2 for AMIs registered with <code>ImdsSupport</code> <code>v2.0</code>. A container on the instance is one hop further away. With a limit of 1, the container does not get the token, so its SDK cannot get role credentials. AWS recommends a hop limit of 2 for containers.</li>
-    <li>Current SDK and CLI versions use IMDSv2 automatically. Old versions must be upgraded before you require IMDSv2.</li>
+    <li>The hop limit is the number of network hops that the token response can travel. The default hop limit for the <code>PUT</code> response is 1, or 2 for AMIs registered with <code>ImdsSupport</code> <code>v2.0</code>. A container with its own network (for example Docker bridge mode) is one hop further away. With a limit of 1, the container does not get the token, so its SDK cannot get role credentials. AWS recommends a hop limit of 2 for containers.</li>
+    <li>Current SDK and CLI versions use IMDSv2 automatically. Old versions must be upgraded before you require IMDSv2. Otherwise their requests get 401 and the application has no credentials.</li>
   </ul>
   <h3>Filtering and checks</h3>
   <table>
@@ -284,7 +284,7 @@
     <li>1 GB of persistent storage in <code>$HOME</code> for each Region, at no cost.</li>
     <li>If you do not use CloudShell in a Region for 120 days, AWS deletes the home directory data of that Region.</li>
     <li>A session ends after 20–30 minutes without keyboard or pointer input.</li>
-    <li>Outbound internet access only. No inbound ports and no public IP address.</li>
+    <li>Outbound internet access only. No inbound ports and no public IP address. You cannot host a server in CloudShell that other users reach.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
@@ -293,7 +293,7 @@
       <li>"Check permissions to launch an instance without launching it" → <code>--dry-run</code>.</li>
       <li>"Reduce the data returned for a large list" → server-side filter, not <code>--query</code>. <code>--query</code> runs on the client after the full response arrives.</li>
       <li>"Developer needs short-term credentials on a laptop" → IAM Identity Center and <code>aws sso login</code>. The credentials expire, so no long-term key stays on the laptop.</li>
-      <li>"Protect instance credentials from SSRF" → require IMDSv2. In server-side request forgery (SSRF), an attacker makes the application send a request to a URL that the attacker chooses. Such a request is usually a simple <code>GET</code>, which IMDSv1 answers. IMDSv2 first needs a <code>PUT</code> with a special header, which this kind of attack usually cannot send.</li>
+      <li>"Protect instance credentials from SSRF" → require IMDSv2. In server-side request forgery (SSRF), an attacker makes the application send a request to a URL that the attacker chooses. Such a request is usually a simple <code>GET</code>, which IMDSv1 answers. IMDSv2 first needs a <code>PUT</code> request to get a token. The attack usually cannot choose the HTTP method, so it never gets a token.</li>
     </ul>
   </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html">CLI configuration and credentials precedence</a>, <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-filter.html">CLI filtering</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html">IMDSv2</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-new-instances.html">IMDS options for new instances (hop limit)</a>, <a href="https://docs.aws.amazon.com/cloudshell/latest/userguide/limits.html">CloudShell quotas</a>, <a href="https://aws.amazon.com/blogs/security/defense-in-depth-open-firewalls-reverse-proxies-ssrf-vulnerabilities-ec2-instance-metadata-service/">IMDSv2 and SSRF (AWS Security Blog)</a>.</p>
@@ -305,7 +305,7 @@
   <ul>
     <li>A unit test checks your code without calls to real AWS services. It is fast and costs nothing.</li>
     <li>Keep business logic out of the handler. The handler parses the event and calls plain functions that you can test. A test can then call those functions directly, without a full Lambda event.</li>
-    <li><strong>Inject</strong> the SDK client (pass it in as a parameter). A test can then pass a fake client. If the code creates its own client inside the function, a test cannot replace it, and the test calls real AWS.</li>
+    <li><strong>Inject</strong> the SDK client (pass it in as a parameter). A test can then pass a fake client. If the code creates its own client inside the function, a test must patch the SDK module to replace it, which is more fragile. Injection is simpler and works in every language.</li>
     <li>A <strong>mock</strong> or <strong>stub</strong> is a fake object that returns the responses that the test sets. Mock AWS calls with a stub library, for example <code>moto</code> or the botocore <code>Stubber</code> (Python), or <code>aws-sdk-client-mock</code> (JavaScript SDK v3).</li>
     <li>Test the error paths too: throttling, <code>ConditionalCheckFailedException</code>, and timeouts.</li>
   </ul>
@@ -315,7 +315,7 @@
     <li><code>sam local generate-event &lt;service&gt; &lt;event&gt;</code> prints a sample event, for example <code>sam local generate-event s3 put</code>.</li>
     <li><code>sam local invoke -e event.json</code> runs the function locally in a container with that event. Docker (or a compatible container runtime) must be installed.</li>
     <li><code>sam local start-api</code> runs the API locally for HTTP tests.</li>
-    <li>The Lambda console has private test events and <strong>shareable</strong> test events. Only the creator can use a private event. All users in the same account can use a shareable event, so a team does not create the same event by hand many times.</li>
+    <li>The Lambda console has private test events and <strong>shareable</strong> test events. Only the creator can use a private event. Other users in the same account can use a shareable event (they need the EventBridge schema registry permissions), so a team does not create the same event by hand many times.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
@@ -349,7 +349,7 @@
   <ul>
     <li>Asynchronous flows do not return a result to the caller. Send an event, then poll the result store (for example a DynamoDB table) until the result appears or a timeout ends.</li>
     <li><strong>EventBridge archive and replay</strong>: an archive keeps events from one event bus (indefinitely by default, or for a set number of days). A replay sends them again to the same bus. Use it to process past events again after you fix a bug, or to test new code with real past events. The archive must exist before the events arrive, because only archived events can be replayed.</li>
-    <li>EventBridge adds a <code>replay-name</code> field to each replayed event. A target can use it to tell a replayed event from an original event.</li>
+    <li>EventBridge adds a <code>replay-name</code> field to each replayed event. A target can use it to recognize a replayed event.</li>
     <li><strong>Step Functions <code>TestState</code></strong> API tests one state without a deployed state machine. The inspection level sets how much detail the result shows:
       <ul>
         <li><code>INFO</code> (default): the state output, or the error.</li>
@@ -421,7 +421,7 @@
   <h3>In the console and tiers</h3>
   <ul>
     <li>In the AWS Management Console, <strong>Diagnose with Amazon Q</strong> explains common errors (for example missing IAM permissions) and gives steps to fix them.</li>
-    <li>Free tier: monthly limits. Sign in to the IDE with an AWS Builder ID (no AWS account necessary).</li>
+    <li>Free tier: no cost, with monthly usage limits. Sign in to the IDE with an AWS Builder ID (no AWS account necessary).</li>
     <li>Pro tier (Amazon Q Developer Pro): paid, higher limits, and advanced features. An organization subscribes its IAM Identity Center users. Administrators manage settings in the Amazon Q Developer console.</li>
     <li>AWS plans to end support for the Amazon Q Developer IDE plugins on April 30, 2027. AWS names Kiro as the replacement for the IDE plugins. The exam guide still lists Amazon Q Developer.</li>
   </ul>
