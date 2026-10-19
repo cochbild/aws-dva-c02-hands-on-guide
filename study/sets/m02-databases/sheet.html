@@ -44,8 +44,8 @@
     <li>Each table has a primary key. It is a <strong>partition key</strong> only, or a partition key plus a <strong>sort key</strong> (composite key).</li>
     <li>A <strong>partition</strong> is a unit of storage and throughput that DynamoDB manages for you. Items with the same partition key value are stored together on one partition, in sort key order.</li>
     <li>Items with the same partition key value form an <strong>item collection</strong>. One <code>Query</code> can return the whole collection.</li>
-    <li>DynamoDB hashes the partition key value to choose the partition that stores an item. All requests for one key value go to that one partition, and each partition has a throughput limit (3,000 reads and 1,000 writes per second). Choose a partition key with <strong>high cardinality</strong> — many different values, such as a user ID or an order ID — so that requests spread across many partitions. A key with few values (for example status = NEW, PAID, SHIPPED) sends most traffic to one or two partitions. Those requests throttle with <code>ProvisionedThroughputExceededException</code> even when the table has spare capacity. Example: an IoT table with <code>deviceId</code> as the partition key spreads writes from 2 million devices; <code>readingDate</code> sends all of today's writes to one partition.</li>
-    <li>A partition that gets more requests than its limit is a <strong>hot partition</strong>. Other keys that make hot partitions: country, or today's date. Adaptive capacity (next topic) helps a hot partition, but it cannot raise one partition above its limit.</li>
+    <li>DynamoDB hashes the partition key value to choose the partition that stores an item. All requests for one key value go to that one partition, and each partition has a throughput limit (3,000 reads and 1,000 writes per second). Choose a partition key with <strong>high cardinality</strong> — many different values, such as a user ID or an order ID — so that requests spread across many partitions. A key with few values (for example status = NEW, PAID, SHIPPED) sends most traffic to one or two partitions. Those requests throttle with <code>ProvisionedThroughputExceededException</code> (provisioned table) even when the table has spare capacity. Example: an IoT table with <code>deviceId</code> as the partition key spreads writes from 2 million devices; <code>readingDate</code> sends all of today's writes to one partition.</li>
+    <li>A partition that gets more requests than its limit is a <strong>hot partition</strong>. A country code or today's date also makes a hot partition. Adaptive capacity (next topic) helps a hot partition, but it cannot raise one partition above its limit.</li>
     <li><strong>Write sharding</strong> spreads the writes for one busy key value over many partitions. Add a suffix to the key value, for example <code>2026-10-18#1</code> to <code>2026-10-18#10</code>. Each suffix is a different key value, so DynamoDB can store it on a different partition. The cost: to read all items for that day, the application must query each suffix and merge the results.</li>
     <li>A random suffix spreads writes best, but you cannot find one item later without querying all suffixes. A calculated suffix (for example, a hash of the order ID) lets you compute the full key and use <code>GetItem</code>.</li>
     <li><code>GetItem</code>, <code>PutItem</code>, <code>UpdateItem</code>, and <code>DeleteItem</code> need the full primary key (partition key and, if the table has one, sort key).</li>
@@ -118,11 +118,11 @@
   <p>Older study material says "one switch every 24 hours". That rule is out of date.</p>
   <h3>Burst, adaptive capacity, and throttling</h3>
   <ul>
-    <li>Burst capacity: DynamoDB keeps up to 300 seconds (5 minutes) of unused read and write capacity. A short spike above the provisioned capacity can use it and not throttle. Do not plan capacity on it, because DynamoDB can also use burst capacity for maintenance without notice.</li>
+    <li>Burst capacity: DynamoDB keeps up to 300 seconds (5 minutes) of unused read and write capacity. A short spike above the provisioned capacity can use it and not throttle. Do not count burst capacity as part of your provisioned capacity. DynamoDB can also use it for maintenance without notice.</li>
     <li>Adaptive capacity: DynamoDB gives more throughput to hot partitions automatically, at no extra cost. An uneven workload then throttles less. It cannot go above the table's total capacity or the partition maximum.</li>
     <li><code>ProvisionedThroughputExceededException</code>: a provisioned table or GSI is over its capacity.</li>
-    <li><code>ThrottlingException</code>: request rate too high (for example on-demand limits, or control plane calls too fast).</li>
-    <li><code>RequestLimitExceeded</code>: the account throughput quota is reached.</li>
+    <li><code>ThrottlingException</code>: an on-demand table went over a partition limit or its maximum throughput, or table-management calls such as <code>CreateTable</code> or <code>UpdateTable</code> (control plane calls) came too fast.</li>
+    <li><code>RequestLimitExceeded</code>: the account throughput quota is reached. Request a quota increase from AWS Support.</li>
     <li>The AWS SDKs retry throttled requests automatically with <strong>exponential backoff</strong>. Without an SDK, retry 5xx errors and throttling errors with backoff.</li>
     <li>Use <code>ReturnConsumedCapacity</code> (<code>TOTAL</code> or <code>INDEXES</code>) to see the units that a request used. Use it to check your capacity calculations or to find expensive requests.</li>
   </ul>
@@ -142,7 +142,7 @@
   <h2>Read consistency, Query, Scan, PartiQL, and batch operations</h2>
   <h3>Read consistency</h3>
   <ul>
-    <li>Reads are <strong>eventually consistent</strong> by default. A read can miss a write that completed a short time before.</li>
+    <li>Reads are <strong>eventually consistent</strong> by default. DynamoDB keeps copies of each item in several storage locations and needs a short time to update all of them. An eventually consistent read can come from a copy that does not have the latest write yet. Consistency is usually reached within seconds.</li>
     <li>Set <code>ConsistentRead</code> to <code>true</code> for a <strong>strongly consistent</strong> read. It returns the latest data and costs twice as much.</li>
     <li>Tables and LSIs support strongly consistent reads. GSIs and DynamoDB Streams support only eventually consistent reads.</li>
   </ul>
@@ -214,7 +214,7 @@
   <ul>
     <li>The <strong>projection</strong> is the set of table attributes that DynamoDB copies into the index. Types: <code>KEYS_ONLY</code> (smallest), <code>INCLUDE</code> (keys plus named attributes), <code>ALL</code> (largest). A larger projection costs more storage and index writes, but more queries can get their data from the index alone.</li>
     <li>Use <code>Query</code> or <code>Scan</code> on an index. <code>GetItem</code> and <code>BatchGetItem</code> do not work on an index.</li>
-    <li>GSI key values do not have to be unique.</li>
+    <li>GSI key values do not have to be unique, so a Query on a GSI can return many items for one key value. Only the table's primary key must be unique.</li>
     <li><strong>Sparse index</strong>: an item without the index key attribute is not in the index. Use it to find a small set of items, for example open orders.</li>
     <li>DynamoDB updates a GSI asynchronously. A GSI query can return data that is not current.</li>
     <li>If a GSI does not have enough write capacity, DynamoDB throttles <strong>writes to the base table</strong>. Give the GSI write capacity equal to or greater than the table.</li>
@@ -241,7 +241,7 @@
     <li>Add a <code>ConditionExpression</code> to <code>PutItem</code>, <code>UpdateItem</code>, or <code>DeleteItem</code>. If the condition is false, the write fails with <code>ConditionalCheckFailedException</code> and nothing changes.</li>
     <li>To create an item only when no item with that key exists, add the condition <code>attribute_not_exists(pk)</code>. Without it, <code>PutItem</code> replaces the existing item and gives no error.</li>
     <li>Functions: <code>attribute_exists</code>, <code>attribute_not_exists</code>, <code>attribute_type</code>, <code>begins_with</code>, <code>contains</code>, <code>size</code>.</li>
-    <li><strong>Optimistic locking</strong> stops one client from overwriting a change that another client made after the first client read the item (a lost update). Keep a version number in the item. Write with <code>SET version = :new</code> and the condition <code>version = :old</code>. If another client wrote first, the version changed, and the write fails with <code>ConditionalCheckFailedException</code>. Read the item again and retry.</li>
+    <li><strong>Optimistic locking</strong> prevents a lost update. A lost update occurs when client A reads an item, client B changes it, and client A then writes over B's change. Keep a version number in the item. Write with <code>SET version = :new</code> and the condition <code>version = :old</code>. If another client wrote first, the version changed, and the write fails with <code>ConditionalCheckFailedException</code>. Read the item again and retry.</li>
     <li>A failed condition still uses write capacity: the size of the existing item, minimum 1 WCU.</li>
     <li><code>ReturnValuesOnConditionCheckFailure=ALL_OLD</code> returns the current item with the exception. You do not need a second read.</li>
     <li><code>ReturnValues</code> on writes: <code>NONE</code> (default), <code>ALL_OLD</code>, <code>UPDATED_OLD</code>, <code>ALL_NEW</code>, <code>UPDATED_NEW</code>. Use <code>ALL_NEW</code> or <code>UPDATED_NEW</code> to get the result of an update, for example a new counter value, without a second read.</li>
@@ -290,7 +290,7 @@
     <li>A <code>PutItem</code> or <code>UpdateItem</code> that does not change data writes no stream record.</li>
     <li>You cannot edit <code>StreamViewType</code>. Disable the stream and enable a new one. The new stream has a new ARN, so update each consumer (for example, the Lambda event source mapping) to use it.</li>
     <li>A stream stores its records in <strong>shards</strong> (groups of records). Let a maximum of two processes read the same shard at the same time. More readers can be throttled.</li>
-    <li>A transaction writes one stream record for each changed item. Consumers must not expect transaction atomicity in the stream.</li>
+    <li>A transaction writes one stream record for each changed item. The records of one transaction can appear at different times and can be mixed with records from other transactions. A consumer that needs all items of a transaction together must read them with <code>TransactGetItems</code>.</li>
     <li>For longer retention, use Amazon Kinesis Data Streams for DynamoDB (a separate feature).</li>
   </ul>
   <h3>StreamViewType</h3>
@@ -393,7 +393,7 @@
   <ul>
     <li>DynamoDB always encrypts data at rest: tables, indexes, streams, backups, and global tables. You cannot turn it off.</li>
     <li>You can change the key type of an existing table.</li>
-    <li>DynamoDB uses HTTPS endpoints. For client-side encryption of attribute values, use the AWS Database Encryption SDK.</li>
+    <li>DynamoDB uses HTTPS endpoints. For client-side encryption of attribute values, use the AWS Database Encryption SDK. Use it when the application must encrypt a value before it sends it, so that DynamoDB stores only ciphertext.</li>
   </ul>
   <h3>Network access</h3>
   <ul>
@@ -420,7 +420,7 @@
     <li>DAX runs in a VPC. Clients must be in the VPC. Control access with security groups.</li>
     <li>A cluster has one primary node and 0 to 10 read replicas. AWS recommends at least three nodes in different Availability Zones, so that the cluster still serves reads when one node or one zone fails.</li>
     <li><strong>Item cache</strong>: results of <code>GetItem</code> and <code>BatchGetItem</code>. Default TTL: 5 minutes.</li>
-    <li><strong>Query cache</strong>: results of <code>Query</code> and <code>Scan</code>, stored by request parameters. It has its own TTL.</li>
+    <li><strong>Query cache</strong>: results of <code>Query</code> and <code>Scan</code>. DAX uses the full set of request parameters as the cache key, so only an identical Query or Scan gets the cached result. It has its own TTL.</li>
     <li>Writes through DAX are <strong>write-through</strong>: DAX writes to DynamoDB first, then updates the item cache.</li>
     <li>Writes do not update or clear the query cache. A cached Query result can be stale until its TTL ends.</li>
     <li>Writes made directly to DynamoDB (not through DAX) do not update the DAX cache.</li>
@@ -452,7 +452,7 @@
   <table>
     <tr><th>Item</th><th>Multi-AZ DB instance (standby)</th><th>Read replica</th></tr>
     <tr><td>Purpose</td><td>High availability and failover</td><td>Read scaling, reporting, disaster recovery</td></tr>
-    <tr><td>Replication</td><td>Synchronous</td><td>Asynchronous</td></tr>
+    <tr><td>Replication</td><td>Synchronous: the standby has every committed write, so a failover loses no data.</td><td>Asynchronous: the replica can lag behind the primary, so a read from it can return old data.</td></tr>
     <tr><td>Serves reads</td><td>No</td><td>Yes</td></tr>
     <tr><td>Number</td><td>One standby</td><td>Up to 15 for each primary (default quota)</td></tr>
     <tr><td>Other Region</td><td>No</td><td>Yes (cross-Region replica)</td></tr>
@@ -469,7 +469,7 @@
   <ul>
     <li>Automated backups: retention of 0 to 35 days. 0 turns off automated backups and point-in-time restore.</li>
     <li>Default retention: 1 day when you create the instance with the API or CLI, 7 days in the console.</li>
-    <li>Point-in-time restore always creates a <strong>new</strong> DB instance. RDS uploads transaction logs to Amazon S3 every 5 minutes.</li>
+    <li>Point-in-time restore always creates a <strong>new</strong> DB instance. RDS uploads transaction logs to Amazon S3 every 5 minutes. So the latest restorable time is up to about 5 minutes before now.</li>
     <li>Manual snapshots stay until you delete them.</li>
   </ul>
   <h3>Aurora</h3>
@@ -489,7 +489,7 @@
   <ul>
     <li>Capacity unit: ACU. One ACU is about 2 GiB of memory with matching CPU and network.</li>
     <li>Range: 0 to 256 ACUs, depending on the engine version. Scaling steps can be as small as 0.5 ACU.</li>
-    <li>A minimum of 0 ACUs turns on automatic pause and resume on supported versions.</li>
+    <li>A minimum of 0 ACUs turns on automatic pause and resume on supported versions. A paused instance costs nothing for compute (storage is still charged). The first connection after a pause waits while the instance resumes, typically about 15 seconds.</li>
     <li>A cluster can mix Serverless v2 and provisioned instances.</li>
     <li>The <strong>promotion tier</strong> of a reader sets the order in which Aurora chooses a new writer on failover. Readers in tiers 0 and 1 scale with the writer, so they are ready to take its full load. Readers in tiers 2 to 15 scale on their own load, for example for reports.</li>
   </ul>
@@ -502,7 +502,7 @@
       <li>"Restore the database to 3:15 PM yesterday" → point-in-time restore to a new instance.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZSingleStandby.html">Multi-AZ DB instance</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.Failover.html">Multi-AZ failover (time, DNS)</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html">RDS quotas (read replicas)</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.BackupRetention.html">Backup retention</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Overview.Endpoints.html">Aurora endpoints</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html">Aurora Serverless v2 capacity</a>. Labs: <a href="../../../module-02-dynamodb-deep-dive/lab-08-rds-mysql/README.md">Lab 2.8 RDS MySQL</a>, <a href="../../../module-02-dynamodb-deep-dive/lab-09-aurora-serverless/README.md">Lab 2.9 Aurora Serverless</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZSingleStandby.html">Multi-AZ DB instance</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.Failover.html">Multi-AZ failover (time, DNS)</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html">RDS quotas (read replicas)</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.BackupRetention.html">Backup retention</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Overview.Endpoints.html">Aurora endpoints</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.how-it-works.html">Aurora Serverless v2 capacity</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2-auto-pause.html">Aurora Serverless v2 auto-pause (billing, resume time)</a>. Labs: <a href="../../../module-02-dynamodb-deep-dive/lab-08-rds-mysql/README.md">Lab 2.8 RDS MySQL</a>, <a href="../../../module-02-dynamodb-deep-dive/lab-09-aurora-serverless/README.md">Lab 2.9 Aurora Serverless</a>.</p>
 </section>
 
 <section id="rds-access">
@@ -515,7 +515,7 @@
   <h3>IAM database authentication</h3>
   <ul>
     <li>Engines: MariaDB, MySQL, PostgreSQL (RDS and Aurora).</li>
-    <li>The application gets an <strong>authentication token</strong> (signed with SigV4) and uses it as the password. A token is valid for <strong>15 minutes</strong>.</li>
+    <li>The application gets an <strong>authentication token</strong> (signed with the caller's IAM credentials, like any AWS API request) and uses it as the password. A token is valid for <strong>15 minutes</strong>.</li>
     <li>The IAM policy allows <code>rds-db:connect</code> for the database user.</li>
     <li>Traffic uses SSL/TLS. No password is stored in the database or the application.</li>
   </ul>
@@ -531,7 +531,7 @@
   <ul>
     <li>An HTTPS endpoint for SQL statements. The caller needs no persistent connection, no database driver, and no VPC configuration.</li>
     <li>The call gives the cluster ARN and the ARN of a Secrets Manager secret with the database credentials.</li>
-    <li>Data API runs queries on the writer instance only. The response size limit is 1 MiB. It does not support T DB instance classes.</li>
+    <li>Data API runs queries on the writer instance only, so it does not spread reads over replicas. The response size limit is 1 MiB. It does not support the small burstable db.t instance classes.</li>
   </ul>
   <h3>Encryption at rest</h3>
   <ul>
@@ -594,7 +594,7 @@
     <tr><td>Data types</td><td>Complex: strings, lists, sets, sorted sets, hashes, and more</td><td>Simple</td></tr>
     <tr><td>Replication and automatic failover</td><td>Yes</td><td>No</td></tr>
     <tr><td>Backup and restore</td><td>Yes</td><td>Serverless caches only</td></tr>
-    <tr><td>Pub/sub</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Pub/sub (publish/subscribe: clients publish messages to a channel, and every client that subscribes to the channel receives them)</td><td>Yes</td><td>No</td></tr>
     <tr><td>Multi-threaded (uses all CPU cores of a node)</td><td>No</td><td>Yes</td></tr>
     <tr><td>Choose when</td><td>You need data structures, replication, high availability, or backups</td><td>You need the simplest model, large multi-threaded nodes, and scale out and in</td></tr>
   </table>
@@ -602,7 +602,7 @@
   <ul>
     <li>Node-based clusters run in a VPC. A Lambda function needs VPC access and a security group rule to reach the cluster.</li>
     <li>Encryption in transit: always on for serverless caches. For node-based clusters, set <code>TransitEncryptionEnabled</code>.</li>
-    <li>The Valkey or Redis OSS <strong>AUTH</strong> token works only with encryption in transit turned on. Role-based access control (RBAC) replaces AUTH, with users and access strings.</li>
+    <li>The Valkey or Redis OSS <strong>AUTH</strong> token works only with encryption in transit turned on. The client sends the token on each connection, and without TLS anyone who can see the network traffic can read it. AUTH gives every client with the token full access. Role-based access control (RBAC) replaces AUTH. It gives each user a password and an access string: a list of rules that sets which commands the user can run and which keys the user can use.</li>
     <li><strong>IAM authentication</strong> (Valkey 7.2 or later, Redis OSS 7.0 or later): needs TLS and an IAM policy with <code>elasticache:Connect</code>. The token is valid for 15 minutes. The connection closes after 12 hours unless it authenticates again.</li>
   </ul>
   <h3>MemoryDB</h3>
@@ -610,7 +610,7 @@
     <li>MemoryDB is a durable, in-memory <strong>primary database</strong>, compatible with Valkey and Redis OSS.</li>
     <li>It stores every write in a Multi-AZ transactional log before it returns success to the client.</li>
     <li>Performance: microsecond reads and single-digit millisecond writes.</li>
-    <li>Reads from primary nodes are strongly consistent. Reads from replica nodes are eventually consistent.</li>
+    <li>Reads from primary nodes are strongly consistent. Reads from replica nodes are eventually consistent, because replicas receive writes asynchronously.</li>
     <li>MemoryDB uses access control lists (ACLs) for user authentication.</li>
   </ul>
   <h3>ElastiCache compared with MemoryDB</h3>
@@ -629,7 +629,7 @@
       <li>"Authenticate to the cache without a long-lived password" → ElastiCache IAM authentication.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SelectEngine.html">Comparing Valkey, Memcached, and Redis OSS</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/in-transit-encryption.html">ElastiCache in-transit encryption</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth.html">AUTH</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth-iam.html">IAM authentication (token and connection limits)</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/durability.html">ElastiCache durability (Valkey 9.0)</a>, <a href="https://docs.aws.amazon.com/memorydb/latest/devguide/what-is-memorydb.html">What is MemoryDB</a>, <a href="https://docs.aws.amazon.com/memorydb/latest/devguide/consistency.html">MemoryDB consistency</a>. Labs: <a href="../../../module-02-dynamodb-deep-dive/lab-10-elasticache-redis/README.md">Lab 2.10 ElastiCache Redis</a>, <a href="../../../module-02-dynamodb-deep-dive/lab-11-memorydb/README.md">Lab 2.11 MemoryDB</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SelectEngine.html">Comparing Valkey, Memcached, and Redis OSS</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/in-transit-encryption.html">ElastiCache in-transit encryption</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth.html">AUTH</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Clusters.RBAC.html">RBAC and access strings</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth-iam.html">IAM authentication (token and connection limits)</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/durability.html">ElastiCache durability (Valkey 9.0)</a>, <a href="https://docs.aws.amazon.com/memorydb/latest/devguide/what-is-memorydb.html">What is MemoryDB</a>, <a href="https://docs.aws.amazon.com/memorydb/latest/devguide/consistency.html">MemoryDB consistency</a>. Labs: <a href="../../../module-02-dynamodb-deep-dive/lab-10-elasticache-redis/README.md">Lab 2.10 ElastiCache Redis</a>, <a href="../../../module-02-dynamodb-deep-dive/lab-11-memorydb/README.md">Lab 2.11 MemoryDB</a>.</p>
 </section>
 
 </main>
