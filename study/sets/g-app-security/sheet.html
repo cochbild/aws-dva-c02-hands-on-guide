@@ -166,7 +166,7 @@
   <h2>Application-level authorization</h2>
   <h3>REST API Cognito authorizer and scopes</h3>
   <ul>
-    <li>No authorization scopes on the method: API Gateway treats the token as an <strong>ID token</strong>. API Gateway then checks <code>aud</code> and the identity claims, not scopes.</li>
+    <li>No authorization scopes on the method: API Gateway treats the token as an <strong>ID token</strong>. API Gateway then verifies the claimed identity against the user pool, not scopes.</li>
     <li>Authorization scopes on the method: API Gateway treats the token as an <strong>access token</strong>. The call succeeds if any method scope matches a scope in the token. Otherwise the result is <code>401 Unauthorized</code>.</li>
     <li>The optional token validation regex checks the <code>aud</code> claim. Access tokens have no <code>aud</code> unless the token is bound to a resource server, so this regex rejects them.</li>
     <li>After the authorizer validates the token, the backend can read its claims. The backend can trust these values because API Gateway verified the token. In a mapping template, use <code>$context.authorizer.claims.sub</code>. For a claim name with a colon, use <code>$context.authorizer.claims['custom:role']</code>.</li>
