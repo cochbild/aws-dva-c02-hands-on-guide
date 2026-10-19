@@ -41,31 +41,38 @@
   <table>
     <tr><th>Section</th><th>Purpose</th></tr>
     <tr><td><code>AWSTemplateFormatVersion</code>, <code>Description</code></td><td>Format version and a text description (maximum 1,024 bytes).</td></tr>
-    <tr><td><code>Metadata</code></td><td>Extra information about the template. CloudFormation does not change or mask it.</td></tr>
+    <tr><td><code>Metadata</code></td><td>Extra information about the template, for example the parameter groups that the console shows (<code>AWS::CloudFormation::Interface</code>). CloudFormation does not change or mask it, so do not put secrets in it.</td></tr>
     <tr><td><code>Parameters</code></td><td>Input values at stack create or update.</td></tr>
-    <tr><td><code>Rules</code></td><td>Validate a parameter or a combination of parameters.</td></tr>
+    <tr><td><code>Rules</code></td><td>Validate a parameter or a combination of parameters, for example "if <code>UseSSL</code> is Yes, the certificate ARN must not be empty". CloudFormation checks the rules before it creates or updates any resource. If an assertion is false, the operation stops and shows the <code>AssertDescription</code> text.</td></tr>
     <tr><td><code>Mappings</code></td><td>Lookup tables. Read them with <code>Fn::FindInMap</code>.</td></tr>
     <tr><td><code>Conditions</code></td><td>Decide if a resource or output is created, or which property value to use.</td></tr>
-    <tr><td><code>Transform</code></td><td>Macros. <code>AWS::Serverless-2016-10-31</code> (SAM) and <code>AWS::Include</code>.</td></tr>
-    <tr><td><code>Resources</code></td><td><strong>The only required section.</strong> Each resource has a logical ID, a type, and properties.</td></tr>
+    <tr><td><code>Transform</code></td><td>Names the macros to run. A macro rewrites the template before CloudFormation creates resources from it. <code>AWS::Serverless-2016-10-31</code> (SAM) expands short SAM resources into full CloudFormation resources. <code>AWS::Include</code> inserts a template snippet that is stored in S3.</td></tr>
+    <tr><td><code>Resources</code></td><td><strong>The only required section.</strong> Each resource has a logical ID, a type, and properties. The logical ID is the name of the resource inside the template (for example <code>OrdersTable</code>). The physical ID is the real name or ID that AWS gives the resource (for example <code>prod-OrdersTable-1A2B3C</code>).</td></tr>
     <tr><td><code>Outputs</code></td><td>Values that the stack returns. Can be exported to other stacks.</td></tr>
   </table>
   <h3>Parameters</h3>
   <ul>
     <li>Basic types: <code>String</code>, <code>Number</code>, <code>List&lt;Number&gt;</code>, <code>CommaDelimitedList</code>.</li>
-    <li>AWS-specific types make the user pick an existing value in the account and Region. Examples: <code>AWS::EC2::VPC::Id</code>, <code>AWS::EC2::KeyPair::KeyName</code>, <code>List&lt;AWS::EC2::Subnet::Id&gt;</code>. The console shows a list of existing values.</li>
-    <li>Systems Manager parameter types: <code>AWS::SSM::Parameter::Value&lt;String&gt;</code> or <code>AWS::SSM::Parameter::Value&lt;AWS::EC2::Image::Id&gt;</code>. The user gives a Parameter Store key. CloudFormation reads the latest value at each create or update.</li>
-    <li>CloudFormation does not support a <code>SecureString</code> Parameter Store type as a template parameter type. Use a dynamic reference for secrets.</li>
-    <li>Constraints: <code>AllowedValues</code>, <code>AllowedPattern</code>, <code>MinLength</code>, <code>MaxLength</code>, <code>MinValue</code>, <code>MaxValue</code>, <code>ConstraintDescription</code>.</li>
+    <li>AWS-specific types make the user pick an existing value in the account and Region. Examples: <code>AWS::EC2::VPC::Id</code>, <code>AWS::EC2::KeyPair::KeyName</code>, <code>List&lt;AWS::EC2::Subnet::Id&gt;</code>. The console shows a list of existing values. A value that does not exist in the account and Region fails validation, so a typo does not reach resource creation.</li>
+    <li>Systems Manager parameter types: <code>AWS::SSM::Parameter::Value&lt;String&gt;</code> or <code>AWS::SSM::Parameter::Value&lt;AWS::EC2::Image::Id&gt;</code>. The user gives a Parameter Store key (a name, for example <code>/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2</code>), not the value. CloudFormation reads the latest value of that key at each create or update. Use this type for a value that changes outside the template, such as the newest AMI ID.</li>
+    <li>CloudFormation does not support a <code>SecureString</code> Parameter Store type as a template parameter type. Use a dynamic reference for secrets (see the next topic).</li>
+    <li>Constraints: <code>AllowedValues</code>, <code>AllowedPattern</code> (a regular expression), <code>MinLength</code>, <code>MaxLength</code>, <code>MinValue</code>, <code>MaxValue</code>. CloudFormation rejects a value that breaks a constraint. <code>ConstraintDescription</code> is the error text that the user then sees, for example "must contain only letters and numbers".</li>
     <li><code>NoEcho: true</code> masks the value as asterisks in describe calls and stack events. It does <strong>not</strong> mask values in the <code>Metadata</code> section, the <code>Outputs</code> section, or a resource <code>Metadata</code> attribute.</li>
   </ul>
   <h3>Pseudo parameters</h3>
-  <p>Use them with <code>Ref</code> or <code>Fn::Sub</code>. You do not declare them: <code>AWS::AccountId</code>, <code>AWS::Region</code>, <code>AWS::StackName</code>, <code>AWS::StackId</code>, <code>AWS::Partition</code>, <code>AWS::URLSuffix</code>, <code>AWS::NotificationARNs</code>, <code>AWS::NoValue</code>.</p>
+  <p>Pseudo parameters are built-in values that CloudFormation supplies. You do not declare them. Use them with <code>Ref</code> or <code>Fn::Sub</code> so that one template works in any account and Region without hard-coded values: <code>AWS::AccountId</code>, <code>AWS::Region</code>, <code>AWS::StackName</code>, <code>AWS::StackId</code>, <code>AWS::Partition</code>, <code>AWS::URLSuffix</code>, <code>AWS::NotificationARNs</code>, <code>AWS::NoValue</code>.</p>
+  <ul>
+    <li><code>AWS::NoValue</code>: when <code>Fn::If</code> returns it, CloudFormation removes that property from the resource, as if you did not write it.</li>
+    <li><code>AWS::Partition</code>: the partition segment of an ARN (<code>arn:aws:...</code>). It is <code>aws</code> in standard Regions, <code>aws-cn</code> in China, and <code>aws-us-gov</code> in GovCloud. Use it to build ARNs that work in every partition.</li>
+    <li><code>AWS::URLSuffix</code>: the domain suffix, usually <code>amazonaws.com</code>.</li>
+  </ul>
   <h3>Capabilities</h3>
   <ul>
+    <li>A capability is an explicit acknowledgment that you pass with the create or update call (<code>--capabilities</code>). It confirms that you know the template can do something sensitive, such as change IAM permissions in the account.</li>
     <li>A template with IAM resources needs <code>CAPABILITY_IAM</code> or <code>CAPABILITY_NAMED_IAM</code>. Without one, CloudFormation returns <code>InsufficientCapabilities</code>.</li>
-    <li>IAM resources with custom names (for example <code>RoleName</code>) need <code>CAPABILITY_NAMED_IAM</code>.</li>
-    <li><code>create-stack</code> or <code>update-stack</code> directly from a template with a macro (SAM, <code>AWS::Include</code>) needs <code>CAPABILITY_AUTO_EXPAND</code>. Change sets do not need it, so <code>aws cloudformation deploy</code> and <code>sam deploy</code> need it only for a template with macros and nested stacks.</li>
+    <li>IAM resources with custom names (for example <code>RoleName</code>) need <code>CAPABILITY_NAMED_IAM</code>. <code>CAPABILITY_IAM</code> is not enough for them.</li>
+    <li>A macro (SAM, <code>AWS::Include</code>) changes the template while CloudFormation processes it. When you call <code>create-stack</code> or <code>update-stack</code> directly on such a template, pass <code>CAPABILITY_AUTO_EXPAND</code> to accept those changes without review.</li>
+    <li>A change set does not use <code>CAPABILITY_AUTO_EXPAND</code>, because you can review the processed template before you run it. <code>aws cloudformation deploy</code> and <code>sam deploy</code> use change sets. They still need it for a template that has macros and nested stacks, for example a SAM template with a nested application (<code>AWS::Serverless::Application</code>).</li>
   </ul>
   <h3>Numbers to memorize</h3>
   <table>
@@ -79,13 +86,13 @@
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Users must choose an existing VPC, catch typos at create time" → AWS-specific parameter type <code>AWS::EC2::VPC::Id</code>.</li>
-      <li>"Always use the latest AMI in every Region, no template edits" → <code>AWS::SSM::Parameter::Value&lt;AWS::EC2::Image::Id&gt;</code> with a public parameter.</li>
+      <li>"Users must choose an existing VPC, catch typos at create time" → AWS-specific parameter type <code>AWS::EC2::VPC::Id</code>, because CloudFormation checks that the VPC exists before it creates resources.</li>
+      <li>"Always use the latest AMI in every Region, no template edits" → <code>AWS::SSM::Parameter::Value&lt;AWS::EC2::Image::Id&gt;</code> with a public parameter. AWS updates the public parameter in each Region when it releases a new AMI, and CloudFormation reads it at each create or update.</li>
       <li>"Password parameter shows in an output" → <code>NoEcho</code> does not mask <code>Outputs</code>.</li>
-      <li>"InsufficientCapabilities, the role has a fixed name" → <code>CAPABILITY_NAMED_IAM</code>.</li>
+      <li>"InsufficientCapabilities, the role has a fixed name" → <code>CAPABILITY_NAMED_IAM</code>, because <code>CAPABILITY_IAM</code> does not cover IAM resources with custom names.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-anatomy.html">Template sections</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/parameters-section-structure.html">Parameters (NoEcho)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cloudformation-supplied-parameter-types.html">AWS-specific and SSM parameter types</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/pseudo-parameter-reference.html">Pseudo parameters</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_CreateStack.html">CreateStack (capabilities)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_CreateChangeSet.html">CreateChangeSet (CAPABILITY_AUTO_EXPAND has no effect on change sets)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cloudformation-limits.html">CloudFormation quotas</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-anatomy.html">Template sections</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/rules-section-structure.html">Rules</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/parameters-section-structure.html">Parameters (NoEcho)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cloudformation-supplied-parameter-types.html">AWS-specific and SSM parameter types</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/pseudo-parameter-reference.html">Pseudo parameters</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_CreateStack.html">CreateStack (capabilities)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_CreateChangeSet.html">CreateChangeSet (CAPABILITY_AUTO_EXPAND has no effect on change sets)</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-cli-command-reference-sam-deploy.html">sam deploy (CAPABILITY_AUTO_EXPAND for nested applications)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cloudformation-limits.html">CloudFormation quotas</a>.</p>
 </section>
 
 <section id="iac-cfn-intrinsics">
@@ -93,14 +100,14 @@
   <h3>Functions</h3>
   <table>
     <tr><th>Function</th><th>Use</th></tr>
-    <tr><td><code>Ref</code></td><td>Value of a parameter, or the default identifier of a resource.</td></tr>
+    <tr><td><code>Ref</code></td><td>Value of a parameter. For a resource, its default identifier, which differs by type (see "What Ref returns" below).</td></tr>
     <tr><td><code>Fn::GetAtt</code></td><td>A named attribute of a resource, for example <code>Arn</code>.</td></tr>
     <tr><td><code>Fn::Sub</code></td><td>Put values into a string: <code>!Sub 'arn:aws:s3:::${Bucket}/*'</code>. <code>${Param}</code> works like <code>Ref</code>. <code>${Res.Attr}</code> works like <code>Fn::GetAtt</code>. <code>${!Literal}</code> writes <code>${Literal}</code>.</td></tr>
     <tr><td><code>Fn::Join</code>, <code>Fn::Split</code>, <code>Fn::Select</code></td><td>Join a list into a string, split a string into a list, pick one item by index.</td></tr>
     <tr><td><code>Fn::FindInMap</code></td><td>Read a value from <code>Mappings</code>.</td></tr>
-    <tr><td><code>Fn::If</code>, <code>Fn::Equals</code>, <code>Fn::And</code>, <code>Fn::Or</code>, <code>Fn::Not</code></td><td>Condition functions.</td></tr>
+    <tr><td><code>Fn::If</code>, <code>Fn::Equals</code>, <code>Fn::And</code>, <code>Fn::Or</code>, <code>Fn::Not</code></td><td>Condition functions. <code>Fn::Equals</code>, <code>Fn::And</code>, <code>Fn::Or</code>, and <code>Fn::Not</code> define true-or-false conditions in the <code>Conditions</code> section. <code>Fn::If</code> returns one of two values, based on a condition, for example in a resource property.</td></tr>
     <tr><td><code>Fn::ImportValue</code></td><td>Read an export from another stack.</td></tr>
-    <tr><td><code>Fn::GetAZs</code>, <code>Fn::Base64</code></td><td>List the Availability Zones of a Region. Encode user data.</td></tr>
+    <tr><td><code>Fn::GetAZs</code>, <code>Fn::Base64</code></td><td><code>Fn::GetAZs</code> lists the Availability Zones of a Region. <code>Fn::Base64</code> encodes a string in Base64, the format that EC2 <code>UserData</code> requires.</td></tr>
   </table>
   <h3>What Ref returns</h3>
   <table>
@@ -112,11 +119,13 @@
     <tr><td><code>AWS::DynamoDB::Table</code></td><td>Table name</td><td><code>Arn</code>, <code>StreamArn</code></td></tr>
     <tr><td><code>AWS::IAM::Role</code></td><td>Role name</td><td><code>Arn</code>, <code>RoleId</code></td></tr>
   </table>
+  <p>An IAM policy <code>Resource</code> needs an ARN. <code>Ref</code> returns an ARN only for some types (here, the SNS topic). For the others, use <code>Fn::GetAtt</code> with <code>Arn</code> in policies.</p>
   <h3>Dynamic references</h3>
+  <p>A dynamic reference is a placeholder in a property value, in the form <code>{{resolve:...}}</code>. CloudFormation replaces it with the value stored in Parameter Store or Secrets Manager when it creates or updates the resource. The secret is then not in the template or in a parameter value.</p>
   <table>
     <tr><th>Pattern</th><th>Source</th><th>Notes</th></tr>
     <tr><td><code>{{resolve:ssm:name:version}}</code></td><td>Parameter Store <code>String</code> or <code>StringList</code></td><td>Version is optional. Without it, CloudFormation uses the latest version at create or update.</td></tr>
-    <tr><td><code>{{resolve:ssm-secure:name:version}}</code></td><td>Parameter Store <code>SecureString</code></td><td>Works only for a short list of properties, for example RDS <code>MasterUserPassword</code> and IAM user <code>LoginProfile</code> <code>Password</code>.</td></tr>
+    <tr><td><code>{{resolve:ssm-secure:name:version}}</code></td><td>Parameter Store <code>SecureString</code></td><td>Works only for a short list of properties, for example RDS <code>MasterUserPassword</code> and IAM user <code>LoginProfile</code> <code>Password</code>. For a secret in any other property, use a Secrets Manager reference.</td></tr>
     <tr><td><code>{{resolve:secretsmanager:secret-id:SecretString:json-key:version-stage:version-id}}</code></td><td>Secrets Manager</td><td>Works in all resource properties. Default version is <code>AWSCURRENT</code>. Use the full ARN for a secret in another account.</td></tr>
   </table>
   <ul>
@@ -129,9 +138,9 @@
     <h3>Exam signals</h3>
     <ul>
       <li>"Environment variable needs the queue URL, the policy needs the queue ARN" → <code>!Ref Queue</code> and <code>!GetAtt Queue.Arn</code>.</li>
-      <li>"Database password must not be in the template and must rotate automatically" → Secrets Manager dynamic reference.</li>
-      <li>"Remove a property in dev, set it in prod" → <code>Fn::If</code> with <code>AWS::NoValue</code>.</li>
-      <li>"Secret changed, but the resource still has the old value" → update the resource in the stack.</li>
+      <li>"Database password must not be in the template and must rotate automatically" → Secrets Manager dynamic reference. The template holds only the reference, and Secrets Manager can rotate the secret. Parameter Store has no automatic rotation.</li>
+      <li>"Remove a property in dev, set it in prod" → <code>Fn::If</code> with <code>AWS::NoValue</code>. In dev, <code>Fn::If</code> returns <code>AWS::NoValue</code>, and CloudFormation removes the property.</li>
+      <li>"Secret changed, but the resource still has the old value" → update the resource in the stack, because CloudFormation reads the secret only when it creates or updates that resource.</li>
     </ul>
   </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/intrinsic-function-reference-sub.html">Fn::Sub</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/dynamic-references.html">Dynamic references</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/dynamic-references-ssm-secure-strings.html">ssm-secure (supported properties)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/dynamic-references-secretsmanager.html">secretsmanager</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-sqs-queue.html">SQS queue return values</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-sns-topic.html">SNS topic return values</a>.</p>
@@ -144,34 +153,42 @@
     <tr><th>Item</th><th>Export + <code>Fn::ImportValue</code></th><th>Nested stacks</th><th>StackSets</th></tr>
     <tr><td>Purpose</td><td>Share values between independent stacks</td><td>Reuse a template as a component of one parent stack</td><td>Deploy one template to many accounts and Regions</td></tr>
     <tr><td>Scope</td><td>Same account and same Region</td><td>Inside one stack hierarchy</td><td>Many accounts and Regions</td></tr>
-    <tr><td>How</td><td><code>Outputs</code> with <code>Export: Name</code>. The consumer uses <code>!ImportValue name</code>.</td><td><code>AWS::CloudFormation::Stack</code> with <code>TemplateURL</code> (S3). Parent reads <code>!GetAtt Child.Outputs.Name</code>.</td><td>A stack set in an administrator account creates stack instances in target accounts.</td></tr>
+    <tr><td>How</td><td><code>Outputs</code> with <code>Export: Name</code>. The consumer uses <code>!ImportValue name</code>.</td><td><code>AWS::CloudFormation::Stack</code> with <code>TemplateURL</code> (S3). Parent reads <code>!GetAtt Child.Outputs.Name</code>.</td><td>A stack set in an administrator account creates stack instances in target accounts. A stack instance is the reference to one stack in one target account and Region.</td></tr>
   </table>
+  <p>Choose exports when separate teams own separate stacks and one stack must use a value from another. Choose nested stacks when one stack must include a reusable component and create, update, and delete it together with the parent. Choose StackSets when the same resources must exist in many accounts or Regions.</p>
   <h3>Export rules</h3>
   <ul>
-    <li>Export names must be unique in each account and Region.</li>
-    <li>After another stack imports a value, you cannot delete the exporting stack. You also cannot change or remove that output. Remove all imports first.</li>
-    <li>The export <code>Name</code> and <code>Fn::ImportValue</code> cannot use <code>Ref</code> or <code>GetAtt</code> to a resource.</li>
+    <li>Export names must be unique in each account and Region. A second stack that exports the same name fails to create or update.</li>
+    <li>After another stack imports a value, you cannot delete the exporting stack. You also cannot change or remove that output. Remove all imports first. This rule stops a change that breaks the stacks that use the value.</li>
+    <li>The export <code>Name</code> and <code>Fn::ImportValue</code> cannot use <code>Ref</code> or <code>GetAtt</code> to a resource. Build the name from parameters or pseudo parameters instead, for example <code>!Sub '${AWS::StackName}-VpcId'</code>.</li>
     <li><code>aws cloudformation list-imports</code> shows the stacks that use an export.</li>
   </ul>
   <h3>Nested stack rules</h3>
   <ul>
-    <li>The top stack is the root stack. Start updates from the root stack. CloudFormation updates only the nested stacks with changes.</li>
-    <li>Termination protection is set on the root stack only.</li>
+    <li>The top stack is the root stack. Start updates from the root stack, not from a nested stack. The parent manages each nested stack as one of its resources. CloudFormation updates only the nested stacks with changes.</li>
+    <li>Termination protection is set on the root stack only. Nested stacks inherit it from the root stack. You cannot set it on a nested stack directly.</li>
   </ul>
   <h3>StackSets</h3>
   <ul>
-    <li><strong>Self-managed permissions</strong>: you create <code>AWSCloudFormationStackSetAdministrationRole</code> in the administrator account and <code>AWSCloudFormationStackSetExecutionRole</code> in each target account.</li>
-    <li><strong>Service-managed permissions</strong>: use AWS Organizations. StackSets creates the roles. You can turn on automatic deployment to accounts that join an organizational unit later.</li>
-    <li>Operation options: maximum concurrent accounts, failure tolerance (for each Region), Region order, sequential or parallel Regions.</li>
+    <li><strong>Self-managed permissions</strong>: you create <code>AWSCloudFormationStackSetAdministrationRole</code> in the administrator account and <code>AWSCloudFormationStackSetExecutionRole</code> in each target account. Choose it for accounts that are not in your AWS Organizations organization.</li>
+    <li><strong>Service-managed permissions</strong>: use AWS Organizations. StackSets creates the roles. You can turn on automatic deployment to accounts that join an organizational unit (OU) later.</li>
+    <li>Operation options:
+      <ul>
+        <li>Maximum concurrent accounts: the number or percentage of accounts that get the operation at the same time.</li>
+        <li>Failure tolerance: the number or percentage of stack failures allowed in each Region. One more failure stops the operation.</li>
+        <li>Region order: the order in which the Regions get the operation.</li>
+        <li>Region concurrency: sequential (one Region at a time, the default) or parallel (all Regions at the same time).</li>
+      </ul>
+    </li>
     <li>A template update goes to all stack instances. You cannot update the template for only some stacks.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Many teams' stacks use the shared VPC, protect it from deletion while in use" → export and import.</li>
+      <li>"Many teams' stacks use the shared VPC, protect it from deletion while in use" → export and import, because CloudFormation blocks deletion of a stack while another stack imports its export.</li>
       <li>"Update fails: export cannot be updated because it is in use" → remove the imports first.</li>
-      <li>"Same baseline in every account of the organization, also new accounts" → StackSets, service-managed, automatic deployment.</li>
-      <li>"Reuse a standard component in many templates" → nested stack.</li>
+      <li>"Same baseline in every account of the organization, also new accounts" → StackSets, service-managed, automatic deployment. Only service-managed permissions can deploy automatically to accounts that join the OU later.</li>
+      <li>"Reuse a standard component in many templates" → nested stack. Each template points to the one component template in S3 instead of a copy of its resources.</li>
     </ul>
   </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-exports.html">Exports</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html">Nested stacks</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-concepts.html">StackSets concepts</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-prereqs-self-managed.html">Self-managed roles</a>.</p>
@@ -184,50 +201,51 @@
     <tr><th>Behavior</th><th>Effect</th></tr>
     <tr><td>No interruption</td><td>Same physical ID. The resource keeps working.</td></tr>
     <tr><td>Some interruption</td><td>Same physical ID. The resource can stop for a short time (for example, an EC2 instance restart).</td></tr>
-    <tr><td>Replacement</td><td>CloudFormation creates a new resource with a new physical ID, moves references, then deletes the old resource.</td></tr>
+    <tr><td>Replacement</td><td>CloudFormation usually creates a new resource with a new physical ID first. Then it points the resources that refer to it to the new resource, and deletes the old resource. A replaced database or table is a new, empty resource unless you restore the data.</td></tr>
   </table>
   <ul>
     <li>Each resource property page in the template reference shows its update behavior.</li>
-    <li>If you set a custom name (for example <code>TableName</code> or <code>FunctionName</code>), updates that need replacement fail. Change the name to replace the resource.</li>
+    <li>If you set a custom name (for example <code>TableName</code> or <code>FunctionName</code>), updates that need replacement fail. CloudFormation creates the new resource before it deletes the old one, and the old resource still has that name. Change the name to replace the resource.</li>
   </ul>
   <h3>Change sets</h3>
   <ul>
     <li>A change set shows what CloudFormation will add, modify, or remove, and if it will replace a resource. Creating it does not change the stack.</li>
-    <li>A change set does not guarantee that the update succeeds.</li>
-    <li>After you run one change set, CloudFormation deletes the other change sets of that stack.</li>
+    <li>A change set does not guarantee that the update succeeds. CloudFormation checks common causes when it creates the change set, but some failures occur only at run time, for example in custom resource code.</li>
+    <li>After you run one change set, CloudFormation deletes the other change sets of that stack, because they describe changes to the old stack state.</li>
   </ul>
   <h3>Protection</h3>
   <table>
     <tr><th>Feature</th><th>Protects against</th><th>Facts</th></tr>
-    <tr><td>Stack policy</td><td>Updates to listed resources</td><td>After you set it, all resources are protected by default. Add explicit <code>Allow</code> statements. Actions: <code>Update:Modify</code>, <code>Update:Replace</code>, <code>Update:Delete</code>, <code>Update:*</code>. <code>Principal</code> must be <code>*</code>. You cannot delete it, only change it. Use a temporary override policy during one update.</td></tr>
-    <tr><td>Termination protection</td><td>Deletion of the stack</td><td>Off by default. Set on the root stack only.</td></tr>
+    <tr><td>Stack policy</td><td>Updates to listed resources</td><td>A JSON document that says which update actions are allowed on which resources (by logical ID or type). It applies to everyone who updates the stack. After you set it, it denies updates to all resources by default, so add explicit <code>Allow</code> statements. An explicit <code>Deny</code> wins over an <code>Allow</code>. Actions: <code>Update:Modify</code>, <code>Update:Replace</code>, <code>Update:Delete</code>, <code>Update:*</code>. <code>Principal</code> must be <code>*</code>. You cannot delete it, only change it. To change a protected resource one time, pass a temporary override policy with that one update.</td></tr>
+    <tr><td>Termination protection</td><td>Deletion of the stack</td><td>Off by default. Set on the root stack only. Nested stacks inherit it from the root stack. You cannot set it on a nested stack directly. While it is on, a delete request fails.</td></tr>
     <tr><td><code>DeletionPolicy</code></td><td>Loss of one resource when it is deleted</td><td>See the resource attributes topic.</td></tr>
   </table>
   <h3>Rollback and failures</h3>
   <ul>
-    <li>By default, a failed create or update rolls back. For create, <code>OnFailure</code> can be <code>ROLLBACK</code> (default), <code>DO_NOTHING</code>, or <code>DELETE</code>. Disable rollback to keep resources for inspection.</li>
-    <li>Rollback triggers: CloudFormation watches up to 5 CloudWatch alarms during the operation and for a monitoring time of 0 to 180 minutes. An alarm in <code>ALARM</code> state rolls back the operation.</li>
-    <li><code>UPDATE_ROLLBACK_FAILED</code>: fix the cause (for example, recreate a resource that someone deleted outside CloudFormation). Then run <code>ContinueUpdateRollback</code>. You can skip resources with <code>ResourcesToSkip</code>.</li>
-    <li><code>DELETE_FAILED</code> (for example, a bucket with objects): delete again with <code>RetainResources</code> for that resource.</li>
-    <li>To find the cause, read the stack events. Find the <strong>first</strong> failed event and its status reason. Later events are often rollback noise.</li>
+    <li>By default, a failed create or update rolls back: CloudFormation returns the stack to its last working state and deletes the resources that it created. For create, <code>OnFailure</code> can be <code>ROLLBACK</code> (default), <code>DO_NOTHING</code>, or <code>DELETE</code>. <code>DO_NOTHING</code> (or <code>--disable-rollback</code>) keeps the created resources so that you can inspect them. <code>DELETE</code> deletes the whole stack.</li>
+    <li>Rollback triggers: CloudFormation watches up to 5 CloudWatch alarms during the operation. It also watches them for a monitoring time of 0 to 180 minutes after all resources are deployed. An alarm in <code>ALARM</code> state rolls back the operation. Use them to undo a release that deploys correctly but makes the application fail.</li>
+    <li><code>UPDATE_ROLLBACK_FAILED</code> means that the rollback itself failed. You cannot update the stack in this state. Fix the cause (for example, recreate a resource that someone deleted outside CloudFormation). Then run <code>ContinueUpdateRollback</code>. You can skip resources that cannot roll back with <code>ResourcesToSkip</code>.</li>
+    <li><code>DELETE_FAILED</code> (for example, CloudFormation cannot delete a bucket with objects): delete the stack again and list that resource in <code>RetainResources</code>. CloudFormation then deletes the stack and keeps that resource.</li>
+    <li>To find the cause, read the stack events. Find the <strong>first</strong> failed event and its status reason. Later failures are usually effects of the first failure or of the rollback.</li>
     <li>CloudFormation does not see a change to only <code>DeletionPolicy</code>, <code>UpdatePolicy</code>, conditions, or outputs as an update. Change a resource <code>Metadata</code> attribute to force one.</li>
   </ul>
   <h3>Drift detection</h3>
   <ul>
+    <li>Drift is a difference between the actual configuration of a resource and its definition in the template, for example after someone changes the resource in the console.</li>
     <li>Drift detection compares the actual resource configuration with the template and parameter values. It does not change resources.</li>
     <li>Resource status: <code>IN_SYNC</code>, <code>MODIFIED</code>, <code>DELETED</code>, <code>NOT_CHECKED</code> (type not supported).</li>
-    <li>It checks only properties that you set explicitly, not default values. It does not check nested stacks. Run it on each nested stack.</li>
+    <li>It checks only properties that you set explicitly, not default values. A console change to a property that the template does not set is not reported. It does not check nested stacks. Run it on each nested stack.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"See if the update replaces the database before you apply it" → change set.</li>
-      <li>"Allow all updates except replacement of the database" → stack policy with a <code>Deny</code> on <code>Update:Replace</code> for that logical ID.</li>
-      <li>"Someone changed the security group in the console, find what differs from the template" → drift detection.</li>
-      <li>"Stack is in UPDATE_ROLLBACK_FAILED" → fix the resource, then continue update rollback.</li>
+      <li>"See if the update replaces the database before you apply it" → change set. It shows a Replacement value for each changed resource and does not change the stack.</li>
+      <li>"Allow all updates except replacement of the database" → stack policy with an <code>Allow</code> on <code>Update:*</code> and a <code>Deny</code> on <code>Update:Replace</code> for that logical ID. The <code>Deny</code> wins for that one resource.</li>
+      <li>"Someone changed the security group in the console, find what differs from the template" → drift detection, because only drift detection reads changes made outside CloudFormation.</li>
+      <li>"Stack is in UPDATE_ROLLBACK_FAILED" → fix the resource, then continue update rollback. The stack cannot update until the rollback completes.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-update-behaviors.html">Update behaviors</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-changesets.html">Change sets</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/protect-stack-resources.html">Stack policies</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-protect-stacks.html">Termination protection</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-rollback-triggers.html">Rollback triggers (0–180 minutes, 5 alarms)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/troubleshooting.html">Troubleshooting</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html">Drift detection</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-update-behaviors.html">Update behaviors</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-changesets.html">Change sets</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/protect-stack-resources.html">Stack policies</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-protect-stacks.html">Termination protection</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-rollback-triggers.html">Rollback triggers (0–180 minutes, 5 alarms)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stack-failure-options.html">Stack failure options (disable rollback)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/troubleshooting.html">Troubleshooting</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html">Drift detection</a>.</p>
 </section>
 
 <section id="iac-cfn-resource-policies">
@@ -238,17 +256,18 @@
     <tr><td><code>DeletionPolicy</code></td><td>The stack is deleted, or you remove the resource from the template</td><td><code>Delete</code> (default), <code>Retain</code>, <code>Snapshot</code></td></tr>
     <tr><td><code>UpdateReplacePolicy</code></td><td>An update <strong>replaces</strong> the resource (the old physical resource)</td><td><code>Delete</code> (default), <code>Retain</code>, <code>Snapshot</code></td></tr>
   </table>
+  <p><code>Retain</code> keeps the resource and its data, but the stack no longer manages it. <code>Snapshot</code> takes a backup snapshot and then deletes the resource. Choose <code>Retain</code> to keep using the resource. Choose <code>Snapshot</code> when a backup is enough and you do not want to pay for the running resource.</p>
   <ul>
-    <li><code>DeletionPolicy</code> default exception: <code>AWS::RDS::DBCluster</code>, and <code>AWS::RDS::DBInstance</code> without <code>DBClusterIdentifier</code>, default to <code>Snapshot</code>. <code>UpdateReplacePolicy</code> has no such exception: its default is always <code>Delete</code>.</li>
+    <li><code>DeletionPolicy</code> default exception: <code>AWS::RDS::DBCluster</code>, and <code>AWS::RDS::DBInstance</code> without <code>DBClusterIdentifier</code>, default to <code>Snapshot</code>. <code>UpdateReplacePolicy</code> has no such exception: its default is always <code>Delete</code>. An instance inside a cluster (for example an Aurora instance) has no snapshot default of its own, because the cluster stores the data and the cluster snapshot covers it.</li>
     <li><code>Snapshot</code> works for EBS volumes, RDS instances and clusters, ElastiCache clusters and replication groups, Neptune clusters, and Redshift clusters. <code>DeletionPolicy: Snapshot</code> also works for DocumentDB clusters, but the <code>UpdateReplacePolicy</code> list does not include DocumentDB. <code>Snapshot</code> does not work for S3 buckets or DynamoDB tables.</li>
     <li><code>Retain</code> works for every resource type. A retained resource still costs money.</li>
     <li>CloudFormation cannot delete an S3 bucket that contains objects.</li>
   </ul>
   <h3>Other attributes</h3>
   <ul>
-    <li><code>DependsOn</code>: create this resource after another resource. <code>Ref</code> and <code>GetAtt</code> already make an implicit dependency.</li>
+    <li><code>DependsOn</code>: create this resource after another resource. CloudFormation creates resources in parallel when it can. <code>Ref</code> and <code>GetAtt</code> already make an implicit dependency, so you need <code>DependsOn</code> only when the order matters but no reference exists. Examples: an EC2 instance with a public IP address must wait for the VPC gateway attachment. A resource that uses a role must wait for a separate <code>AWS::IAM::Policy</code> on that role, or it fails with insufficient permissions.</li>
     <li><code>Condition</code>: create the resource only when the condition is true.</li>
-    <li><code>CreationPolicy</code>: wait for success signals before <code>CREATE_COMPLETE</code>. Only for <code>AWS::EC2::Instance</code>, <code>AWS::AutoScaling::AutoScalingGroup</code>, <code>AWS::CloudFormation::WaitCondition</code>, and <code>AWS::AppStream::Fleet</code>.</li>
+    <li><code>CreationPolicy</code>: wait for success signals before <code>CREATE_COMPLETE</code>. Without it, CloudFormation marks an instance complete when EC2 creates it, not when the software on it is ready. Only for <code>AWS::EC2::Instance</code>, <code>AWS::AutoScaling::AutoScalingGroup</code>, <code>AWS::CloudFormation::WaitCondition</code>, and <code>AWS::AppStream::Fleet</code>.</li>
     <li><code>ResourceSignal</code>: <code>Count</code> (default 1) and <code>Timeout</code> in ISO 8601 format (default <code>PT5M</code>, maximum 12 hours). No signal in time: the resource fails and the stack rolls back.</li>
   </ul>
   <h3>Helper scripts (EC2)</h3>
@@ -262,23 +281,24 @@
   <p>The scripts are installed in <code>/opt/aws/bin</code> on Amazon Linux AMIs. They do not run by default. Call them from <code>UserData</code>. Logs: <code>/var/log/cfn-init.log</code> and <code>/var/log/cloud-init.log</code>.</p>
   <h3>Custom resources</h3>
   <ul>
-    <li>Type <code>Custom::MyName</code> or <code>AWS::CloudFormation::CustomResource</code>. The only required property is <code>ServiceToken</code>: a Lambda function ARN or an SNS topic ARN in the same Region.</li>
-    <li>CloudFormation sends <code>Create</code>, <code>Update</code>, and <code>Delete</code> requests. The request has a pre-signed S3 <code>ResponseURL</code>.</li>
+    <li>A custom resource runs your own code when the stack is created, updated, or deleted. Use it for a task that CloudFormation does not support, for example to look up a value or to call a third-party API.</li>
+    <li>Type <code>Custom::MyName</code> or <code>AWS::CloudFormation::CustomResource</code>. The only required property is <code>ServiceToken</code>: a Lambda function ARN or an SNS topic ARN in the same Region. The code behind it is the provider.</li>
+    <li>CloudFormation sends <code>Create</code>, <code>Update</code>, and <code>Delete</code> requests. The request has a <code>ResponseURL</code>: a pre-signed S3 URL, which lets the provider upload its result without AWS credentials.</li>
     <li>The provider must send <code>SUCCESS</code> or <code>FAILED</code> to the <code>ResponseURL</code>. If no response arrives, the stack waits for the timeout: 3,600 seconds (1 hour) by default. Set <code>ServiceTimeout</code> to fail sooner.</li>
-    <li>The <code>cfn-response</code> module is available only for inline code in the <code>ZipFile</code> property.</li>
-    <li>Return data (maximum 4,096 bytes). Read it with <code>Fn::GetAtt</code>.</li>
+    <li>The <code>cfn-response</code> module (a helper that sends the response) is available only for inline code in the <code>ZipFile</code> property. For code in a .zip file in S3, write your own code to send the response.</li>
+    <li>The provider can return data in the response (maximum 4,096 bytes). Other resources read it with <code>Fn::GetAtt</code>.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
       <li>"Keep the bucket and its data when the stack is deleted" → <code>DeletionPolicy: Retain</code>.</li>
-      <li>"Keep a backup of the old database when an update replaces it" → <code>UpdateReplacePolicy: Snapshot</code>.</li>
-      <li>"Stack is complete before the app on the instance is ready" → <code>CreationPolicy</code> with <code>cfn-signal</code>.</li>
-      <li>"Delete hangs for an hour on a custom resource" → the function did not send a response. Respond in every code path.</li>
+      <li>"Keep a backup of the old database when an update replaces it" → <code>UpdateReplacePolicy: Snapshot</code>, because <code>DeletionPolicy</code> does not apply to a replacement.</li>
+      <li>"Stack is complete before the app on the instance is ready" → <code>CreationPolicy</code> with <code>cfn-signal</code>. CloudFormation waits for the signal that the <code>UserData</code> script sends after the app starts.</li>
+      <li>"Delete hangs for an hour on a custom resource" → the function did not send a response, so CloudFormation waits for the 1-hour timeout. Respond in every code path.</li>
       <li>"Run logic that CloudFormation does not support" → Lambda-backed custom resource.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-attribute-deletionpolicy.html">DeletionPolicy</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-attribute-updatereplacepolicy.html">UpdateReplacePolicy</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-attribute-creationpolicy.html">CreationPolicy (PT5M default, 12 hours maximum)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/cfn-helper-scripts-reference.html">Helper scripts</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-custom-resources.html">Custom resources (3,600-second timeout)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html">cfn-response module</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-attribute-deletionpolicy.html">DeletionPolicy</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-attribute-updatereplacepolicy.html">UpdateReplacePolicy</a>, <a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Overview.html">Aurora DB clusters (cluster volume stores the data)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-attribute-dependson.html">DependsOn (when it is required)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-attribute-creationpolicy.html">CreationPolicy (PT5M default, 12 hours maximum)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/cfn-helper-scripts-reference.html">Helper scripts</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-custom-resources.html">Custom resources (3,600-second timeout)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html">cfn-response module</a>.</p>
 </section>
 
 <section id="iac-sam-template">
@@ -286,29 +306,30 @@
   <h3>Key facts</h3>
   <ul>
     <li><code>Transform: AWS::Serverless-2016-10-31</code> makes a template a SAM template. CloudFormation expands SAM resources into normal CloudFormation resources.</li>
-    <li>Common resource types: <code>AWS::Serverless::Function</code>, <code>Api</code> (REST API), <code>HttpApi</code>, <code>SimpleTable</code> (DynamoDB table with a single-attribute primary key), <code>LayerVersion</code>, <code>StateMachine</code>, <code>Application</code> (nested application), <code>Connector</code>, <code>GraphQLApi</code>.</li>
+    <li>Common resource types: <code>AWS::Serverless::Function</code>, <code>Api</code> (API Gateway REST API), <code>HttpApi</code> (API Gateway HTTP API), <code>SimpleTable</code> (DynamoDB table with a single-attribute primary key), <code>LayerVersion</code> (Lambda layer), <code>StateMachine</code> (Step Functions), <code>Application</code> (nested application: another SAM application deployed as a nested stack), <code>Connector</code> (permissions, see below), <code>GraphQLApi</code> (AppSync).</li>
     <li>You can mix SAM resources and normal CloudFormation resources in one template.</li>
-    <li>The <code>Events</code> property of a function adds a trigger: <code>Api</code>, <code>HttpApi</code>, <code>S3</code>, <code>SQS</code>, <code>SNS</code>, <code>DynamoDB</code>, <code>Kinesis</code>, <code>Schedule</code>, <code>EventBridgeRule</code>, and others. An <code>Api</code> event with no API resource makes SAM create an implicit REST API.</li>
-    <li>SAM creates an execution role for each function unless you give a <code>Role</code>.</li>
+    <li>The <code>Events</code> property of a function adds a trigger: <code>Api</code>, <code>HttpApi</code>, <code>S3</code>, <code>SQS</code>, <code>SNS</code>, <code>DynamoDB</code>, <code>Kinesis</code>, <code>Schedule</code>, <code>EventBridgeRule</code>, and others. SAM creates the trigger and the permissions that the trigger needs. An <code>Api</code> event that does not point to an API resource makes SAM create a REST API for you (an implicit API).</li>
+    <li>SAM creates an execution role for each function unless you give a <code>Role</code>. The role gets the permissions in the function <code>Policies</code> property.</li>
   </ul>
   <h3>Globals</h3>
   <ul>
     <li>The <code>Globals</code> section sets shared properties for <code>Function</code>, <code>Api</code>, <code>HttpApi</code>, <code>SimpleTable</code>, <code>StateMachine</code>, and a few other types.</li>
-    <li>Override rules: a primitive value in the resource <strong>replaces</strong> the global value. Maps (for example environment variables) are <strong>merged</strong>, and the resource key wins. Lists are <strong>added</strong>: global items come first.</li>
-    <li>A resource cannot remove a property that <code>Globals</code> sets.</li>
+    <li>Override rules: a primitive value (a single value such as a string or number, for example <code>Timeout</code>) in the resource <strong>replaces</strong> the global value. Maps (key-value sets, for example environment variables) are <strong>merged</strong>, and the resource key wins. Lists are <strong>added</strong>: global items come first.</li>
+    <li>A resource cannot remove a property that <code>Globals</code> sets. If one function must not have a property, do not put that property in <code>Globals</code>. Set it on each function that needs it.</li>
   </ul>
   <h3>Permissions</h3>
   <ul>
     <li><code>Policies</code> on a function accepts AWS managed policy names, inline policy documents, and <strong>policy templates</strong>.</li>
-    <li>Policy templates scope permissions to one resource. Examples: <code>DynamoDBCrudPolicy</code>, <code>DynamoDBReadPolicy</code>, <code>S3ReadPolicy</code>, <code>S3CrudPolicy</code>, <code>SQSPollerPolicy</code>, <code>SQSSendMessagePolicy</code>, <code>SNSPublishMessagePolicy</code>, <code>LambdaInvokePolicy</code>, <code>SSMParameterReadPolicy</code>, <code>AWSSecretsManagerGetSecretValuePolicy</code>, <code>KMSDecryptPolicy</code>, <code>StepFunctionsExecutionPolicy</code>, <code>EventBridgePutEventsPolicy</code>.</li>
+    <li>A policy template is a predefined IAM policy with placeholders. You give the resource name, and SAM writes a policy that allows only the needed actions on that one resource. You get least privilege without IAM JSON. Examples: <code>DynamoDBCrudPolicy</code>, <code>DynamoDBReadPolicy</code>, <code>S3ReadPolicy</code>, <code>S3CrudPolicy</code>, <code>SQSPollerPolicy</code>, <code>SQSSendMessagePolicy</code>, <code>SNSPublishMessagePolicy</code>, <code>LambdaInvokePolicy</code>, <code>SSMParameterReadPolicy</code>, <code>AWSSecretsManagerGetSecretValuePolicy</code>, <code>KMSDecryptPolicy</code>, <code>StepFunctionsExecutionPolicy</code>, <code>EventBridgePutEventsPolicy</code>.</li>
     <li>Syntax: <code>- DynamoDBCrudPolicy: { TableName: !Ref Table }</code>. A template with no placeholders still needs an empty object: <code>- CloudWatchPutMetricPolicy: {}</code>.</li>
-    <li><strong>Connectors</strong> (<code>AWS::Serverless::Connector</code>, or the <code>Connectors</code> attribute on the source resource) create least-privilege policies between a source and a destination. Permissions are <code>Read</code> and <code>Write</code>.</li>
+    <li><strong>Connectors</strong> (<code>AWS::Serverless::Connector</code>, or the <code>Connectors</code> attribute on the source resource) create least-privilege policies between a source and a destination. Permissions are <code>Read</code> (get data from the destination) and <code>Write</code> (send data or events to the destination, or change its data). You name the two resources and the access type, and SAM composes the IAM policy.</li>
+    <li>Choose a policy template when you know the template name for the access you need. Choose a connector when you want to state only "this function reads from or writes to that resource".</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
       <li>"Least privilege to one DynamoDB table with the fewest template lines" → <code>DynamoDBCrudPolicy</code> policy template, or a connector.</li>
-      <li>"Ten functions use the same runtime, timeout, and variables" → <code>Globals</code>.</li>
+      <li>"Ten functions use the same runtime, timeout, and variables" → <code>Globals</code>, because it sets those properties one time for all functions.</li>
       <li>"Function must send messages to one queue, no hand-written IAM JSON" → <code>SQSSendMessagePolicy</code> or a connector with <code>Write</code>.</li>
     </ul>
   </div>
@@ -322,20 +343,20 @@
     <tr><th>Command</th><th>Job</th></tr>
     <tr><td><code>sam init</code></td><td>Create a project from a template. Creates <code>samconfig.toml</code>.</td></tr>
     <tr><td><code>sam validate</code></td><td>Check the template.</td></tr>
-    <tr><td><code>sam build</code></td><td>Build functions and layers into <code>.aws-sam/build</code> with a built template. <code>--use-container</code> builds in a Lambda-like container (needs Docker), for example for native dependencies.</td></tr>
+    <tr><td><code>sam build</code></td><td>Build functions and layers into <code>.aws-sam/build</code> with a built template. <code>--use-container</code> builds in a Lambda-like container (needs Docker). Use it for native dependencies: packages with compiled code, which must match the Lambda operating system and processor architecture.</td></tr>
     <tr><td><code>sam deploy --guided</code></td><td>Upload artifacts to S3, create a change set, and deploy. Saves answers to <code>samconfig.toml</code>.</td></tr>
     <tr><td><code>sam local invoke -e event.json</code></td><td>Run one function one time in a local container with a test event.</td></tr>
     <tr><td><code>sam local generate-event s3 put</code></td><td>Make a sample event payload for a service (S3, SQS, SNS, API Gateway, and others).</td></tr>
     <tr><td><code>sam local start-api</code></td><td>Run a local HTTP server for the API Gateway routes in the template.</td></tr>
     <tr><td><code>sam local start-lambda</code></td><td>Run a local endpoint that emulates the Lambda Invoke API (default <code>http://127.0.0.1:3001</code>). Call it from the AWS CLI or an SDK with <code>--endpoint-url</code>.</td></tr>
-    <tr><td><code>sam sync --watch</code></td><td>Watch local files and push changes to the cloud. Code changes go through service APIs, not CloudFormation. <strong>Development stacks only</strong>: it causes drift.</td></tr>
+    <tr><td><code>sam sync --watch</code></td><td>Watch local files and push changes to the cloud. Code changes skip CloudFormation and go directly through service APIs (for example, the Lambda API updates the function code). This takes seconds instead of minutes. <strong>Development stacks only</strong>: the stack no longer matches its template (drift).</td></tr>
     <tr><td><code>sam remote invoke</code></td><td>Invoke a deployed function, send to a deployed queue or stream, or start a deployed state machine.</td></tr>
     <tr><td><code>sam logs</code></td><td>Get function logs from CloudWatch Logs.</td></tr>
     <tr><td><code>sam delete</code></td><td>Delete the stack.</td></tr>
   </table>
   <ul>
-    <li><code>sam local</code> commands need Docker.</li>
-    <li>Local tests do not test cloud permissions. Test in the cloud too.</li>
+    <li><code>sam local</code> commands need Docker, because they run each function in a container that emulates the Lambda environment.</li>
+    <li>Local tests do not test cloud permissions. On your machine, the function runs with your local AWS credentials (the <code>--profile</code> option), not with its execution role. A missing permission in the role shows only in the cloud. Test in the cloud too.</li>
     <li>After you change code, run <code>sam build</code> again before <code>sam local</code>, because the CLI uses <code>.aws-sam/build</code> if it exists.</li>
   </ul>
   <div class="exam-signals">
@@ -344,22 +365,22 @@
       <li>"Test with a realistic S3 event on a laptop, no deployment" → <code>sam local generate-event</code> and <code>sam local invoke -e</code>.</li>
       <li>"Integration tests call Lambda through the SDK, run them locally" → <code>sam local start-lambda</code> and the endpoint URL.</li>
       <li>"See code changes in a dev stack in seconds" → <code>sam sync --watch</code>. Not for production.</li>
-      <li>"Native dependencies fail on Lambda after a build on Windows" → <code>sam build --use-container</code>.</li>
+      <li>"Native dependencies fail on Lambda after a build on Windows" → <code>sam build --use-container</code>. The container matches the Lambda Linux environment, so the compiled code works on Lambda.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-build.html">sam build</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-local-generate-event.html">sam local generate-event</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-local-start-lambda.html">sam local start-lambda (port 3001)</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-sync.html">sam sync</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-remote-invoke.html">sam remote invoke</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-build.html">sam build</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-local-generate-event.html">sam local generate-event</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-local-start-lambda.html">sam local start-lambda (port 3001)</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-sync.html">sam sync</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-remote-invoke.html">sam remote invoke</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-cli-command-reference-sam-local-invoke.html">sam local invoke (--profile)</a>.</p>
 </section>
 
 <section id="iac-sam-safe-deploy">
   <h2>SAM gradual deployments</h2>
   <h3>Key facts</h3>
   <ul>
-    <li><code>AutoPublishAlias: live</code> publishes a new version when the code changes and points the alias <code>live</code> to it. Callers must use the alias.</li>
-    <li><code>DeploymentPreference</code> makes SAM create the CodeDeploy application, the deployment group, and the CodeDeploy role for you. CodeDeploy shifts alias traffic.</li>
+    <li><code>AutoPublishAlias: live</code> publishes a new version when the code changes and points the alias <code>live</code> to it. Callers must use the alias, because the traffic shift happens on the alias. A caller that uses the function name with no alias calls <code>$LATEST</code> and skips the gradual deployment.</li>
+    <li><code>DeploymentPreference</code> makes SAM create the CodeDeploy application, the deployment group, and the CodeDeploy role for you. CodeDeploy then changes the alias weights in steps, so that traffic moves from the old version to the new version.</li>
     <li>Types: <code>Canary10Percent5Minutes</code>, <code>Canary10Percent10Minutes</code>, <code>Canary10Percent15Minutes</code>, <code>Canary10Percent30Minutes</code>, <code>Linear10PercentEvery1Minute</code>, <code>Linear10PercentEvery2Minutes</code>, <code>Linear10PercentEvery3Minutes</code>, <code>Linear10PercentEvery10Minutes</code>, <code>AllAtOnce</code>.</li>
-    <li>Canary: two steps. Linear: equal steps with equal time between them.</li>
-    <li><code>Alarms</code>: CloudWatch alarms. If one goes off, CodeDeploy rolls back the deployment.</li>
-    <li><code>Hooks</code>: <code>PreTraffic</code> runs before traffic shifts. <code>PostTraffic</code> runs after all traffic shifts. Both are optional.</li>
+    <li>Canary: two steps. <code>Canary10Percent5Minutes</code> sends 10% of traffic to the new version, waits 5 minutes, then sends the remaining 90%. Linear: equal steps with equal time between them. <code>Linear10PercentEvery1Minute</code> adds 10% each minute, so all traffic moves in 10 steps. <code>AllAtOnce</code> moves all traffic in one step.</li>
+    <li><code>Alarms</code>: CloudWatch alarms. If one alarm enters the <code>ALARM</code> state, CodeDeploy rolls back the deployment: all traffic goes back to the old version.</li>
+    <li><code>Hooks</code>: Lambda functions that test the new version. <code>PreTraffic</code> runs before traffic shifts. <code>PostTraffic</code> runs after all traffic shifts. Both are optional. If a hook reports failure, CodeDeploy rolls back.</li>
     <li>A hook function must report its result to CodeDeploy with <code>PutLifecycleEventHookExecutionStatus</code> (<code>Succeeded</code> or <code>Failed</code>). Its role needs permission for that call.</li>
     <li>CodeDeploy needs an earlier version to shift traffic from. For a new function, deploy first with <code>AutoPublishAlias</code>, then add <code>DeploymentPreference</code>.</li>
   </ul>
@@ -368,18 +389,18 @@
     <ul>
       <li>"10% for 5 minutes, then all, roll back on errors, least effort" → <code>Canary10Percent5Minutes</code> with <code>Alarms</code>.</li>
       <li>"Run a smoke test before any user traffic reaches the new version" → <code>PreTraffic</code> hook.</li>
-      <li>"Hook ran, but the deployment waits and then fails" → the hook did not call <code>PutLifecycleEventHookExecutionStatus</code>.</li>
+      <li>"Hook ran, but the deployment waits and then fails" → the hook did not call <code>PutLifecycleEventHookExecutionStatus</code>. CodeDeploy waits for that call, not for the function to return. Without it, the deployment fails after 1 hour.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/automating-updates-to-serverless-apps.html">SAM gradual deployments</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/APIReference/API_PutLifecycleEventHookExecutionStatus.html">PutLifecycleEventHookExecutionStatus</a>. Related set: Module 1 (Lambda versions and aliases).</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/automating-updates-to-serverless-apps.html">SAM gradual deployments</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/APIReference/API_PutLifecycleEventHookExecutionStatus.html">PutLifecycleEventHookExecutionStatus</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-versions.html">Lambda versions (unqualified calls use $LATEST)</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/reference-appspec-file-structure-hooks.html">AppSpec hooks (1-hour limit for a Lambda hook)</a>. Related set: Module 1 (Lambda versions and aliases).</p>
 </section>
 
 <section id="iac-cdk">
   <h2>AWS CDK concepts</h2>
   <h3>Key facts</h3>
   <ul>
-    <li>A CDK <strong>app</strong> contains <strong>stacks</strong>. A stack contains <strong>constructs</strong>. Each CDK stack becomes one CloudFormation stack.</li>
-    <li>You write the app in a programming language (TypeScript, JavaScript, Python, Java, C#, Go).</li>
+    <li>A CDK <strong>app</strong> contains <strong>stacks</strong>. A stack contains <strong>constructs</strong>. A construct is a class that represents one or more AWS resources. Each CDK stack becomes one CloudFormation stack.</li>
+    <li>You write the app in a programming language (TypeScript, JavaScript, Python, Java, C#, Go). The CDK turns the code into CloudFormation templates, and CloudFormation deploys them.</li>
   </ul>
   <h3>Construct levels</h3>
   <table>
@@ -388,27 +409,28 @@
     <tr><td>L2</td><td>One resource with safe defaults and helper methods (for example grant methods).</td><td><code>s3.Bucket</code></td></tr>
     <tr><td>L3 (patterns)</td><td>Many resources for one common architecture.</td><td><code>ApplicationLoadBalancedFargateService</code></td></tr>
   </table>
+  <p>Use L2 by default. Use L1 when no L2 construct exists for the resource or the L2 construct does not support a property that you need. Use L3 when a pattern matches your architecture and you want the least code.</p>
   <h3>CLI</h3>
   <table>
     <tr><th>Command</th><th>Job</th></tr>
-    <tr><td><code>cdk bootstrap</code></td><td>Deploys the <code>CDKToolkit</code> stack: an S3 bucket for assets, an ECR repository for images, and IAM roles for deployment. Do it one time for each account and Region (environment).</td></tr>
+    <tr><td><code>cdk bootstrap</code></td><td>Deploys the <code>CDKToolkit</code> stack: an S3 bucket for assets, an ECR repository for images, and IAM roles for deployment. Assets are local files and Docker images that the app needs, for example Lambda code. Do it one time for each account and Region (environment).</td></tr>
     <tr><td><code>cdk synth</code></td><td>Makes the cloud assembly in <code>cdk.out</code>: a CloudFormation template for each stack and the assets.</td></tr>
-    <tr><td><code>cdk diff</code></td><td>Compares the app with the deployed stack.</td></tr>
+    <tr><td><code>cdk diff</code></td><td>Compares the app with the deployed stack and shows the resources and permissions that a deploy will change.</td></tr>
     <tr><td><code>cdk deploy</code></td><td>Deploys through a CloudFormation change set by default. <code>--hotswap</code> updates supported resources (for example Lambda code) through service APIs. Development only: it causes drift.</td></tr>
     <tr><td><code>cdk watch</code></td><td>Deploys when files change. Uses hotswap by default.</td></tr>
   </table>
   <ul>
-    <li>Without bootstrap, only stacks with no assets and a template under 51,200 bytes deploy.</li>
+    <li>Without bootstrap, only stacks with no assets and a template under 51,200 bytes deploy. Assets and larger templates must go to the bootstrap S3 bucket first, and that bucket does not exist yet.</li>
     <li>Grants add a least-privilege IAM policy to the function role. You do not write the policy JSON. Current form: <code>table.grants.readData(fn)</code> (the <code>grants</code> property on L2 constructs). Older study material shows <code>table.grantReadData(fn)</code>. These methods still work, but the API reference marks them discouraged.</li>
-    <li><code>RemovalPolicy</code> maps to <code>DeletionPolicy</code>. For stateful resources (S3 buckets, DynamoDB tables) the CDK default is <strong>RETAIN</strong>. This is the opposite of the CloudFormation default.</li>
-    <li>To delete a bucket with objects on <code>cdk destroy</code>, set <code>removalPolicy: DESTROY</code> and <code>autoDeleteObjects: true</code>.</li>
+    <li><code>RemovalPolicy</code> maps to <code>DeletionPolicy</code>. For stateful resources (S3 buckets, DynamoDB tables) the CDK default is <strong>RETAIN</strong>. This is the opposite of the CloudFormation default. This default protects data from an accidental delete. After <code>cdk destroy</code>, the bucket and table still exist and still cost money, and you must delete them by hand. A new deploy with the same resource names then fails with a name conflict.</li>
+    <li>To delete a bucket with objects on <code>cdk destroy</code>, set <code>removalPolicy: DESTROY</code> and <code>autoDeleteObjects: true</code>. <code>DESTROY</code> alone is not enough, because CloudFormation cannot delete a bucket that contains objects. <code>autoDeleteObjects</code> makes the CDK empty the bucket first.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"First cdk deploy in a new account fails, assets cannot upload" → <code>cdk bootstrap</code>.</li>
+      <li>"First cdk deploy in a new account fails, assets cannot upload" → <code>cdk bootstrap</code>, because bootstrap creates the asset bucket in each account and Region.</li>
       <li>"cdk destroy finished, but the bucket and table still exist" → default <code>RemovalPolicy.RETAIN</code>.</li>
-      <li>"Give a function read access to a table with the least code" → a grant method.</li>
+      <li>"Give a function read access to a table with the least code" → a grant method. One line adds a read-only policy for that one table to the function role.</li>
     </ul>
   </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/cdk/v2/guide/constructs.html">Constructs</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html">Bootstrapping</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/ref-cli-cmd-deploy.html">cdk deploy (hotswap, 51,200 bytes)</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/permissions.html">Grants</a>, <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_dynamodb.Table.html">Table API (grants.readData)</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/resources.html">Removal policies</a>. Related set: Module 8 (CI/CD).</p>
@@ -421,13 +443,13 @@
     <li>Add an environment parameter (for example <code>EnvType</code> with <code>AllowedValues: [dev, prod]</code>).</li>
     <li><code>Mappings</code> keyed by environment or Region give values such as instance size. Mapping keys and values are literals. You cannot use parameters or functions inside <code>Mappings</code>.</li>
     <li><code>Conditions</code> use <code>Fn::Equals</code> on parameters. Attach <code>Condition</code> to a resource or output. Use <code>Fn::If</code> for property values.</li>
-    <li>Conditions can use parameters, pseudo parameters, mappings, and other conditions. They <strong>cannot</strong> use resources or resource attributes.</li>
-    <li>Use one stack for each environment, from the same template. Add <code>AWS::Region</code> or the stack name to custom resource names so that names do not collide.</li>
+    <li>Conditions can use parameters, pseudo parameters, mappings, and other conditions. They <strong>cannot</strong> use resources or resource attributes. CloudFormation evaluates conditions when it starts a create or update, before it changes any resource, so a resource value is not available to a condition.</li>
+    <li>Use one stack for each environment, from the same template. Add <code>AWS::Region</code> or the stack name to custom resource names so that names do not collide. Without this, the second stack fails because a resource with that name already exists.</li>
   </ul>
   <h3>SAM configuration file</h3>
   <ul>
-    <li><code>samconfig.toml</code> (default) or <code>samconfig.yaml</code> stores CLI options as <code>[environment.command.parameters]</code>.</li>
-    <li>The default environment is <code>default</code>. Example: <code>[prod.deploy.parameters]</code> with <code>stack_name</code> and <code>parameter_overrides</code>.</li>
+    <li><code>samconfig.toml</code> (default) or <code>samconfig.yaml</code> stores SAM CLI options, so that you do not type them each time. Each table header has the form <code>[environment.command.parameters]</code>. Here, an environment is a named set of options (for example <code>staging</code>), not an AWS account.</li>
+    <li>The default environment is <code>default</code>. Example: <code>[prod.deploy.parameters]</code> with <code>stack_name</code> and <code>parameter_overrides</code> holds the options that <code>sam deploy</code> uses for prod.</li>
     <li>Deploy to staging: <code>sam deploy --config-env staging</code>. Command-line values override the file.</li>
   </ul>
   <h3>CodePipeline CloudFormation action</h3>
@@ -435,58 +457,60 @@
     <tr><th>ActionMode</th><th>Effect</th></tr>
     <tr><td><code>CHANGE_SET_REPLACE</code></td><td>Create the change set (replace it if it exists). Does not change the stack.</td></tr>
     <tr><td><code>CHANGE_SET_EXECUTE</code></td><td>Run the change set.</td></tr>
-    <tr><td><code>CREATE_UPDATE</code></td><td>Create or update the stack at once.</td></tr>
-    <tr><td><code>REPLACE_ON_FAILURE</code></td><td>Delete and recreate a stack in a failed state. For testing only.</td></tr>
+    <tr><td><code>CREATE_UPDATE</code></td><td>Create the stack if it does not exist, or update it at once. No review step.</td></tr>
+    <tr><td><code>REPLACE_ON_FAILURE</code></td><td>Create the stack if it does not exist. If it is in a failed state, delete it and create it again. Otherwise, update it. For testing only, because it can delete the stack.</td></tr>
     <tr><td><code>DELETE_ONLY</code></td><td>Delete the stack.</td></tr>
   </table>
+  <p>Choose the two change set modes when someone must review the changes before they apply (production). Choose <code>CREATE_UPDATE</code> for fast deployments with no review, for example to a test stage.</p>
   <ul>
     <li>Common pattern: <code>CHANGE_SET_REPLACE</code>, then a manual approval action, then <code>CHANGE_SET_EXECUTE</code>.</li>
-    <li><code>TemplateConfiguration</code> is a file with parameter values and a stack policy, for example one file for each stage. <code>ParameterOverrides</code> are for values known only at run time.</li>
+    <li><code>TemplateConfiguration</code> is a file with parameter values and a stack policy, for example one file for each stage. <code>ParameterOverrides</code> sets values in the action itself and overrides the file. Use it only for values that are not known until the pipeline runs.</li>
   </ul>
   <h3>CloudFormation service role</h3>
   <ul>
+    <li>A service role is an IAM role that CloudFormation assumes to create, update, and delete the stack resources. Without one, CloudFormation uses the permissions of the user who runs the operation.</li>
     <li>Pass a service role (<code>RoleARN</code>) when you create the stack. CloudFormation then uses that role for all operations on the stack.</li>
-    <li>Users then need permission for CloudFormation and <code>iam:PassRole</code> for the role. They do not need permission to create the resources directly.</li>
+    <li>Users then need permission for CloudFormation and <code>iam:PassRole</code> for the role. <code>iam:PassRole</code> is the permission to give a role to an AWS service. They do not need permission to create the resources directly.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Deploy the same SAM template to staging with other values" → <code>sam deploy --config-env staging</code>.</li>
-      <li>"Prod gets an extra alarm, dev does not" → a condition on the alarm resource.</li>
+      <li>"Deploy the same SAM template to staging with other values" → <code>sam deploy --config-env staging</code>, because <code>samconfig.toml</code> stores the stack name and parameter values for each named environment.</li>
+      <li>"Prod gets an extra alarm, dev does not" → a condition on the alarm resource, because CloudFormation creates a resource with a <code>Condition</code> only when the condition is true.</li>
       <li>"Review the changes before production, then apply" → <code>CHANGE_SET_REPLACE</code>, manual approval, <code>CHANGE_SET_EXECUTE</code>.</li>
-      <li>"Developers deploy stacks but must not create resources directly" → CloudFormation service role.</li>
+      <li>"Developers deploy stacks but must not create resources directly" → CloudFormation service role. The role holds the resource permissions, and developers only pass it to CloudFormation.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/conditions-section-structure.html">Conditions</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/mappings-section-structure.html">Mappings</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html">SAM configuration file</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-CloudFormation.html">CodePipeline CloudFormation action</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_CreateStack.html">CreateStack (RoleARN)</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/conditions-section-structure.html">Conditions</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/mappings-section-structure.html">Mappings</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-config.html">SAM configuration file</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-CloudFormation.html">CodePipeline CloudFormation action</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_CreateStack.html">CreateStack (RoleARN)</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-iam-servicerole.html">CloudFormation service role</a>.</p>
 </section>
 
 <section id="iac-packaging">
   <h2>Packaging and project layout</h2>
   <h3>Packaging</h3>
   <ul>
-    <li><code>aws cloudformation package --s3-bucket ...</code> (or the same job with <code>sam package</code>) uploads local paths (for example <code>CodeUri</code>, Lambda <code>Code</code>, nested stack <code>TemplateURL</code>) to S3. A folder becomes a .zip file. It writes a new template with the S3 locations.</li>
-    <li><code>aws cloudformation deploy</code> creates a change set and runs it. With <code>--no-execute-changeset</code>, it stops after it creates the change set.</li>
-    <li>A template larger than 51,200 bytes must come from S3. Use <code>deploy --s3-bucket</code>.</li>
-    <li><code>sam deploy</code> does the upload for you. <code>resolve_s3 = true</code> makes SAM create a managed bucket.</li>
-    <li>Container image functions: <code>PackageType: Image</code>. The image is in Amazon ECR (<code>ImageUri</code>). <code>sam build</code> builds the image from the <code>Dockerfile</code> in the function <code>Metadata</code>.</li>
+    <li><code>aws cloudformation package --s3-bucket ...</code> (or the same job with <code>sam package</code>) uploads local paths (for example <code>CodeUri</code>, Lambda <code>Code</code>, nested stack <code>TemplateURL</code>) to S3. A folder becomes a .zip file. It writes a new template with the S3 locations. You need this step because CloudFormation runs in AWS and cannot read files on your computer.</li>
+    <li><code>aws cloudformation deploy</code> creates a change set and runs it. With <code>--no-execute-changeset</code>, it stops after it creates the change set. Use it when someone must review the change set before it runs.</li>
+    <li>A template larger than 51,200 bytes must come from S3, because that is the maximum template body in a request. Use <code>deploy --s3-bucket</code>, which uploads the template to the bucket first.</li>
+    <li><code>sam deploy</code> does the upload for you. <code>resolve_s3 = true</code> makes SAM create a managed bucket, so you do not create one.</li>
+    <li>Container image functions: <code>PackageType: Image</code>. The image is in Amazon Elastic Container Registry (ECR) (<code>ImageUri</code>). <code>sam build</code> builds the image from the <code>Dockerfile</code> in the function <code>Metadata</code>.</li>
   </ul>
   <h3>Project layout</h3>
   <ul>
     <li><code>template.yaml</code> and <code>samconfig.toml</code> at the project root.</li>
-    <li>One folder for each function (its <code>CodeUri</code>), with its own dependency file (<code>requirements.txt</code>, <code>package.json</code>). Each package stays small.</li>
-    <li>Shared code goes in a layer (<code>AWS::Serverless::LayerVersion</code> with <code>ContentUri</code>). Functions list it in <code>Layers</code>.</li>
+    <li>One folder for each function (its <code>CodeUri</code>), with its own dependency file (<code>requirements.txt</code>, <code>package.json</code>). Each package then contains only the code and libraries of its own function, so it stays small.</li>
+    <li>Shared code goes in a layer (<code>AWS::Serverless::LayerVersion</code> with <code>ContentUri</code>). Functions list it in <code>Layers</code>. A layer is a .zip archive of shared code or libraries. Lambda extracts it into the <code>/opt</code> folder of each function that uses it, so you update the shared code in one place.</li>
     <li>Test events go in an <code>events/</code> folder. Tests go in a <code>tests/</code> folder.</li>
     <li>Do not edit files in <code>.aws-sam/build</code>. <code>sam build</code> overwrites them.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Template points to a local folder, create-stack fails" → <code>aws cloudformation package</code>, then deploy the output template.</li>
-      <li>"Template body is too large" → upload the template to S3.</li>
+      <li>"Template points to a local folder, create-stack fails" → <code>aws cloudformation package</code>, then deploy the output template. The package step uploads the folder and replaces the local path with the S3 location.</li>
+      <li>"Template body is too large" → upload the template to S3. A template in S3 can be up to 1 MB.</li>
       <li>"Five functions share a helper library" → a layer, and one folder for each function.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-cli-package.html">aws cloudformation package</a>, <a href="https://docs.aws.amazon.com/cli/latest/reference/cloudformation/deploy.html">aws cloudformation deploy</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-build.html">sam build output</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-cli-package.html">aws cloudformation package</a>, <a href="https://docs.aws.amazon.com/cli/latest/reference/cloudformation/deploy.html">aws cloudformation deploy</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-build.html">sam build output</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/chapter-layers.html">Lambda layers (/opt)</a>.</p>
 </section>
 
 </main>

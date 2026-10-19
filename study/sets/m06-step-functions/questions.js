@@ -227,7 +227,7 @@ window.QUESTION_BANKS.push({ setId: "m06-step-functions", questions: [
       { text: "A Catch field for ApiBusy that goes to a Wait state of 2 seconds and then back to the Task state.", correct: false,
         why: "This loop has a fixed wait, no attempt limit, and no jitter. It fails the backoff and attempt requirements." }
     ],
-    explanation: "Retry fields: IntervalSeconds (default 1), MaxAttempts (default 3), BackoffRate (default 2.0), MaxDelaySeconds (no default limit), and JitterStrategy (default NONE). FULL jitter spreads retries." },
+    explanation: "With IntervalSeconds 2 and BackoffRate 2, the waits are 2, 4, 8, 16, and 32 seconds, and MaxDelaySeconds 30 caps the last wait at 30. The default JitterStrategy is NONE, so all executions retry at the same moments. FULL jitter makes each wait random between 0 and the calculated wait, which spreads the retries." },
 
   { id: "m06-017", topic: "sfn-errors", domain: 4,
     stem: "A Task state has a catcher with ErrorEquals [\"States.ALL\"] and Next set to NotifyFailure. The NotifyFailure state must include the order ID from the original state input in its message. During tests, NotifyFailure receives only the Error and Cause fields. Which change will meet these requirements?",
@@ -347,7 +347,7 @@ window.QUESTION_BANKS.push({ setId: "m06-step-functions", questions: [
       { text: "Configure an ItemBatcher on the Map state.", correct: false,
         why: "ItemBatcher groups items into batches for each child execution. It does not tolerate failures or save results." }
     ],
-    explanation: "ToleratedFailurePercentage or ToleratedFailureCount lets a Distributed Map continue when some items fail (default 0). ResultWriter writes results to Amazon S3." },
+    explanation: "ToleratedFailurePercentage or ToleratedFailureCount lets a Distributed Map continue when some items fail. The default is 0, so without it one failed item fails the Map Run. ResultWriter writes the child execution results to files in Amazon S3." },
 
   { id: "m06-025", topic: "sfn-parallel-map", domain: 2,
     stem: "A developer adds a Distributed Map state to the state machine OrderBatch. The execution role can already invoke the Lambda function that processes each item. When the Map state runs, it cannot start any child executions because of an access error. The developer must fix the error with the least privilege. Which solution will meet these requirements?",
@@ -477,7 +477,7 @@ window.QUESTION_BANKS.push({ setId: "m06-step-functions", questions: [
       { text: "Log level OFF.", correct: false,
         why: "No events are logged. It fails the requirement to keep a record of failed executions." }
     ],
-    explanation: "Log levels are ALL, ERROR, FATAL, and OFF. includeExecutionData controls whether logs contain input, output, and variables." },
+    explanation: "Log levels are ALL (every event), ERROR (error events only), FATAL (only executions that failed, timed out, or were aborted), and OFF. includeExecutionData controls whether logs contain input, output, and variables. ERROR with includeExecutionData false records the failures without the personal data." },
 
   { id: "m06-034", topic: "sfn-security", domain: 2,
     stem: "A developer configures an Amazon API Gateway REST API method with an AWS service integration that calls the Step Functions StartExecution action for a Standard state machine. Requests fail with an authorization error. The fix must follow the principle of least privilege. Which actions will meet these requirements? (Choose two.)",

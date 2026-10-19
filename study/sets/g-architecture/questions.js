@@ -27,7 +27,7 @@ window.QUESTION_BANKS.push({ setId: "g-architecture", questions: [
       { text: "Allow the sns.amazonaws.com service principal to perform sqs:SendMessage in the queue policy with no condition.", correct: false,
         why: "Delivery works, but any SNS topic can then send to the queue. It is less secure than a policy with the aws:SourceArn condition." }
     ],
-    explanation: "For SNS to SQS fanout, the queue policy must allow sns.amazonaws.com to do sqs:SendMessage. Use aws:SourceArn to limit it to one topic." },
+    explanation: "For SNS to SQS fanout, the queue policy must allow sns.amazonaws.com to do sqs:SendMessage, because SNS, not the publisher, sends to the queue. Use aws:SourceArn to limit it to one topic. Without the condition, any SNS topic can send to the queue." },
 
   { id: "garch-003", topic: "arch-event-driven", domain: 1,
     stem: "An application emits JSON events for orders. Events with \"region\": \"EU\" in the event body must go to one AWS Lambda function, and events with a \"priority\": \"high\" field must go to an AWS Step Functions state machine. Other teams will add new consumers later. The producer must not change when consumers are added. Which solution will meet these requirements with the LEAST operational overhead?",
@@ -335,7 +335,7 @@ window.QUESTION_BANKS.push({ setId: "g-architecture", questions: [
     stem: "A Lambda function counts API requests in a global variable and writes the total to a log. The total in the log is much lower than the real number of requests and sometimes goes back to zero. The developer needs an accurate total across all invocations. Which solution will meet these requirements?",
     options: [
       { text: "Store the counter in an Amazon DynamoDB item, and increase it with an UpdateItem call that uses an ADD update expression.", correct: true,
-        why: "Each execution environment has its own memory, and Lambda can end an environment at any time. An atomic counter in DynamoDB is shared and durable." },
+        why: "Each execution environment has its own memory, and Lambda can end an environment at any time. An atomic counter in DynamoDB is shared and durable. The ADD expression changes the value on the server, so parallel updates do not overwrite each other." },
       { text: "Store the counter in a file in /tmp.", correct: false,
         why: "Each execution environment has its own /tmp. The counts are still split across environments and lost when an environment ends." },
       { text: "Configure provisioned concurrency so that environments stay initialized.", correct: false,

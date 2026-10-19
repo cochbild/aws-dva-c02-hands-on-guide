@@ -393,7 +393,7 @@ window.QUESTION_BANKS.push({ setId: "m09-observability", questions: [
     stem: "A developer instruments an order service with AWS X-Ray. Support engineers must find all traces for a given customer tier, such as gold, by using X-Ray filter expressions. Which solution will meet these requirements?",
     options: [
       { text: "Record the customer tier as an annotation on the segment.", correct: true,
-        why: "Annotations are indexed key-value pairs. Filter expressions can search them, for example annotation.customer_tier = \"gold\"." },
+        why: "Annotations are indexed key-value pairs. Filter expressions can search them, for example annotation[customer_tier] = \"gold\"." },
       { text: "Record the customer tier as metadata on the segment.", correct: false,
         why: "Metadata is not indexed. Filter expressions cannot search it, so engineers cannot find the traces." },
       { text: "Write the customer tier to CloudWatch Logs.", correct: false,
@@ -417,7 +417,7 @@ window.QUESTION_BANKS.push({ setId: "m09-observability", questions: [
       { text: "Create an X-Ray group for each order ID.", correct: false,
         why: "Groups use a filter expression to collect traces. A group for each order adds cost and still needs a searchable field such as an annotation." }
     ],
-    explanation: "Annotations: indexed, simple values for search. Metadata: any type, not indexed, for debug context." },
+    explanation: "Use an annotation for a value that you search on, such as the order ID. X-Ray indexes annotations, and they hold only simple values (string, number, or Boolean). Use metadata for debug data that nobody searches, such as a nested JSON body. Metadata accepts any type but is not indexed." },
 
   { id: "m09-030", topic: "xray-setup", domain: 3,
     stem: "A team deploys a Python web application to AWS Elastic Beanstalk. The application uses the X-Ray SDK. The team must send trace data to X-Ray with the LEAST operational overhead. Which actions will meet these requirements? (Choose two.)",

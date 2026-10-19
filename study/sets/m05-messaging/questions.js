@@ -113,7 +113,7 @@ window.QUESTION_BANKS.push({ setId: "m05-messaging", questions: [
       { text: "Set the reserved concurrency of the function to 4.", correct: false,
         why: "This limits the function to 4 concurrent invocations, one for each shard. It cannot add processing capacity, so the backlog continues." }
     ],
-    explanation: "IteratorAge shows how far a consumer is behind the stream. For a Lambda consumer, increase ParallelizationFactor (1 to 10), add shards, or make the function faster." },
+    explanation: "IteratorAge shows how far a consumer is behind the stream. For a Lambda consumer, increase ParallelizationFactor (1 to 10), add shards, or make the function faster. ParallelizationFactor is the number of batches that Lambda processes at the same time from each shard." },
 
   { id: "m05-009", topic: "sqs-dlq-redrive", domain: 3,
     stem: "A CloudFormation template defines an SQS standard queue named orders. A developer adds a RedrivePolicy to orders that points to an existing queue named orders-dlq.fifo, with maxReceiveCount set to 5. The stack update fails. Which solution will meet these requirements?",
@@ -319,7 +319,7 @@ window.QUESTION_BANKS.push({ setId: "m05-messaging", questions: [
       { text: "Increase the visibility timeout of the queue to 6 times the function timeout.", correct: false,
         why: "This prevents duplicates caused by a short timeout. A failed batch still returns all its messages to the queue." }
     ],
-    explanation: "Event source mapping filter criteria stop unneeded invocations (SQS deletes non-matching messages). ReportBatchItemFailures returns only the failed messages to the queue." },
+    explanation: "Event source mapping filter criteria stop unneeded invocations (Lambda deletes non-matching messages from the queue). ReportBatchItemFailures returns only the failed messages to the queue." },
 
   { id: "m05-023", topic: "eb-rules-patterns", domain: 2,
     stem: "A developer uses the AWS CLI to create an EventBridge rule with a Lambda function as the target. Events match the rule, but the function is never invoked. The FailedInvocations metric for the rule increases. Which solutions will each meet these requirements with least privilege? (Choose two.)",
@@ -421,7 +421,7 @@ window.QUESTION_BANKS.push({ setId: "m05-messaging", questions: [
       { text: "Increase the stream retention period to 7 days.", correct: false,
         why: "Retention controls how long stored records stay. It does not change write capacity for a shard." }
     ],
-    explanation: "The partition key decides the shard. A low-cardinality key makes hot shards. Use a key with many values, and retry throttled writes with exponential backoff." },
+    explanation: "The partition key decides the shard. A key with few distinct values sends most records to a few shards, which become hot shards: they pass their write limit and throttle while other shards are idle. Use a key with many values, and retry throttled writes with exponential backoff." },
 
   { id: "m05-030", topic: "kinesis-streams", domain: 4,
     stem: "Five applications read every record from the same Kinesis data stream with GetRecords. As traffic grows, the consumers get read throttling errors and latency increases. Each application must get its own read throughput that other consumers do not affect. Which solution will meet these requirements?",

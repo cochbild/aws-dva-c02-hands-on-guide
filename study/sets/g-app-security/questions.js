@@ -127,7 +127,7 @@ window.QUESTION_BANKS.push({ setId: "g-app-security", questions: [
       { text: "Base64-decode the payload and trust the claims if exp is in the future.", correct: false,
         why: "Anyone can decode and change a JWT payload. Without a signature check, the service would trust modified tokens." },
       { text: "Check that the aud claim matches the app client ID.", correct: false,
-        why: "Cognito access tokens carry client_id, not aud, unless resource binding is used. This check would reject valid access tokens." },
+        why: "Cognito access tokens carry client_id, not aud. Only a token that the app requested for one specific API (resource binding) has an aud claim. This check would reject valid access tokens." },
       { text: "Call the Cognito GetUser API for every request to check if the token is expired.", correct: false,
         why: "AWS says not to use GetUser to check expiration. Compare the exp claim instead, which needs no network call." }
     ],
@@ -375,7 +375,7 @@ window.QUESTION_BANKS.push({ setId: "g-app-security", questions: [
       { text: "ForAllValues:StringEquals with dynamodb:Attributes set to ${cognito-identity.amazonaws.com:sub}.", correct: false,
         why: "dynamodb:Attributes limits attribute names, not partition key values. It does not limit which items a user reads." }
     ],
-    explanation: "Use dynamodb:LeadingKeys with ForAllValues and an identity variable for per-user item access. ${cognito-identity.amazonaws.com:sub} is the identity pool identity ID." },
+    explanation: "dynamodb:LeadingKeys is the partition key value in the request. Compare it with ForAllValues to an identity variable for per-user item access. IAM replaces ${cognito-identity.amazonaws.com:sub} with the identity pool identity ID of the caller." },
 
   { id: "appsec-027", topic: "appsec-multi-tenant", domain: 2,
     stem: "A photo app uses an Amazon Cognito identity pool. The app calls Amazon S3 directly with the identity pool credentials. Each user must read and write only objects under a prefix named with their identity ID in one shared bucket. The company wants the least operational overhead. Which solution will meet these requirements?",
