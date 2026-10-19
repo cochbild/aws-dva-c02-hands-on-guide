@@ -393,7 +393,7 @@ window.QUESTION_BANKS.push({ setId: "m09-observability", questions: [
     stem: "A developer instruments an order service with AWS X-Ray. Support engineers must find all traces for a given customer tier, such as gold, by using X-Ray filter expressions. Which solution will meet these requirements?",
     options: [
       { text: "Record the customer tier as an annotation on the segment.", correct: true,
-        why: "Annotations are indexed key-value pairs. Filter expressions can search them, for example annotation.customer_tier = \"gold\"." },
+        why: "Annotations are indexed key-value pairs. Filter expressions can search them, for example annotation[customer_tier] = \"gold\"." },
       { text: "Record the customer tier as metadata on the segment.", correct: false,
         why: "Metadata is not indexed. Filter expressions cannot search it, so engineers cannot find the traces." },
       { text: "Write the customer tier to CloudWatch Logs.", correct: false,
