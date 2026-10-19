@@ -27,7 +27,7 @@ window.QUESTION_BANKS.push({ setId: "g-compute", questions: [
       { text: "Allow access to instance tags in the instance metadata.", correct: false,
         why: "Tag access adds tag data to the metadata. It does not change the hop limit, so the container still cannot get a token." }
     ],
-    explanation: "The IMDSv2 PUT response hop limit is 1 by default. Containers on the instance can need hop limit 2 to receive the token." },
+    explanation: "The IMDSv2 PUT response hop limit is 1 by default. Each network hop lowers it by 1, and the container network adds one hop. Thus the token response is dropped before it reaches the container. Set the hop limit to 2 so that the container receives the token." },
 
   { id: "gcmp-003", topic: "compute-ec2-dev", domain: 4,
     stem: "An old monitoring script on Amazon EC2 instances runs curl http://169.254.169.254/latest/meta-data/instance-id. After an administrator required IMDSv2 on the instances, the script gets HTTP 401 Unauthorized. The developer must fix the script with the fewest changes and keep IMDSv2 required. Which solution will meet these requirements?",
@@ -173,7 +173,7 @@ window.QUESTION_BANKS.push({ setId: "g-compute", questions: [
       { text: "An AWS WAF web ACL blocked the request.", correct: false,
         why: "A request that AWS WAF blocks gets 403 Forbidden, not 504." }
     ],
-    explanation: "ALB 502 = bad or reset response from the target. 503 = no registered targets. 504 = connection or response timeout to the target." },
+    explanation: "The ALB makes these errors itself, so they count in HTTPCode_ELB_5XX_Count. It returns 502 when the target sends a bad response or resets the connection. It returns 503 when the target group has no registered targets. It returns 504 when it cannot connect to the target within 10 seconds, or when the target does not respond before the idle timeout." },
 
   { id: "gcmp-013", topic: "compute-health-checks", domain: 4,
     stem: "All targets in an Application Load Balancer target group show unhealthy with the reason Target.ResponseCodeMismatch. The health check uses the default path /. The application redirects / to /login with HTTP 302. The application works when users open it. The team wants the health check to show the real health of the application. Which solution will meet this requirement?",
