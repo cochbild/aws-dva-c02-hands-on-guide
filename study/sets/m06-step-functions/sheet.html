@@ -86,7 +86,7 @@
     <tr><th>Type</th><th>Purpose</th><th>Notes</th></tr>
     <tr><td><code>Task</code></td><td>Do one unit of work: a Lambda function, an AWS service API, an activity, or an HTTPS API.</td><td>Supports <code>Retry</code> and <code>Catch</code>.</td></tr>
     <tr><td><code>Choice</code></td><td>Branch on the input.</td><td>A Choice state cannot end the execution, so it has no <code>End</code> field. Each rule names its own <code>Next</code> state. It has no <code>Retry</code> or <code>Catch</code>.</td></tr>
-    <tr><td><code>Wait</code></td><td>Pause for <code>Seconds</code>, <code>SecondsPath</code>, <code>Timestamp</code>, or <code>TimestampPath</code>.</td><td>No compute runs during the wait, so you do not pay for idle time. Use it in place of a Lambda function that sleeps.</td></tr>
+    <tr><td><code>Wait</code></td><td>Pause for <code>Seconds</code>, <code>SecondsPath</code>, <code>Timestamp</code>, or <code>TimestampPath</code>.</td><td>No compute runs during the wait. In a Standard workflow the wait costs one state transition, not function run time. In an Express workflow the wait time counts toward the billed duration. Use a Wait state in place of a Lambda function that sleeps.</td></tr>
     <tr><td><code>Parallel</code></td><td>Run fixed branches at the same time.</td><td>Supports <code>Retry</code> and <code>Catch</code>.</td></tr>
     <tr><td><code>Map</code></td><td>Run the same steps for each item in a dataset.</td><td>Supports <code>Retry</code> and <code>Catch</code>.</td></tr>
     <tr><td><code>Pass</code></td><td>Pass or reshape data. Inject a fixed value with <code>Result</code>.</td><td>Cannot run code. Use it to add fixed values or as a placeholder for a step that you build later.</td></tr>
@@ -99,7 +99,7 @@
     <li>Use <code>Default</code> for input that matches no rule. With no match and no <code>Default</code>, the execution fails with <code>States.NoChoiceMatched</code>.</li>
     <li>Operators have types: <code>StringEquals</code>, <code>NumericGreaterThanEquals</code>, <code>BooleanEquals</code>, <code>TimestampLessThan</code>, and more. A numeric operator does not match a string value. For example, <code>NumericGreaterThan</code> does not match the string <code>"500"</code>, so Step Functions goes to the next rule or to <code>Default</code>.</li>
     <li>Add <code>Path</code> to an operator to compare with another input value instead of a fixed value. For example, <code>"Variable": "$.total", "NumericLessThanPath": "$.limit"</code> compares two fields of the input.</li>
-    <li><code>IsPresent</code>, <code>IsNull</code>, <code>IsNumeric</code>, and <code>IsString</code> test a field. Use <code>IsPresent</code> in an <code>And</code> before a comparison on a field that can be missing. A comparison on a missing field fails the execution.</li>
+    <li><code>IsPresent</code>, <code>IsNull</code>, <code>IsNumeric</code>, and <code>IsString</code> test a field. Use <code>IsPresent</code> in an <code>And</code> before a comparison on a field that can be missing. A comparison on a missing field fails with <code>States.Runtime</code>. <code>States.ALL</code> cannot catch that error, so the execution always fails.</li>
     <li><code>And</code>, <code>Or</code>, and <code>Not</code> combine rules. Only the top-level rule has <code>Next</code>.</li>
     <li><code>StringMatches</code> supports the <code>*</code> wildcard only, for example <code>"log-*.txt"</code>. It does not support regular expressions. To match a literal asterisk, write <code>\\*</code> in the JSON definition.</li>
   </ul>
@@ -112,7 +112,7 @@
       <li>"Large amounts go to the wrong branch" → check the rule order. The first matching rule wins.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/state-choice.html">Choice state</a>, <a href="https://states-language.net/spec.html">Amazon States Language specification</a>. Lab: <a href="../../../module-06-step-functions/lab-01-asl-basics/README.md">Lab 6.1 ASL basics</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/state-choice.html">Choice state</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html">Handling errors (States.Runtime)</a>, <a href="https://aws.amazon.com/step-functions/pricing/">Step Functions pricing</a>, <a href="https://states-language.net/spec.html">Amazon States Language specification</a>. Lab: <a href="../../../module-06-step-functions/lab-01-asl-basics/README.md">Lab 6.1 ASL basics</a>.</p>
 </section>
 
 <section id="sfn-dataflow">
@@ -142,14 +142,14 @@
   <h3>JSONata and variables</h3>
   <ul>
     <li>Step Functions has two query languages: JSONPath and JSONata. Set <code>QueryLanguage</code> on the state machine or on one state. Without it, the state machine uses JSONPath.</li>
-    <li>AWS recommends JSONata for new state machines.</li>
+    <li>AWS recommends JSONata for new state machines. One JSONata expression can filter, reshape, and compute values. The same work in JSONPath needs several path fields and intrinsic functions.</li>
     <li>JSONata states use <code>Arguments</code> (in place of <code>Parameters</code>) and <code>Output</code> (in place of the path fields). One <code>Output</code> field replaces <code>InputPath</code>, <code>ResultSelector</code>, <code>ResultPath</code>, and <code>OutputPath</code>. An expression is inside <code>{% %}</code>.</li>
     <li>In JSONata, <code>$states.input</code> is the state input, <code>$states.result</code> is the task result, <code>$states.errorOutput</code> is the error in a <code>Catch</code>, and <code>$states.context</code> is the Context object.</li>
     <li><strong>Variables</strong>: the <code>Assign</code> field stores a value. A later state reads it as <code>$name</code>. State output goes only to the next state, but a variable is available to all later states.</li>
-    <li>Variables work in JSONPath and JSONata states. In JSONPath, you cannot use a variable in <code>ResultPath</code>.</li>
+    <li>Variables work in JSONPath and JSONata states. In JSONPath, you cannot use a variable in <code>ResultPath</code>. <code>ResultPath</code> names a location in the input, not a value.</li>
     <li>A value that a state assigns is available from the next state. The same state still sees the old value, because Step Functions evaluates all expressions before it assigns.</li>
     <li>Parallel branches and Map iterations can read outer variables, but they have their own scope. A variable that a branch assigns stops existing when the Parallel or Map state completes. Use the state output to pass data out of the branch.</li>
-    <li>Distributed Map cannot read outer variables.</li>
+    <li>Distributed Map cannot read outer variables. Pass the value to each item with <code>ItemSelector</code> instead.</li>
     <li>Limits: 256 KiB for one variable, 256 KiB for all variables in one <code>Assign</code> field, 10 MiB for all variables in one execution.</li>
   </ul>
   <h3>Numbers to memorize</h3>
@@ -193,7 +193,7 @@
     <li>You cannot change the workflow type after you create the state machine. Create a new state machine.</li>
     <li>Standard is for non-idempotent actions, such as payments. A non-idempotent action has a new effect each time it runs: a second run charges the card again. Express is for idempotent, high-volume event processing, where a second run does no harm.</li>
     <li>Standard: a <code>StartExecution</code> call with the same name and the same input as a running execution returns the same response. It does not start a second execution. A call with the same name and a different input, or after that execution closed, fails with <code>ExecutionAlreadyExists</code>.</li>
-    <li>Express: Step Functions does not manage idempotency. The same name can start concurrent executions.</li>
+    <li>Express: Step Functions does not manage idempotency. The same name can start concurrent executions. A client that retries <code>StartExecution</code> starts a second run, so each step must be idempotent.</li>
     <li>A Standard parent can call an Express child for the high-volume idempotent part. This can reduce cost. The parent keeps the non-idempotent steps (for example approval and payment). The child runs the many short idempotent steps (for example notifications and inventory updates) without per-transition pricing.</li>
   </ul>
   <div class="exam-signals">
@@ -250,7 +250,7 @@
     <li>Use <code>"ResultPath": "$.error"</code> to keep the input and add the error.</li>
   </ul>
   <h3>Transient Lambda errors</h3>
-  <p>AWS recommends a retrier for <code>Lambda.ServiceException</code>, <code>Lambda.AWSLambdaException</code>, <code>Lambda.SdkClientException</code>, and <code>Lambda.ClientExecutionTimeoutException</code>. These are short 500 errors in the Lambda service, not bugs in your code, so a retry usually succeeds. Without a retrier, one of these errors fails the whole execution. The documented example uses <code>IntervalSeconds</code> 2, <code>MaxAttempts</code> 6, and <code>BackoffRate</code> 2. Throttling shows as <code>Lambda.TooManyRequestsException</code>.</p>
+  <p>AWS recommends a retrier for <code>Lambda.ServiceException</code>, <code>Lambda.AWSLambdaException</code>, <code>Lambda.SdkClientException</code>, and <code>Lambda.ClientExecutionTimeoutException</code>. These are temporary 500 errors in the Lambda service, not bugs in your code, so a retry usually succeeds. Without a retrier, one of these errors fails the whole execution. The documented example uses <code>IntervalSeconds</code> 2, <code>MaxAttempts</code> 6, and <code>BackoffRate</code> 2. Throttling shows as <code>Lambda.TooManyRequestsException</code>.</p>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
@@ -269,9 +269,9 @@
   <ul>
     <li>By default, ASL sets no useful timeout. The <code>TimeoutSeconds</code> default is 99,999,999 seconds. A task that never answers keeps the execution open until the execution limit.</li>
     <li>Set <code>TimeoutSeconds</code> on each Task state. A task that runs longer fails with <code>States.Timeout</code>.</li>
-    <li>Set <code>HeartbeatSeconds</code> lower than <code>TimeoutSeconds</code>. The worker calls <code>SendTaskHeartbeat</code> regularly to show that it is still alive. If no heartbeat arrives within <code>HeartbeatSeconds</code>, the task fails with <code>States.HeartbeatTimeout</code>.</li>
+    <li>Set <code>HeartbeatSeconds</code> lower than <code>TimeoutSeconds</code>. The worker calls <code>SendTaskHeartbeat</code> regularly to show that it is still alive. If no heartbeat arrives within <code>HeartbeatSeconds</code>, the task fails. AWS docs list both <code>States.HeartbeatTimeout</code> and <code>States.Timeout</code> for a missed heartbeat. Match both in a retrier or catcher.</li>
     <li>Use a heartbeat for long callback tasks. A heartbeat failure tells you that the worker stopped, not that the job is slow. Example: a 2-hour job with <code>HeartbeatSeconds</code> 600 fails within 10 minutes after the worker crashes, not after 2 hours.</li>
-    <li>A state machine can have a top-level <code>TimeoutSeconds</code> for the whole execution.</li>
+    <li>A state machine can have a top-level <code>TimeoutSeconds</code> for the whole execution. When the execution runs longer, it fails with <code>States.Timeout</code>. Use it to stop an execution that loops or waits too long.</li>
     <li>An Express execution that runs longer than 5 minutes fails with <code>States.Timeout</code>.</li>
   </ul>
   <h3>Numbers to memorize</h3>
@@ -359,7 +359,7 @@
     <tr><th>Pattern</th><th>Examples</th></tr>
     <tr><td><code>.sync</code></td><td>AWS Batch, Amazon ECS/Fargate, Amazon EKS, AWS Glue, Amazon EMR, Amazon Athena, AWS CodeBuild, Amazon SageMaker AI, Step Functions (<code>startExecution.sync</code>)</td></tr>
     <tr><td><code>.waitForTaskToken</code></td><td>AWS Lambda, Amazon SQS, Amazon SNS, Amazon EventBridge, Amazon API Gateway, Amazon ECS, Step Functions</td></tr>
-    <tr><td>Neither</td><td>Amazon DynamoDB (Request Response only). Lambda does not support <code>.sync</code>.</td></tr>
+    <tr><td>Neither</td><td>Amazon DynamoDB (Request Response only). Lambda does not support <code>.sync</code> because Invoke already waits for the function to return. There is no job to wait for.</td></tr>
   </table>
   <ul>
     <li>Express workflows support Request Response only.</li>
@@ -438,7 +438,7 @@
     <li>CloudWatch Logs delivery is best effort: AWS does not guarantee that every log entry arrives, or when. For a guaranteed record, write to a data store such as DynamoDB from a workflow step, or use Standard.</li>
     <li>Use a log group name that starts with <code>/aws/vendedlogs/states</code>. When you turn on logging, Step Functions adds the log group to the CloudWatch Logs resource policy. That policy has a 5,120-character limit, and many log groups can fill it. Then the state machine cannot send logs to a new log group. When the policy comes near the limit, CloudWatch Logs automatically allows logging to log groups whose names start with <code>/aws/vendedlogs/</code>.</li>
     <li>X-Ray: turn on tracing on the state machine. The execution role needs <code>xray:PutTraceSegments</code>, <code>xray:PutTelemetryRecords</code>, <code>xray:GetSamplingRules</code>, and <code>xray:GetSamplingTargets</code>.</li>
-    <li>X-Ray does not trace Distributed Map child executions.</li>
+    <li>X-Ray does not trace Distributed Map child executions. Steps inside the items do not appear in the trace. Use the Map Run details or CloudWatch Logs to find a slow item.</li>
     <li>Only Standard workflows send <strong>Execution Status Change</strong> events to the EventBridge default bus. The source is <code>aws.states</code>. Statuses include <code>FAILED</code>, <code>TIMED_OUT</code>, and <code>ABORTED</code>. Use an EventBridge rule on these events to send alerts without a change to the definition.</li>
     <li>The <code>ExecutionThrottled</code> CloudWatch metric counts state entries and retries that Step Functions throttled because the account reached its state transition quota. Throttled steps start later, so executions run slower.</li>
   </ul>
