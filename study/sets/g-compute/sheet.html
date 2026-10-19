@@ -118,7 +118,7 @@
     <li><strong>Routing algorithm</strong>: round robin sends requests to the targets in turn. Use it when requests are similar. Least outstanding requests sends each request to the target with the fewest requests in progress. Use it when request times vary. Weighted random supports Automatic Target Weights anomaly mitigation, which sends less traffic to a target with a high error rate. Choose weighted random when you want anomaly mitigation. It does not work with sticky sessions or slow start.</li>
     <li><strong>Idle timeout</strong>: the ALB closes a connection when no data moves on it for this time. If a target takes longer than the idle timeout to respond, the client gets 504.</li>
     <li><strong>Sticky sessions</strong> (session affinity): the ALB sends all requests from one client to the same target, so the target can keep session data in memory. The client must accept cookies. Duration-based stickiness uses the ALB cookie <code>AWSALB</code> with a duration that you set. Application-based stickiness follows a cookie that your application sets. Choose it when your application already has its own session cookie.</li>
-    <li>Sticky sessions do not work when cross-zone load balancing is off. Weighted random does not work with sticky sessions.</li>
+    <li>Sticky sessions do not work when cross-zone load balancing is off.</li>
     <li>Sticky sessions are a fast fix for in-memory sessions, with no code change. But when a target fails or is removed, its users lose their sessions. A shared session store (for example, ElastiCache or DynamoDB) is the better design, because any target can then serve any user.</li>
   </ul>
   <h3>Client information</h3>
@@ -167,7 +167,7 @@
   <p>The healthy threshold is the number of checks in a row that a target must pass to become healthy. The unhealthy threshold is the number of checks in a row that it must fail to become unhealthy. The matcher is the list of HTTP status codes that count as a pass.</p>
   <ul>
     <li>A new target must pass one health check before it gets traffic.</li>
-    <li>If all targets in a target group are unhealthy, the ALB <strong>fails open</strong>. It sends traffic to all of them. This protects against a health check that is wrong for every target, for example a bad path. If the targets are really broken, clients get errors from them.</li>
+    <li>If all targets in a target group are unhealthy, the ALB <strong>fails open</strong>. It sends traffic to all of them. AWS says that this increases the chance that a client connection succeeds when targets fail health checks for a short time. It also reduces the risk of overloading the remaining healthy targets.</li>
     <li>The target security group must allow traffic from the load balancer on the health check port. If it does not, the checks get no answer and the targets show <code>Target.Timeout</code>.</li>
   </ul>
   <table>
@@ -263,7 +263,7 @@
     <li>Then <code>docker tag</code> the image with the repository URI and <code>docker push</code> it.</li>
     <li>Docker cannot use IAM credentials directly. <code>get-login-password</code> gets an ECR authorization token, and <code>docker login</code> stores it for Docker.</li>
     <li>The authorization token is valid for <strong>12 hours</strong>. After that, pushes and pulls fail until you log in again. To use several registries, run <code>docker login</code> for each registry. One login covers all repositories in that registry, because Docker stores the login for the registry URI, not for one repository.</li>
-    <li>To push, the principal needs <code>ecr:GetAuthorizationToken</code> and the layer upload actions: <code>ecr:BatchCheckLayerAvailability</code>, <code>ecr:InitiateLayerUpload</code>, <code>ecr:UploadLayerPart</code>, <code>ecr:CompleteLayerUpload</code>, <code>ecr:PutImage</code>, <code>ecr:BatchGetImage</code>. <code>ecr:GetAuthorizationToken</code> uses the resource <code>*</code>.</li>
+    <li>To push, the principal needs <code>ecr:GetAuthorizationToken</code> and the layer upload actions: <code>ecr:BatchCheckLayerAvailability</code>, <code>ecr:InitiateLayerUpload</code>, <code>ecr:UploadLayerPart</code>, <code>ecr:CompleteLayerUpload</code>, <code>ecr:PutImage</code>, <code>ecr:BatchGetImage</code>. <code>ecr:GetAuthorizationToken</code> uses the resource <code>*</code>, because the token is for the whole registry, not for one repository.</li>
     <li><strong>Tag immutability</strong>: after you push a tag, no later push can move that tag to a different image. A push of a tag that already exists fails with <code>ImageTagAlreadyExistsException</code>. Use it so that a release tag always means the same image.</li>
     <li>An image digest (<code>sha256:...</code>) is a hash of the image content, so it always identifies the same image content. Deploy by digest when you must run an exact image, even if a tag moves.</li>
   </ul>
@@ -278,7 +278,7 @@
       <li>"Push fails: no basic auth credentials" or "push fails after 12 hours" → run <code>get-login-password</code> and <code>docker login</code> again, because Docker has no valid ECR token.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html">Push an image to ECR (12-hour token)</a>, <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/registry_auth.html">ECR registry authentication</a>, <ahref="https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-tag-mutability.html">ECR tag immutability</a>, <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-push-iam.html">ECR push permissions</a>, <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/container-considerations.html">ECS container image best practices</a>, <a href="https://docs.docker.com/build/building/multi-stage/">Docker multi-stage builds</a>, <a href="https://docs.docker.com/build/cache/">Docker build cache</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html">Push an image to ECR (12-hour token)</a>, <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/registry_auth.html">ECR registry authentication</a>, <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-tag-mutability.html">ECR tag immutability</a>, <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-push-iam.html">ECR push permissions</a>, <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/container-considerations.html">ECS container image best practices</a>, <a href="https://docs.docker.com/build/building/multi-stage/">Docker multi-stage builds</a>, <a href="https://docs.docker.com/build/cache/">Docker build cache</a>.</p>
 </section>
 
 <section id="compute-eks">
@@ -360,7 +360,7 @@
   <ul>
     <li><strong>AWS Compute Optimizer</strong> gives rightsizing recommendations. Rightsizing means changing a resource to the smallest size that still meets the needs of the workload. You must opt in first. Compute Optimizer makes no recommendations before you opt in.</li>
     <li>It covers EC2 instances, Auto Scaling groups, EBS volumes, Lambda functions, ECS services on Fargate, and more.</li>
-    <li>It analyzes the last <strong>14 days</strong> of metrics by default. Enhanced infrastructure metrics is a paid Compute Optimizer option that keeps <strong>93 days</strong> of metrics.</li>
+    <li>It analyzes the last <strong>14 days</strong> of metrics by default. Enhanced infrastructure metrics is a paid Compute Optimizer option that extends the lookback period to <strong>93 days</strong>.</li>
     <li>A 14-day window can miss a peak that comes once a month. Rightsizing preferences also allow a free 32-day lookback, which includes a full monthly cycle.</li>
     <li>For EC2 memory recommendations, install the CloudWatch agent on the instances.</li>
     <li>Scale on the metric that limits the application. For a web tier behind an ALB, request count for each target (<code>ALBRequestCountPerTarget</code>) can be a better signal than CPU. For example, an application that waits on I/O can be overloaded while its CPU stays low.</li>
