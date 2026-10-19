@@ -13,7 +13,7 @@ window.QUESTION_BANKS.push({ setId: "m02-databases", questions: [
       { text: "Partition key region (four possible values) and a GSI on deviceId.", correct: false,
         why: "The table key still has only four values, so table writes go to hot partitions. A GSI does not change how the base table spreads writes." }
     ],
-    explanation: "Use a high-cardinality partition key so that requests spread across partitions. Put the value you sort or filter by, such as a timestamp, in the sort key." },
+    explanation: "DynamoDB sends all requests for one partition key value to one partition, and each partition has a throughput limit. A high-cardinality key (many different values, such as deviceId) spreads requests across many partitions. Put the value you sort or filter by, such as a timestamp, in the sort key." },
 
   { id: "m02-002", topic: "ddb-keys", domain: 4,
     stem: "A voting application writes each vote to a DynamoDB table with the partition key candidateId. During a live event, one popular candidate receives most votes. The application gets throttling errors, but CloudWatch shows that the table uses only 20% of its provisioned write capacity. The developer must remove the throttling. Which solution will meet these requirements?",
@@ -27,7 +27,7 @@ window.QUESTION_BANKS.push({ setId: "m02-databases", questions: [
       { text: "Add a GSI with candidateId as the partition key.", correct: false,
         why: "A GSI with the same hot key has the same concentration of writes. It adds write cost and can also throttle base table writes." }
     ],
-    explanation: "Throttling with low table utilization points to a hot partition key. Write sharding (a suffix on the key) spreads the writes." },
+    explanation: "Throttling with low table utilization points to a hot partition: one key value gets more writes than one partition can accept (1,000 write units each second). Write sharding adds a suffix to the key value, so the writes spread over many key values and partitions." },
 
   { id: "m02-003", topic: "ddb-keys", domain: 1,
     stem: "An application stores customer records in DynamoDB. A new feature must store a scanned contract PDF of about 3 MB with each customer record. The application must find the contract from the customer ID. The solution must be the MOST cost-effective. Which solution will meet these requirements?",
