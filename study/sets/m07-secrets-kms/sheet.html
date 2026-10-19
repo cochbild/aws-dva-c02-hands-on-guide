@@ -47,7 +47,7 @@
     <li>A staging label is a name that is attached to one version, for example <code>AWSCURRENT</code>. Applications ask for a label, not a version ID. When a label moves to a new version, the application gets the new value with no code change. <code>GetSecretValue</code> with no version returns the version with <code>AWSCURRENT</code>.</li>
     <li>You cannot delete one version directly. Remove all its labels with <code>UpdateSecretVersionStage</code>. Secrets Manager then removes it in the background.</li>
     <li><code>DeleteSecret</code> does not delete the secret at once. It schedules deletion after a recovery window, so you can undo a mistake. During the window, <code>GetSecretValue</code> fails with <code>InvalidRequestException</code>, so applications that use the secret stop working. <code>RestoreSecret</code> cancels the deletion and keeps the same ARN.</li>
-    <li><code>ForceDeleteWithoutRecovery</code> is a <code>DeleteSecret</code> option that deletes the secret with no recovery window. You cannot recover it. Use it only when you must use the same name again at once, for example in a test.</li>
+    <li><code>ForceDeleteWithoutRecovery</code> is a <code>DeleteSecret</code> option that deletes the secret with no recovery window. You cannot recover it. Use it with caution, for example for test secrets. Deletion is still a background task, so a new secret with the same name may need a retry.</li>
     <li>You can replicate a secret to other Regions with <code>ReplicateSecretToRegions</code>. Secrets Manager keeps the replicas in sync with the primary secret. An application then reads the replica in its own Region, which gives low latency and keeps working if the primary Region fails.</li>
   </ul>
   <h3>Staging labels</h3>
@@ -56,7 +56,7 @@
     <tr><td><code>AWSCURRENT</code></td><td>The active value. Applications read this label.</td></tr>
     <tr><td><code>AWSPENDING</code></td><td>The new value during a rotation, before the rotation completes.</td></tr>
     <tr><td><code>AWSPREVIOUS</code></td><td>The last known good value. Secrets Manager adds it to the old version when <code>AWSCURRENT</code> moves.</td></tr>
-    <tr><td>Custom labels</td><td>Labels that you add. Maximum 20 labels across all versions of a secret.</td></tr>
+    <tr><td>Custom labels</td><td>Labels that you add. Maximum 20 labels across all versions of a secret. Example: a test fleet reads a <code>CANARY</code> label on a new version while production still reads <code>AWSCURRENT</code>.</td></tr>
   </table>
   <h3>Numbers to memorize</h3>
   <table>
@@ -76,7 +76,7 @@
       <li>"Store a 100 KB certificate bundle as one secret" → too large. The limit is 64 KB.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/reference_limits.html">Secrets Manager quotas</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_DeleteSecret.html">DeleteSecret (recovery window)</a>, <a href="https://aws.amazon.com/secrets-manager/pricing/">Secrets Manager pricing</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html">GetSecretValue (InvalidRequestException)</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/create-manage-multi-region-secrets.html">Replicate secrets to other Regions</a>. Lab: <a href="../../../module-07-secrets-config/lab-01-secrets-manager-basics/README.md">Lab 7.1 Secrets Manager basics</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/reference_limits.html">Secrets Manager quotas</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_DeleteSecret.html">DeleteSecret (recovery window, ForceDeleteWithoutRecovery)</a>, <a href="https://aws.amazon.com/secrets-manager/pricing/">Secrets Manager pricing</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html">GetSecretValue (InvalidRequestException)</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/create-manage-multi-region-secrets.html">Replicate secrets to other Regions</a>. Lab: <a href="../../../module-07-secrets-config/lab-01-secrets-manager-basics/README.md">Lab 7.1 Secrets Manager basics</a>.</p>
 </section>
 
 <section id="secrets-rotation">
@@ -86,7 +86,7 @@
     <li>Rotation changes the secret value and the credential in the database or service at the same time. Two forms of rotation exist. <strong>Managed rotation</strong>: the service that owns the secret (for example, Amazon RDS) rotates it with no Lambda function. <strong>Rotation by Lambda function</strong>: a Lambda function rotates the secret. Use managed rotation when the service offers it, because you have no function to write or maintain.</li>
     <li>Secrets Manager gives rotation function templates for Amazon RDS, Amazon Aurora, Amazon Redshift, and Amazon DocumentDB. Use the generic template for other secrets.</li>
     <li>The console can create the rotation function and its execution role for you.</li>
-    <li>The rotation function must reach both Secrets Manager and the database. A Lambda function in a VPC can reach only resources in that VPC, unless the VPC gives it internet access. The Secrets Manager API is a public endpoint. Without a Secrets Manager VPC endpoint or a NAT gateway, the function waits for the API until it times out, and the rotation fails. It also needs a network path to the database, so you cannot simply move it out of the VPC.</li>
+    <li>The rotation function must reach both Secrets Manager and the database. A Lambda function in a VPC can reach only resources in that VPC, unless the VPC gives it internet access. The Secrets Manager API is a public endpoint. Without a Secrets Manager VPC endpoint or a NAT gateway, the function waits for the API until the timeout, and the rotation fails. It also needs a network path to the database, so you cannot simply move it out of the VPC.</li>
     <li>"Rotate immediately when the secret is stored" starts a rotation when you save the configuration. If you clear it, the first rotation follows the schedule.</li>
   </ul>
   <h3>The four steps of a rotation function</h3>
@@ -139,7 +139,7 @@
     <tr><td>Secret cache TTL</td><td>300 seconds (<code>SECRETS_MANAGER_TTL</code>, 0 to 300)</td></tr>
     <tr><td>Parameter cache TTL</td><td>300 seconds (<code>SSM_PARAMETER_STORE_TTL</code>)</td></tr>
     <tr><td>Cache size</td><td>1,000 items</td></tr>
-    <tr><td>Request header</td><td><code>X-Aws-Parameters-Secrets-Token</code> with the session token of the function</td></tr>
+    <tr><td>Request header</td><td><code>X-Aws-Parameters-Secrets-Token</code> with the session token of the function. The extension requires this header to show that the request comes from inside the Lambda execution environment.</td></tr>
     <tr><td>Secret path</td><td><code>/secretsmanager/get?secretId=...</code></td></tr>
   </table>
   <h3>Lambda environment variables and KMS</h3>
@@ -166,7 +166,7 @@
       <li>"Environment variable must stay encrypted until the code uses it, even in the console" → encryption helpers with a customer managed key, and decrypt in code.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-secrets-manager.html">Use Secrets Manager secrets in Lambda (extension settings)</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/auth-and-access_examples_cross.html">Cross-account access to secrets</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars-encryption.html">Securing Lambda environment variables</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets.html">Get secrets (caching components)</a>. Lab: <a href="../../../module-07-secrets-config/lab-01-secrets-manager-basics/README.md">Lab 7.1 Secrets Manager basics</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-secrets-manager.html">Use Secrets Manager secrets in Lambda (extension settings)</a>, <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/ps-integration-lambda-extensions.html">Parameters and Secrets Lambda Extension (header requirement)</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/auth-and-access_examples_cross.html">Cross-account access to secrets</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars-encryption.html">Securing Lambda environment variables</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets.html">Get secrets (caching components)</a>. Lab: <a href="../../../module-07-secrets-config/lab-01-secrets-manager-basics/README.md">Lab 7.1 Secrets Manager basics</a>.</p>
 </section>
 
 <section id="secrets-choose">
@@ -188,7 +188,7 @@
     <li>Choose Secrets Manager for database credentials that must rotate. It is the only one of the three with built-in rotation.</li>
     <li>Choose Parameter Store <code>SecureString</code> for a static secret at the lowest cost. A Standard parameter has no storage charge and is encrypted with KMS. Secrets Manager charges for each secret each month.</li>
     <li>Choose Parameter Store <code>String</code> in a hierarchy for plain configuration values, with one path for each environment (for example <code>/myapp/prod/</code>). One <code>GetParametersByPath</code> call loads the whole path.</li>
-    <li>Choose AppConfig for feature flags, or for configuration that must roll out slowly and roll back on an alarm. Parameter Store and Secrets Manager give a new value to all readers at once, with no gradual rollout and no rollback.</li>
+    <li>Choose AppConfig for feature flags, or for configuration that must roll out slowly and roll back on an alarm. Parameter Store and Secrets Manager give a new value to all readers at once, with no gradual rollout and no automatic rollback.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
@@ -326,14 +326,14 @@
     <li><strong>Bake time</strong>: after the data reaches 100 percent of targets, AppConfig watches CloudWatch alarms for this time. If an alarm goes off, AppConfig rolls back.</li>
     <li>AppConfig also rolls back if an alarm goes into <code>ALARM</code> or <code>INSUFFICIENT_DATA</code> during the rollout. You add the alarms to the environment. An alarm with missing metric data can therefore cause a rollback.</li>
     <li><code>StopDeployment</code> rolls back a deployment that is still in progress.</li>
-    <li>Automatic rollback needs an IAM role that lets AppConfig read the alarms.</li>
-    <li>You can deploy only one configuration at a time to an environment.</li>
+    <li>Automatic rollback needs an IAM role that lets AppConfig read the alarms (<code>cloudwatch:DescribeAlarms</code>). Without the role, AppConfig cannot read the alarm state and does not roll back.</li>
+    <li>You can deploy only one configuration at a time to an environment. A second deployment to that environment must wait until the first deployment completes or you stop it. You can deploy to different environments at the same time.</li>
   </ul>
   <h3>Predefined strategies</h3>
   <table>
     <tr><th>Strategy</th><th>Rollout</th><th>Bake time</th></tr>
     <tr><td><code>AppConfig.Linear20PercentEvery6Minutes</code></td><td>20 percent every 6 minutes, 30 minutes in total. AWS recommended for production.</td><td>30 minutes</td></tr>
-    <tr><td><code>AppConfig.Canary10Percent20Minutes</code></td><td>Exponential, 10 percent growth factor, over 20 minutes. AWS recommended for production.</td><td>10 minutes</td></tr>
+    <tr><td><code>AppConfig.Canary10Percent20Minutes</code></td><td>Exponential, 10 percent growth factor, over 20 minutes. A canary sends the change to a small group first, so a bad change affects few targets. AWS recommended for production.</td><td>10 minutes</td></tr>
     <tr><td><code>AppConfig.AllAtOnce</code></td><td>All targets at once</td><td>10 minutes</td></tr>
     <tr><td><code>AppConfig.Linear50PercentEvery30Seconds</code></td><td>Half every 30 seconds, 1 minute in total. For tests and demonstrations only.</td><td>1 minute</td></tr>
   </table>
@@ -346,7 +346,7 @@
       <li>"Gradual configuration change with no new code deployment" → AppConfig, not a Lambda alias or CodeDeploy. A Lambda alias and CodeDeploy shift traffic between versions of code. AppConfig changes only the configuration data that running code reads.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-creating-deployment-strategy-predefined.html">Predefined deployment strategies</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-creating-deployment-strategy.html">Deployment strategy settings</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-deploying.html">Deploying a configuration</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/monitoring-deployments.html">Monitoring deployments for automatic rollback (ALARM, INSUFFICIENT_DATA)</a>. Lab: <a href="../../../module-07-secrets-config/lab-03-appconfig-feature-flags/README.md">Lab 7.3 AppConfig feature flags</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-creating-deployment-strategy-predefined.html">Predefined deployment strategies</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-creating-deployment-strategy.html">Deployment strategy settings</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-deploying.html">Deploying a configuration</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/setting-up-appconfig.html">Permissions for automatic rollback</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/monitoring-deployments.html">Monitoring deployments for automatic rollback (ALARM, INSUFFICIENT_DATA)</a>. Lab: <a href="../../../module-07-secrets-config/lab-03-appconfig-feature-flags/README.md">Lab 7.3 AppConfig feature flags</a>.</p>
 </section>
 
 <section id="kms-keys">
@@ -386,7 +386,7 @@
 <section id="kms-envelope">
   <h2>Envelope encryption, data keys, and encryption context</h2>
   <h3>Envelope encryption steps</h3>
-  <p>Envelope encryption uses two keys. A data key encrypts the data on your own computer. The KMS key encrypts only the small data key. KMS <code>Encrypt</code> accepts a maximum of 4,096 bytes, and each call goes over the network. With a data key, a large file needs only one KMS call, and the bulk encryption runs locally.</p>
+  <p>Envelope encryption uses two keys. A data key encrypts the data in your application, outside KMS. The KMS key encrypts only the small data key. KMS <code>Encrypt</code> accepts a maximum of 4,096 bytes, and each call goes over the network. With a data key, a large file needs only one KMS call, and the bulk encryption runs locally.</p>
   <ol>
     <li>Call <code>GenerateDataKey</code> with a symmetric KMS key. KMS returns <code>Plaintext</code> (the data key) and <code>CiphertextBlob</code> (the same data key, encrypted).</li>
     <li>Encrypt the data locally with the plaintext data key.</li>
@@ -406,7 +406,7 @@
   <h3>Encryption context</h3>
   <ul>
     <li>A set of non-secret key-value pairs that describe the data, for example <code>{"tenant":"42"}</code>. KMS uses it as additional authenticated data: it is not encrypted, but it is cryptographically bound to the ciphertext.</li>
-    <li>Decrypt must use the same context (exact, case-sensitive match). If not, KMS returns <code>InvalidCiphertextException</code>. This stops code from decrypting tenant 42's data while it asks for tenant 7, or from using a ciphertext that was moved to a different record.</li>
+    <li>Decrypt must use the same context (exact, case-sensitive match). If not, KMS returns <code>InvalidCiphertextException</code>. A request that sends <code>{"tenant":"7"}</code> cannot decrypt data that was encrypted with <code>{"tenant":"42"}</code>. A ciphertext that was moved to a different record also fails to decrypt, when the context names the record.</li>
     <li>CloudTrail logs the context in plaintext. Do not put secrets in it.</li>
     <li>Use the <code>kms:EncryptionContext:&lt;key&gt;</code> condition to allow decryption only for one tenant or one resource.</li>
   </ul>
@@ -482,7 +482,7 @@
     <li>Grants do not expire on their own. Delete a grant with <code>RetireGrant</code> or <code>RevokeGrant</code>.</li>
     <li>The retiring principal is a principal that the grant names as allowed to retire it. It retires the grant when it finishes the task. A key administrator usually revokes a grant to take access away.</li>
     <li>KMS is eventually consistent: a new grant can take a few seconds, sometimes several minutes, to be known in all of KMS. Until then, a call that uses the grant can get an access denied error. Pass the <strong>grant token</strong> from <code>CreateGrant</code> in the call to use the grant at once.</li>
-    <li>AWS services (for example, Amazon EBS) create grants to use your key for you. The condition <code>kms:GrantIsForAWSResource</code> allows this only for AWS services.</li>
+    <li>AWS services (for example, Amazon EBS) create grants to use your key for you. The condition <code>kms:GrantIsForAWSResource</code> allows this only for AWS services. Put this condition on the <code>kms:CreateGrant</code> statement in the key policy. Then an AWS service can create grants for your resources, but the principal cannot call <code>CreateGrant</code> directly to give the key to any other principal.</li>
     <li>Limit: 50,000 grants for each KMS key.</li>
   </ul>
   <h3>Useful condition keys</h3>
@@ -508,7 +508,7 @@
       <li>"Account B cannot decrypt with the key in Account A" → check both the key policy in A and the IAM policy in B.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/kms/latest/developerguide/key-policy-default.html">Default key policy</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/grants.html">Grants (eventual consistency, grant tokens)</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/conditions-kms.html">KMS condition keys</a>. Lab: <a href="../../../module-07-secrets-config/lab-05-kms-key-policies-and-grants/README.md">Lab 7.5 KMS key policies and grants</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/kms/latest/developerguide/key-policy-default.html">Default key policy</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/grants.html">Grants (eventual consistency, grant tokens)</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/conditions-kms.html">KMS condition keys (kms:GrantIsForAWSResource)</a>. Lab: <a href="../../../module-07-secrets-config/lab-05-kms-key-policies-and-grants/README.md">Lab 7.5 KMS key policies and grants</a>.</p>
 </section>
 
 <section id="acm-certs">
@@ -517,7 +517,7 @@
   <ul>
     <li>ACM public certificates for integrated services (CloudFront, Elastic Load Balancing, API Gateway, and others) have no charge. ACM manages their renewal.</li>
     <li>A standard ACM public certificate is for integrated AWS services only. You cannot export it to an EC2 instance. ACM also offers exportable public certificates, at a charge for each certificate. Older study material says no ACM public certificate can be exported. Exportable certificates were added in June 2025.</li>
-    <li>ACM certificates are Regional. A resource can use only a certificate in its own Region. CloudFront is a global service, and it reads certificates only from <code>us-east-1</code>. API Gateway edge-optimized endpoints use CloudFront, so they also use certificates in <code>us-east-1</code>. A Regional API or a load balancer uses a certificate in its own Region. A certificate in another Region does not appear in the list.</li>
+    <li>ACM certificates are Regional. A resource can use only a certificate in its own Region. CloudFront is a global service, and it reads certificates only from <code>us-east-1</code>. API Gateway edge-optimized endpoints use CloudFront, so they also use certificates in <code>us-east-1</code>. A Regional API or a load balancer uses a certificate in its own Region. A certificate in another Region does not appear in the certificate list in the CloudFront or API Gateway console.</li>
     <li>A wildcard protects one level only. <code>*.example.com</code> covers <code>a.example.com</code>, but not <code>example.com</code> or <code>a.b.example.com</code>.</li>
     <li>ACM does not renew imported certificates. Import a new certificate before expiry. If you do not, clients get TLS errors after the certificate expires.</li>
     <li>AWS Private CA is a managed private CA for internal TLS, mutual TLS, and devices. Browsers do not trust its certificates. General-purpose mode costs $400 for each CA each month.</li>
@@ -529,7 +529,7 @@
     <tr><td>Email</td><td>ACM sends email to admin@, administrator@, hostmaster@, postmaster@, and webmaster@ the domain</td><td>The domain owner must approve each renewal by email</td></tr>
   </table>
   <p>DNS validation renews with no human step, because ACM checks the same CNAME record again at each renewal. Choose email validation only when you cannot add DNS records for the domain.</p>
-  <p>ACM public certificates are valid for 198 days, and renewal starts 45 days before expiry. Older study material says 13 months (395 days) and renewal from 60 days before expiry. Since February 2026 the values are 198 days and 45 days. If validation does not complete in 72 hours, the status changes to "Validation timed out".</p>
+  <p>ACM public certificates are valid for 198 days, and renewal starts 45 days before expiry. Older study material says 13 months (395 days) and renewal from 60 days before expiry. Since February 2026 the values are 198 days and 45 days. If validation does not complete in 72 hours, the status changes to "Validation timed out". Request the certificate again and complete validation.</p>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
@@ -539,7 +539,7 @@
       <li>"Internal services need private certificates from a managed CA" → AWS Private CA.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/acm/latest/userguide/dns-validation.html">DNS validation</a>, <a href="https://docs.aws.amazon.com/acm/latest/userguide/email-validation.html">Email validation (addresses, 198 days, 72 hours)</a>, <a href="https://docs.aws.amazon.com/acm/latest/userguide/acm-concepts.html">ACM concepts (wildcards)</a>, <a href="https://docs.aws.amazon.com/acm/latest/userguide/acm-exportable-certificates.html">Exportable public certificates</a>, <a href="https://aws.amazon.com/private-ca/pricing/">AWS Private CA pricing</a>. Lab: <a href="../../../module-07-secrets-config/lab-06-acm-and-acm-pca/README.md">Lab 7.6 ACM and ACM PCA</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/acm/latest/userguide/dns-validation.html">DNS validation</a>, <a href="https://docs.aws.amazon.com/acm/latest/userguide/email-validation.html">Email validation (addresses, 198 days, 72 hours)</a>, <a href="https://docs.aws.amazon.com/acm/latest/userguide/acm-concepts.html">ACM concepts (wildcards)</a>, <a href="https://docs.aws.amazon.com/acm/latest/userguide/acm-exportable-certificates.html">Exportable public certificates</a>, <a href="https://aws.amazon.com/private-ca/pricing/">AWS Private CA pricing</a>, <a href="https://repost.aws/knowledge-center/acm-validation-time-out">Validation timed out (AWS re:Post)</a>. Lab: <a href="../../../module-07-secrets-config/lab-06-acm-and-acm-pca/README.md">Lab 7.6 ACM and ACM PCA</a>.</p>
 </section>
 
 </main>
