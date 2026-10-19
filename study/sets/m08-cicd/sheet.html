@@ -43,7 +43,7 @@
   <h2>Source and package repositories: CodeCommit and CodeArtifact</h2>
   <h3>Git repositories and triggers</h3>
   <ul>
-    <li>A commit to a Git repository (CodeCommit, GitHub, GitLab, Bitbucket) can start a pipeline. CodePipeline uses EventBridge or a connection to detect the change.</li>
+    <li>A commit to a Git repository (CodeCommit, GitHub, GitLab, Bitbucket) can start a pipeline. CodePipeline detects the change in one of two ways. For CodeCommit and Amazon S3 sources, an EventBridge rule starts the pipeline. For GitHub, GitLab, and Bitbucket, a connection (AWS CodeConnections) is an authorized link that lets CodePipeline read the repository and receive its push events.</li>
     <li>Use branches for environments and Git tags for releases. For example, a push to the <code>dev</code> branch deploys to test, and a push of tag <code>v1.4.0</code> starts the production release. A V2 pipeline can filter triggers on branches, tags, and file paths, so that only the matching pushes start it.</li>
   </ul>
   <h3>CodeCommit (short note)</h3>
@@ -160,7 +160,7 @@
     <li>Two cache types: Amazon S3 and local. An S3 cache is in a bucket, so every build host can use it. Choose it for small to medium files that take longer to build than to download.</li>
     <li>A local cache is on the build host, so only builds that run on that host can use it. Choose it for large files and frequent builds, because it has no network transfer time. Local cache does not work for builds in a VPC.</li>
     <li>Local cache modes: source cache (Git metadata, so a build downloads only new commits), Docker layer cache (image layers), and custom cache (directories that you list in the buildspec <code>cache</code> paths). You can select one or more.</li>
-    <li>Docker layer cache works on Linux only and requires privileged mode.</li>
+    <li>Docker layer cache works on Linux only. It requires privileged mode, because the Docker daemon must run in the build container to reuse layers.</li>
   </ul>
   <h3>Docker builds</h3>
   <ul>
@@ -268,7 +268,7 @@
     <tr><th>Item</th><th>Value</th></tr>
     <tr><td>Hook script timeout</td><td>Default 3,600 seconds. 3,600 seconds is also the maximum for all scripts in one lifecycle event.</td></tr>
     <tr><td>Wait after you tag an instance</td><td>At least 5 minutes before you deploy, so that CodeDeploy can read the tags</td></tr>
-    <tr><td>Terminated instance during a lifecycle event</td><td>The deployment can take up to one hour to show Failed</td></tr>
+    <tr><td>Terminated instance during a lifecycle event</td><td>The deployment can take up to one hour to show Failed. CodeDeploy gives each lifecycle event a one-hour window, and a terminated instance has no agent to report a result.</td></tr>
   </table>
   <h3>Deployment configurations (EC2/On-Premises)</h3>
   <table>
@@ -320,7 +320,7 @@
   <h3>Hooks, in order</h3>
   <table>
     <tr><th>Hook</th><th>When it runs</th></tr>
-    <tr><td><code>BeforeInstall</code></td><td>Before CodeDeploy creates the replacement task set. No rollback is possible here.</td></tr>
+    <tr><td><code>BeforeInstall</code></td><td>Before CodeDeploy creates the replacement task set. No rollback is possible here, because nothing has changed yet.</td></tr>
     <tr><td><code>AfterInstall</code></td><td>After the replacement task set exists and has a target group</td></tr>
     <tr><td><code>AfterAllowTestTraffic</code></td><td>After the test listener sends traffic to the replacement task set</td></tr>
     <tr><td><code>BeforeAllowTraffic</code></td><td>Before production traffic moves to the replacement task set</td></tr>
@@ -332,6 +332,7 @@
     <li><code>CodeDeployDefault.ECSLinear10PercentEvery1Minutes</code> and <code>ECSLinear10PercentEvery3Minutes</code>.</li>
     <li><code>CodeDeployDefault.ECSAllAtOnce</code>. With a Network Load Balancer, only this predefined configuration is supported.</li>
   </ul>
+  <p>A canary configuration moves 10 percent of production traffic to the replacement task set, then the remaining 90 percent after 5 or 15 minutes. A linear configuration moves 10 percent more every 1 or 3 minutes until all traffic moves.</p>
   <h3>Note: native ECS strategies</h3>
   <p>Since 2025, the ECS deployment controller also has native blue/green, linear, and canary strategies, with Lambda lifecycle hooks and a bake time. Exam questions usually describe the CodeDeploy pattern. Read the stem for the service that it names.</p>
   <div class="exam-signals">
@@ -352,9 +353,9 @@
     <li>A pipeline has stages. Each stage has actions. Actions in a stage can run in parallel or in order (<code>runOrder</code>). Actions with the same <code>runOrder</code> number run in parallel. An action with a higher number starts after the lower numbers finish.</li>
     <li>Action categories: Source, Build, Test, Deploy, Approval, Invoke. An Invoke action runs a Lambda function or a Step Functions state machine, for example to run a custom check.</li>
     <li>Actions pass input and output artifacts through an S3 artifact store.</li>
-    <li>With more than one source action, all source actions run again when one source changes.</li>
+    <li>With more than one source action, all source actions run again when one source changes. So every execution gets the current revision of every source.</li>
     <li>A failed action stops the execution. You can retry the failed stage, or a newer execution can take its place.</li>
-    <li>A transition is the link between two stages. Disable a transition to stop executions from entering a stage, for example during a production change freeze. Executions wait at the transition until you enable it again. A disabled transition sends no notification.</li>
+    <li>A transition is the link between two stages. Disable a transition to stop executions from entering a stage, for example during a production change freeze. The newest execution waits at the transition. In <code>SUPERSEDED</code> mode, a newer execution replaces an older waiting one. When you enable the transition, the newest execution enters the stage.</li>
     <li>If a CloudFormation deploy action fails, the error message shows the first failed resource when the role has <code>cloudformation:DescribeStackEvents</code>.</li>
   </ul>
   <h3>Manual approval</h3>
@@ -375,7 +376,11 @@
   <h3>V2-only features</h3>
   <ul>
     <li>Triggers with filters on Git tags, branches, pull requests, and file paths.</li>
-    <li>Pipeline-level variables, stage rollback, stage conditions, automatic stage retry, and the Commands action.</li>
+    <li>Pipeline-level variables: values that you set when an execution starts (with a default value), and that actions use as <code>#{variables.name}</code>.</li>
+    <li>Stage rollback: run a stage again with the source revisions and variables of an earlier successful execution, manually or automatically when the stage fails.</li>
+    <li>Stage conditions: rules that the pipeline checks before a stage starts, or after it succeeds or fails, for example a CloudWatch alarm or a deployment time window. The result can fail or skip the stage, or roll it back.</li>
+    <li>Automatic stage retry: the pipeline retries a failed stage or its failed actions with no manual step.</li>
+    <li>The Commands action: runs shell commands on CodeBuild compute that CodePipeline manages, with no CodeBuild project to create.</li>
   </ul>
   <h3>CloudFormation deploy action modes</h3>
   <table>
@@ -383,7 +388,7 @@
     <tr><td><code>CREATE_UPDATE</code></td><td>Creates the stack, or updates it if it exists</td></tr>
     <tr><td><code>CHANGE_SET_REPLACE</code></td><td>Creates a change set (replaces an existing one with the same name). Does not change the stack.</td></tr>
     <tr><td><code>CHANGE_SET_EXECUTE</code></td><td>Runs the change set and changes the stack</td></tr>
-    <tr><td><code>REPLACE_ON_FAILURE</code></td><td>Deletes and creates again a stack in a failed state. For tests only.</td></tr>
+    <tr><td><code>REPLACE_ON_FAILURE</code></td><td>Deletes and creates again a stack in a failed state. For tests only, because the delete removes every resource in the stack, including databases and their data.</td></tr>
     <tr><td><code>DELETE_ONLY</code></td><td>Deletes the stack</td></tr>
   </table>
   <p>A change set is a list of the resource changes that CloudFormation will make, created before it makes them. Choose <code>CREATE_UPDATE</code> to deploy directly. Choose <code>CHANGE_SET_REPLACE</code> and then <code>CHANGE_SET_EXECUTE</code> when a person must review the changes first.</p>
@@ -396,7 +401,7 @@
       <li>"Start only when a release tag is pushed" → V2 trigger with a Git tag filter.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/concepts-how-it-works.html">How pipeline executions work</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/pipeline-types-planning.html">V1 and V2 pipeline types</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/approvals.html">Manual approvals</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-CloudFormation.html">CloudFormation action reference</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-06-codepipeline/README.md">Lab 8.6 CodePipeline</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/concepts-how-it-works.html">How pipeline executions work</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/pipeline-types-planning.html">V1 and V2 pipeline types</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/approvals.html">Manual approvals</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/transitions.html">Stage transitions</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/stage-rollback.html">Stage rollback</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/stage-conditions.html">Stage conditions</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-Commands.html">Commands action</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/tutorials-pipeline-variables.html">Pipeline-level variables</a>, <a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-CloudFormation.html">CloudFormation action reference</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-06-codepipeline/README.md">Lab 8.6 CodePipeline</a>.</p>
 </section>
 
 <section id="cicd-pipeline-security">
@@ -463,7 +468,7 @@
     <tr><th>Command</th><th>What it does</th></tr>
     <tr><td><code>cdk synth</code></td><td>Synthesizes the CloudFormation template locally</td></tr>
     <tr><td><code>cdk diff</code></td><td>Compares the app with the deployed stack</td></tr>
-    <tr><td><code>cdk deploy</code></td><td>Synthesizes and deploys through CloudFormation. Asks for approval of security-broadening changes by default.</td></tr>
+    <tr><td><code>cdk deploy</code></td><td>Synthesizes and deploys through CloudFormation. Asks for approval of security-broadening changes by default: changes that add IAM permissions or open security group rules. Use <code>--require-approval never</code> in a pipeline, where nobody can answer.</td></tr>
     <tr><td><code>cdk deploy --hotswap</code></td><td>Updates some resources (for example, Lambda code) directly through service APIs. Development only, because it causes drift: the real resources no longer match what the CloudFormation stack records.</td></tr>
     <tr><td><code>cdk watch</code></td><td>Deploys automatically when files change. Uses hotswap by default.</td></tr>
     <tr><td><code>cdk destroy</code></td><td>Deletes the stack. The <code>CDKToolkit</code> stack stays.</td></tr>
@@ -493,7 +498,7 @@
   <h3>Numbers to memorize</h3>
   <table>
     <tr><th>Item</th><th>Value</th></tr>
-    <tr><td>Fargate ephemeral storage (platform 1.4.0 and later)</td><td>20 GiB minimum by default, up to 200 GiB</td></tr>
+    <tr><td>Fargate ephemeral storage (platform 1.4.0 and later)</td><td>20 GiB by default. You can set up to 200 GiB.</td></tr>
     <tr><td><code>minimumHealthyPercent</code> default (replica service)</td><td>100 percent</td></tr>
     <tr><td><code>maximumPercent</code> default (replica service)</td><td>200 percent</td></tr>
   </table>
@@ -609,7 +614,7 @@
     <li>Rolling, Rolling with additional batch, and Traffic splitting need a load-balanced environment. Traffic splitting needs an Application Load Balancer.</li>
     <li>All at once and Immutable also work in single-instance environments.</li>
     <li>Traffic splitting defaults: 10 percent of traffic to the new version, evaluation time 5 minutes. During the evaluation time, Elastic Beanstalk watches the health of the new instances. If they stay healthy, it moves all traffic to them and terminates the old instances. If not, it moves traffic back and terminates the new instances.</li>
-    <li>Batch size: a percentage or a fixed number of instances.</li>
+    <li>Batch size: a percentage or a fixed number of instances. Use a percentage when the number of instances changes, so that each batch grows with the fleet. Use a fixed number when you must know how many instances are out of service at a time.</li>
   </ul>
   <h3>Blue/green with Elastic Beanstalk</h3>
   <ul>
@@ -628,7 +633,7 @@
       <li>"New platform version cannot run next to the old one" → blue/green with a CNAME swap.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.deploy-existing-version.html">Deployment policies</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.rolling-version-deploy.html">Deployment policies and settings (traffic splitting)</a>,<a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/command-options-general.html#command-options-general-elasticbeanstalkcommand">aws:elasticbeanstalk:command options (defaults)</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.CNAMESwap.html">Blue/green with CNAME swap</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-09-beanstalk-and-amplify/README.md">Lab 8.9 Beanstalk and Amplify</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.deploy-existing-version.html">Deployment policies</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.rolling-version-deploy.html">Deployment policies and settings (traffic splitting)</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/command-options-general.html#command-options-general-elasticbeanstalkcommand">aws:elasticbeanstalk:command options (defaults)</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.CNAMESwap.html">Blue/green with CNAME swap</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-09-beanstalk-and-amplify/README.md">Lab 8.9 Beanstalk and Amplify</a>.</p>
 </section>
 
 <section id="eb-env-config">
@@ -638,7 +643,7 @@
     <li>An application has application versions and environments. Each environment runs one version.</li>
     <li>Web server environments serve HTTP. Worker environments process messages from an Amazon SQS queue. Use a worker environment for long tasks, such as image processing or email, so that the web tier stays fast.</li>
     <li>In a worker environment, a daemon (a background process that Elastic Beanstalk runs on each instance) reads the queue. It sends each message as an HTTP POST to <code>http://localhost/</code> on port 80. Your application only handles the POST request.</li>
-    <li>A <code>200 OK</code> response deletes the message. Any other response returns the message to the queue after the error visibility timeout, so another attempt can process it. After the maximum retries (default 10), the message goes to the dead-letter queue, which an automatically generated queue has by default.</li>
+    <li>A <code>200 OK</code> response deletes the message. Any other response returns the message to the queue after the error visibility timeout, so another attempt can process it. After the maximum retries (default 10), the message goes to the dead-letter queue. An automatically generated queue has a dead-letter queue by default.</li>
     <li>Put <code>cron.yaml</code> in the source bundle to queue periodic tasks. Leader election makes one instance put each task in the queue, and one instance processes it, so the job does not run on every instance. Periodic tasks do not work with a FIFO queue.</li>
     <li>Elastic Beanstalk uses CloudFormation to create the environment resources.</li>
   </ul>
@@ -648,7 +653,7 @@
     <li><code>prebuild</code> runs after the bundle is extracted, before the app and web server are configured. <code>predeploy</code> runs before the app moves to its final location. <code>postdeploy</code> runs last.</li>
     <li><code>.platform/confighooks/</code> uses the same subdirectories for configuration deployments that do not replace instances. A configuration deployment applies changed environment settings, such as environment variables, with no new application version.</li>
     <li>Files in each directory run in lexicographical order, as root. A non-zero exit code fails the deployment.</li>
-    <li><code>.ebextensions</code> <code>commands</code> run before <code>prebuild</code>. <code>container_commands</code> run before <code>predeploy</code>.</li>
+    <li><code>.ebextensions</code> <code>commands</code> run before the application bundle is extracted, so they cannot see your code. They run before <code>prebuild</code>. <code>container_commands</code> run after the bundle is extracted and before the application is deployed, so they can see and change your code. They run before <code>predeploy</code>.</li>
   </ul>
   <h3>Configuration precedence (highest first)</h3>
   <ol>
@@ -659,7 +664,7 @@
   </ol>
   <ul>
     <li><code>.ebextensions</code> files are YAML or JSON files with the <code>.config</code> extension, at the root of the source bundle.</li>
-    <li>The console and the EB CLI apply recommended values for <code>DeploymentPolicy</code> and batch size. These are direct settings, so they override the same options in <code>.ebextensions</code>. To use a configuration file for these options, remove the recommended values first.</li>
+    <li>When the console or the EB CLI creates an environment, it applies recommended values (console: <code>DeploymentPolicy</code>, <code>BatchSize</code>, <code>BatchSizeType</code>; EB CLI: <code>BatchSize</code>, <code>BatchSizeType</code>). These are direct settings, so they override the same options in <code>.ebextensions</code>. To let a configuration file set these options, remove the direct settings with the AWS CLI or the EB CLI first.</li>
   </ul>
   <h3>Databases</h3>
   <ul>
@@ -681,7 +686,7 @@
       <li>"Value in .ebextensions is ignored" → a setting with higher precedence (direct or saved configuration) overrides it.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/command-options.html">Configuration options and precedence</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features-managing-env-tiers.html">Worker environments (retries, dead-letter queue, leader election)</a>,<a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.db.html">Adding a database</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/applications-lifecycle.html">Version lifecycle</a>, <a href="https://docs.aws.amazon.com/general/latest/gr/elasticbeanstalk.html">Elastic Beanstalk quotas</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-09-beanstalk-and-amplify/README.md">Lab 8.9 Beanstalk and Amplify</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/command-options.html">Configuration options and precedence</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/command-options.html#configuration-options-recommendedvalues">Recommended values</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/customize-containers-ec2.html">commands and container_commands</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features-managing-env-tiers.html">Worker environments (retries, dead-letter queue, leader election)</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.db.html">Adding a database</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/applications-lifecycle.html">Version lifecycle</a>, <a href="https://docs.aws.amazon.com/general/latest/gr/elasticbeanstalk.html">Elastic Beanstalk quotas</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-09-beanstalk-and-amplify/README.md">Lab 8.9 Beanstalk and Amplify</a>.</p>
 </section>
 
 <section id="cicd-amplify">
