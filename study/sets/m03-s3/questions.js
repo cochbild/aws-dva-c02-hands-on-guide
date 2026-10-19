@@ -29,7 +29,7 @@ window.QUESTION_BANKS.push({ setId: "m03-s3", questions: [
       { text: "Enable S3 Versioning on the bucket.", correct: false,
         why: "Versioning keeps old versions of objects. It does not increase the request rate, so it does not reduce the errors." }
     ],
-    explanation: "S3 supports at least 3,500 PUT/COPY/POST/DELETE and 5,500 GET/HEAD requests per second for each prefix. Use more prefixes for more throughput, and retry 503 errors with exponential backoff." },
+    explanation: "A prefix is the first part of an object key, such as raw/ or raw/device-7/. S3 supports at least 3,500 PUT/COPY/POST/DELETE and 5,500 GET/HEAD requests per second for each prefix. Use more prefixes for more throughput, and retry 503 errors with exponential backoff, because the errors stop when S3 finishes scaling." },
 
   { id: "m03-003", topic: "s3-storage-classes", domain: 1,
     stem: "A media company stores user uploads in Amazon S3. Some objects are read many times in the first week and then never again. Other objects are read again months later with no pattern. Reads must have millisecond latency. The company wants the lowest storage cost with no retrieval fees and no lifecycle rules to maintain. Which storage class will meet these requirements?",
@@ -381,7 +381,7 @@ window.QUESTION_BANKS.push({ setId: "m03-s3", questions: [
     stem: "An application role can upload small files to a bucket that uses SSE-KMS with a customer managed key. When the application uploads a 2 GB file with multipart upload, the upload fails with AccessDenied. The role has kms:GenerateDataKey on the key and s3:PutObject on the bucket. Which additional permission will meet these requirements?",
     options: [
       { text: "kms:Decrypt on the KMS key", correct: true,
-        why: "A multipart upload with SSE-KMS needs kms:GenerateDataKey and kms:Decrypt on the key." },
+        why: "A multipart upload with SSE-KMS needs kms:GenerateDataKey and kms:Decrypt on the key. S3 must decrypt and read the encrypted parts before it completes the upload." },
       { text: "kms:Encrypt on the KMS key", correct: false,
         why: "S3 uses data keys from GenerateDataKey. kms:Encrypt does not fix the multipart upload." },
       { text: "s3:PutObjectAcl on the bucket", correct: false,
@@ -389,13 +389,13 @@ window.QUESTION_BANKS.push({ setId: "m03-s3", questions: [
       { text: "s3:BypassGovernanceRetention on the bucket", correct: false,
         why: "This permission overrides Object Lock governance mode. It does not affect SSE-KMS uploads." }
     ],
-    explanation: "PutObject with SSE-KMS needs kms:GenerateDataKey. A multipart upload with SSE-KMS needs kms:GenerateDataKey and kms:Decrypt." },
+    explanation: "PutObject with SSE-KMS needs kms:GenerateDataKey. A multipart upload with SSE-KMS needs kms:GenerateDataKey and kms:Decrypt, because S3 decrypts the encrypted parts to complete the upload." },
 
   { id: "m03-028", topic: "s3-kms", domain: 2,
     stem: "Account A has a bucket with objects encrypted with SSE-KMS and the AWS managed key aws/s3. A role in Account B must read the objects. The role in Account B already has an IAM policy that allows s3:GetObject on the bucket and kms:Decrypt on any key. Which actions in Account A will meet these requirements? (Choose two.)",
     options: [
       { text: "Encrypt the objects with a customer managed KMS key whose key policy allows the Account B role to use kms:Decrypt.", correct: true,
-        why: "Objects encrypted with aws/s3 cannot be shared across accounts. A customer managed key policy can allow another account." },
+        why: "Objects encrypted with aws/s3 cannot be shared across accounts, because you cannot edit the key policy of an AWS managed key. A customer managed key policy can allow another account." },
       { text: "Add a bucket policy that allows the Account B role to use s3:GetObject on the objects.", correct: true,
         why: "Cross-account access needs an allow in the resource policy of Account A and in the IAM policy of Account B." },
       { text: "Edit the key policy of the aws/s3 key to allow Account B.", correct: false,
@@ -429,7 +429,7 @@ window.QUESTION_BANKS.push({ setId: "m03-s3", questions: [
       { text: "Add a bucket policy that denies requests when aws:SourceVpce does not match the endpoint ID.", correct: true,
         why: "aws:SourceVpce identifies requests that come through a specific VPC endpoint, so other requests are denied." },
       { text: "Add a bucket policy that denies requests when aws:SourceIp is not the private CIDR range of the VPC.", correct: false,
-        why: "aws:SourceIp does not work for requests through a VPC endpoint. Use aws:SourceVpc or aws:SourceVpce." },
+        why: "IAM does not include aws:SourceIp in requests that come through a VPC endpoint, so the condition cannot match them. Use aws:SourceVpc or aws:SourceVpce." },
       { text: "Add a NAT gateway to the private subnets.", correct: false,
         why: "A NAT gateway gives the subnets an internet path, which the requirement does not allow. Requests through it do not come from the VPC endpoint." },
       { text: "Turn on all Block Public Access settings for the bucket.", correct: false,
