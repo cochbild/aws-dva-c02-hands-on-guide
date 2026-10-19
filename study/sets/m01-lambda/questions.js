@@ -127,7 +127,7 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
       { text: "Replace the event notification with an S3 Lifecycle rule that invokes the function.", correct: false,
         why: "S3 Lifecycle rules transition or expire objects. They do not invoke Lambda functions." }
     ],
-    explanation: "Lambda can deliver the same asynchronous event more than one time, even with no errors. Make the function code idempotent." },
+    explanation: "Lambda can deliver the same asynchronous event more than one time, even with no errors. Make the function code idempotent: two runs of the same event must give the same result as one run, for example with a conditional write on a unique key." },
 
   { id: "m01-010", topic: "lambda-destinations", domain: 1,
     stem: "Amazon SNS invokes a Lambda function asynchronously. When an event fails after all retries, the operations team needs one record in an Amazon SQS standard queue. The record must contain the original event, the error message, and the number of attempts. Which solution will meet these requirements?",
@@ -169,7 +169,7 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
       { text: "Turn on content-based deduplication on the queue.", correct: false,
         why: "Content-based deduplication is a feature of FIFO queues only. This queue is a standard queue." }
     ],
-    explanation: "Set the SQS visibility timeout to at least 6 times the function timeout (plus the batch window). A short visibility timeout makes messages visible again while they are still in progress." },
+    explanation: "Set the SQS visibility timeout to at least 6 times the function timeout (plus the batch window). The extra time lets Lambda retry a batch after throttling. A short visibility timeout makes messages visible again while they are still in progress, so Lambda processes them again." },
 
   { id: "m01-013", topic: "lambda-esm", domain: 1,
     stem: "A Lambda function processes batches of 10 messages from an Amazon SQS standard queue. When one message in a batch fails, all 10 messages return to the queue, and the successful messages are processed again. Messages that fail five times must move to a separate queue for review. Which actions should the developer take to meet these requirements? (Choose two.)",
@@ -201,7 +201,7 @@ window.QUESTION_BANKS.push({ setId: "m01-lambda", questions: [
       { text: "Increase the batch size to 10,000 records.", correct: false,
         why: "A bigger batch still contains the bad record. The batch still fails, and more good records wait behind it." }
     ],
-    explanation: "By default, a stream batch is retried until the records expire, which blocks the shard. Use BisectBatchOnFunctionError, a retry or age limit, and an on-failure destination." },
+    explanation: "Lambda processes each shard in order, so by default it retries a failed stream batch until the records expire. No later records in that shard are processed during that time (the shard is blocked). Use BisectBatchOnFunctionError, a retry or age limit, and an on-failure destination." },
 
   { id: "m01-044", topic: "lambda-esm", domain: 4,
     stem: "An Amazon SQS queue receives order events with a JSON message body. A Lambda function needs only events where the status field is CANCELLED. Today the function code ignores all other events. The function must not be invoked for other events, and the producers must not change. Which solution will meet these requirements with the LEAST operational overhead?",
