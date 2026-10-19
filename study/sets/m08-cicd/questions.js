@@ -13,7 +13,7 @@ window.QUESTION_BANKS.push({ setId: "m08-cicd", questions: [
       { text: "Create a second CodeArtifact domain for public packages, and add it as an external connection.", correct: false,
         why: "An external connection points to a public repository, not to another domain. Also, a repository belongs to one domain only, so this design is not possible." }
     ],
-    explanation: "In CodeArtifact, use one repository per domain with the external connection to a public repository, and make it an upstream of the other repositories." },
+    explanation: "In CodeArtifact, use one repository per domain with the external connection to a public repository, and make it an upstream of the other repositories. Then you manage one connection, each public package version comes in one time, and the domain stores each asset once for all repositories." },
 
   { id: "m08-002", topic: "cicd-codecommit", domain: 2,
     stem: "A CodeBuild project runs a Maven build that must download packages from a CodeArtifact repository. The buildspec runs aws codeartifact get-authorization-token and stores the token in CODEARTIFACT_AUTH_TOKEN. The command fails with an AccessDenied error. The developer must grant the minimum permissions. Which permissions must the developer add to the CodeBuild service role? (Choose two.)",
@@ -175,7 +175,7 @@ window.QUESTION_BANKS.push({ setId: "m08-cicd", questions: [
       { text: "ValidateService", correct: false,
         why: "ValidateService runs after ApplicationStart. The application would start before its configuration exists." }
     ],
-    explanation: "EC2 in-place order: ApplicationStop, DownloadBundle, BeforeInstall, Install, AfterInstall, ApplicationStart, ValidateService (plus traffic hooks with a load balancer)." },
+    explanation: "EC2 in-place order: ApplicationStop, DownloadBundle, BeforeInstall, Install, AfterInstall, ApplicationStart, ValidateService (plus traffic hooks with a load balancer). AfterInstall is the first hook after the agent copies the files and the last one before the application starts, so configuration and permission scripts go there." },
 
   { id: "m08-013", topic: "codedeploy-ec2", domain: 4,
     stem: "Every CodeDeploy deployment to an EC2 deployment group fails in the ApplicationStop event. The developer finds a bug in scripts/stop.sh, fixes it in a new revision, and deploys again. The deployment still fails in ApplicationStop. Which solution will meet these requirements?",
@@ -263,7 +263,7 @@ window.QUESTION_BANKS.push({ setId: "m08-cicd", questions: [
       { text: "Disable the transition after the source stage, and enable it after each execution finishes.", correct: false,
         why: "A waiting execution can still be superseded while the transition is disabled. It also needs manual work for every commit." }
     ],
-    explanation: "SUPERSEDED is the default mode. QUEUED and PARALLEL need a V2 pipeline. QUEUED processes executions in order without skipping." },
+    explanation: "SUPERSEDED is the default mode. QUEUED and PARALLEL need a V2 pipeline. QUEUED processes executions in order without skipping. SUPERSEDED lets a newer execution replace an older waiting one, so some commits never deploy." },
 
   { id: "m08-019", topic: "cicd-codepipeline", domain: 3,
     stem: "A pipeline deploys a CloudFormation stack to production. An engineer must review the exact resource changes and approve them before CloudFormation changes the stack. Which CodePipeline actions, in order, will meet these requirements? (Choose three.)",
@@ -295,7 +295,7 @@ window.QUESTION_BANKS.push({ setId: "m08-cicd", questions: [
       { text: "Create a scheduled EventBridge rule that starts the pipeline every hour.", correct: false,
         why: "A schedule does not react to tag pushes. It starts runs without a release and can miss the timing of a release." }
     ],
-    explanation: "Trigger filters on Git tags, branches, pull requests, and file paths are V2 pipeline features." },
+    explanation: "Trigger filters on Git tags, branches, pull requests, and file paths are V2 pipeline features. A V1 pipeline starts on every change to its source branch, so it cannot start only on a release tag." },
 
   { id: "m08-021", topic: "cicd-pipeline-security", domain: 2,
     stem: "A pipeline in account A deploys with a CodeDeploy deployment group in account B. The artifact bucket uses the default AWS managed key for Amazon S3. The deploy action fails because account B cannot read the artifacts. The artifacts must stay encrypted. Which solution will meet these requirements?",
@@ -309,7 +309,7 @@ window.QUESTION_BANKS.push({ setId: "m08-cicd", questions: [
       { text: "Configure S3 Replication to copy the artifact bucket to a bucket in account B.", correct: false,
         why: "Replication copies objects, but the pipeline action still reads from the artifact store. It also leaves the key access problem unsolved." }
     ],
-    explanation: "For cross-account actions, use a customer managed KMS key for the artifact store, a bucket policy, and a role in the other account." },
+    explanation: "For cross-account actions, use a customer managed KMS key for the artifact store, a bucket policy, and a role in the other account. The other account must decrypt the artifacts, and only a customer managed key has a key policy that you can change to allow it." },
 
   { id: "m08-022", topic: "cicd-pipeline-security", domain: 2,
     stem: "A pipeline has a manual approval action named ApproveProd in a stage named Production. Only members of the ReleaseManagers IAM group can approve or reject this action. The solution must follow the principle of least privilege. Which solution will meet these requirements?",
@@ -541,7 +541,7 @@ window.QUESTION_BANKS.push({ setId: "m08-cicd", questions: [
       { text: "Create an EventBridge scheduled rule that invokes a Lambda function to call the application.", correct: false,
         why: "This works, but it adds a function and a rule to maintain. The worker environment already has periodic tasks, so this fails the least-overhead requirement." }
     ],
-    explanation: "In a worker environment, cron.yaml defines periodic tasks. The daemon queues each task, and one instance processes it." },
+    explanation: "In a worker environment, cron.yaml defines periodic tasks. Leader election makes one instance put each task in the queue, and one instance processes it. A crontab entry would run the job on every instance." },
 
   { id: "m08-038", topic: "eb-env-config", domain: 3,
     stem: "An Elastic Beanstalk environment runs on Amazon Linux 2023. After each application deployment, a script must run on every instance after the application and proxy server are deployed, as the final step. Which solution will meet these requirements?",
@@ -555,7 +555,7 @@ window.QUESTION_BANKS.push({ setId: "m08-cicd", questions: [
       { text: "Add the script to the commands section of an .ebextensions configuration file.", correct: false,
         why: "commands run before the prebuild hooks, early in the deployment, not after the application is deployed." }
     ],
-    explanation: "Platform hooks: prebuild, predeploy, and postdeploy under .platform/hooks for application deployments, and under .platform/confighooks for configuration deployments." },
+    explanation: "Platform hooks run in this order: prebuild, predeploy, and postdeploy. postdeploy runs last, after the application and proxy server are deployed. Put hooks in .platform/hooks for application deployments, and in .platform/confighooks for configuration deployments (changed settings with no new application version)." },
 
   { id: "m08-039", topic: "cicd-amplify", domain: 3,
     stem: "A team builds a React single-page application in a GitHub repository. Every push to the main branch must build and deploy the site, and the dev branch must have its own test URL. The team wants the least operational overhead. Which solution will meet these requirements?",
