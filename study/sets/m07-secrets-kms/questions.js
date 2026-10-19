@@ -71,7 +71,7 @@ window.QUESTION_BANKS.push({ setId: "m07-secrets-kms", questions: [
       { text: "Turn off the Rotate immediately when the secret is stored option.", correct: false,
         why: "This option controls only when the first rotation starts. It does not change what happens to logins during a rotation." }
     ],
-    explanation: "Alternating users rotation clones the user and changes each user's password in turn. It needs a superuser secret and gives higher availability than single user rotation." },
+    explanation: "Alternating users rotation creates a second database user (a clone) and changes the password of each user in turn. The credentials that applications read stay valid while the other user's password changes. It needs a superuser secret, because most users cannot clone themselves." },
 
   { id: "m07-006", topic: "secrets-access", domain: 2,
     stem: "A secret in Account A is encrypted with the AWS managed key aws/secretsmanager. A Lambda function in Account B must read the secret. The company wants to follow AWS best practices for least privilege. Which combination of steps will meet these requirements? (Choose three.)",
@@ -371,7 +371,7 @@ window.QUESTION_BANKS.push({ setId: "m07-secrets-kms", questions: [
     stem: "An application uploads thousands of small objects each second to an S3 bucket that uses SSE-KMS with a customer managed key. Uploads fail during peaks, and CloudTrail shows ThrottlingException errors from KMS GenerateDataKey calls. The company wants to reduce KMS requests and cost with no application code changes. Which solution will meet these requirements?",
     options: [
       { text: "Turn on S3 Bucket Keys for the bucket.", correct: true,
-        why: "With a bucket-level key, S3 makes far fewer calls to KMS. AWS states that this can reduce KMS request costs by up to 99 percent, with no client changes." },
+        why: "S3 gets a short-lived bucket-level key from KMS and uses it to create data keys for new objects, so S3 makes far fewer calls to KMS. AWS states that this can reduce KMS request costs by up to 99 percent, with no client changes." },
       { text: "Turn on automatic rotation for the customer managed key.", correct: false,
         why: "Rotation changes key material once a period. It does not reduce the number of KMS requests." },
       { text: "Change the bucket to use the AWS managed key aws/s3.", correct: false,
@@ -463,7 +463,7 @@ window.QUESTION_BANKS.push({ setId: "m07-secrets-kms", questions: [
       { text: "Give the job role the AWS managed key aws/s3 instead.", correct: false,
         why: "You cannot use AWS managed keys directly in your own code, and you cannot change their permissions." }
     ],
-    explanation: "Grants give temporary, revocable access to one key without key policy changes. Use the grant token from CreateGrant to avoid eventual consistency delays." },
+    explanation: "Grants give temporary, revocable access to one key without key policy changes. A new grant can take a few seconds, sometimes several minutes, to be known in all of KMS (eventual consistency). Pass the grant token from CreateGrant in each call to use the grant at once." },
 
   { id: "m07-033", topic: "kms-access", domain: 2,
     stem: "A Lambda function in Account B must decrypt data with a customer managed key in Account A. The function calls Decrypt and gets access denied. Which combination of steps will meet these requirements with least privilege? (Choose two.)",
