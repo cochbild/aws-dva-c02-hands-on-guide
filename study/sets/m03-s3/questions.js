@@ -429,7 +429,7 @@ window.QUESTION_BANKS.push({ setId: "m03-s3", questions: [
       { text: "Add a bucket policy that denies requests when aws:SourceVpce does not match the endpoint ID.", correct: true,
         why: "aws:SourceVpce identifies requests that come through a specific VPC endpoint, so other requests are denied." },
       { text: "Add a bucket policy that denies requests when aws:SourceIp is not the private CIDR range of the VPC.", correct: false,
-        why: "IAM does not include aws:SourceIp in requests that come through a VPC endpoint, so the condition cannot match them. Use aws:SourceVpc or aws:SourceVpce." },
+        why: "IAM does not include aws:SourceIp in requests through a VPC endpoint. A Deny with NotIpAddress treats the missing key as a match, so it blocks the VPC endpoint traffic that you want to allow. aws:SourceIp also works only with public IP ranges. Use aws:SourceVpc or aws:SourceVpce." },
       { text: "Add a NAT gateway to the private subnets.", correct: false,
         why: "A NAT gateway gives the subnets an internet path, which the requirement does not allow. Requests through it do not come from the VPC endpoint." },
       { text: "Turn on all Block Public Access settings for the bucket.", correct: false,
