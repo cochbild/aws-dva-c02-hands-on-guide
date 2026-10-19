@@ -71,7 +71,7 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
       { text: "Create a VPC interface endpoint for Amazon SQS and attach it to the function.", correct: false,
         why: "An endpoint changes the network path. It does not authorize the request, so the function still has no permission to send messages." }
     ],
-    explanation: "Within one account, an allow in either the identity-based policy or the resource-based policy is enough for most services, unless a boundary or session policy limits a role principal." },
+    explanation: "Within one account, an allow in either the identity-based policy or the resource-based policy is enough for most services. When the resource policy names a role ARN, a permissions boundary or session policy on the role can still block the call. This role has neither, so the queue policy alone is enough." },
 
   { id: "g-iam-sts-006", topic: "iam-policy-evaluation", domain: 4,
     stem: "A Lambda function fails with this error: 'is not authorized to perform: dynamodb:PutItem on resource: arn:aws:dynamodb:us-east-1:111122223333:table/Orders because no permissions boundary allows the dynamodb:PutItem action'. The execution role identity-based policy already allows dynamodb:PutItem on the Orders table. The developer must fix the error with the least privilege change. Which solution will meet these requirements?",
@@ -157,7 +157,7 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
       { text: "\"Null\": { \"aws:MultiFactorAuthPresent\": \"false\" }", correct: false,
         why: "In a Deny, this matches only when the key is present. It does not deny requests made with long-term access keys, where the key is absent." }
     ],
-    explanation: "AWS recommends BoolIfExists with aws:MultiFactorAuthPresent false in a Deny statement. It denies requests without MFA, including requests made with long-term access keys." },
+    explanation: "AWS recommends BoolIfExists with aws:MultiFactorAuthPresent false in a Deny statement. Requests made with long-term access keys do not include the key at all. IfExists makes the condition match when the key is absent, so the Deny also blocks those requests." },
 
   { id: "g-iam-sts-012", topic: "iam-roles-trust", domain: 2,
     stem: "A developer tries to create a Lambda function with the execution role app-orders-role. The request fails with an error that the developer is not authorized to perform iam:PassRole on that role. The fix must follow least privilege. Which solution will meet these requirements?",
@@ -331,7 +331,7 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
       { text: "Add s3.amazonaws.com to the trust policy of the function execution role.", correct: false,
         why: "The execution role trust policy controls who can assume the role. It does not control who can invoke the function." }
     ],
-    explanation: "When a resource policy allows an AWS service principal, add aws:SourceArn and aws:SourceAccount to prevent the cross-service confused deputy problem. S3 bucket ARNs do not contain the account ID, so add aws:SourceAccount too." },
+    explanation: "When a resource policy allows an AWS service principal, add aws:SourceArn and aws:SourceAccount to prevent the cross-service confused deputy problem. In that problem, a user in another account configures the same service (here, S3 events from their own bucket) to use your resource. S3 bucket ARNs do not contain the account ID, so add aws:SourceAccount too." },
 
   { id: "g-iam-sts-024", topic: "iam-credential-chain", domain: 4,
     stem: "A developer rotated their IAM access keys and saved the new keys in the default profile of ~/.aws/credentials. An application on the developer's computer that uses the AWS SDK still fails with InvalidClientTokenId, which shows that it still sends the old access key. The application creates its clients with no explicit credentials. The developer must make the application use the new keys with no code changes, and the keys must stay in the credentials file. Which solution will meet these requirements?",
@@ -389,7 +389,7 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
       { text: "Store an IAM user access key in the task definition environment variables.", correct: false,
         why: "This puts long-term credentials in the task definition, which fails the requirement to use no long-term credentials." }
     ],
-    explanation: "ECS task role: permissions for the application code. Task execution role: permissions for the ECS agent to pull images, send logs, and get secrets." },
+    explanation: "The ECS task role gives permissions to the application code in the containers. The task execution role gives permissions to the ECS agent, which pulls images, sends logs, and gets secrets before the code starts. The task started, so the execution role works, and the missing DynamoDB permission belongs in the task role." },
 
   { id: "g-iam-sts-028", topic: "iam-compute-roles", domain: 2,
     stem: "An Amazon EventBridge rule must invoke a Lambda function every hour. The function reads items from an Amazon DynamoDB table. Neither part works yet. The developer must use least privilege. Which actions should the developer take? (Choose two.)",
@@ -405,7 +405,7 @@ window.QUESTION_BANKS.push({ setId: "g-iam-sts", questions: [
       { text: "Add dynamodb:GetItem to the function resource-based policy.", correct: false,
         why: "The function resource-based policy controls access to the function. It cannot give the function access to DynamoDB." }
     ],
-    explanation: "Lambda execution role: what the function can call. Function resource-based policy: who can invoke the function." },
+    explanation: "The Lambda execution role controls what the function code can call, so it needs the DynamoDB read. The function resource-based policy controls who can invoke the function, so it must allow EventBridge." },
 
   { id: "g-iam-sts-029", topic: "iam-compute-roles", domain: 2,
     stem: "An application on Amazon EC2 instances uses an instance profile. A security review finds that a server-side request forgery (SSRF) bug could let an attacker read the role credentials from the instance metadata service with a simple GET request. The fix must keep the instance profile. Which solution will meet these requirements?",
