@@ -388,7 +388,7 @@
     <tr><td><code>CREATE_UPDATE</code></td><td>Creates the stack, or updates it if it exists</td></tr>
     <tr><td><code>CHANGE_SET_REPLACE</code></td><td>Creates a change set (replaces an existing one with the same name). Does not change the stack.</td></tr>
     <tr><td><code>CHANGE_SET_EXECUTE</code></td><td>Runs the change set and changes the stack</td></tr>
-    <tr><td><code>REPLACE_ON_FAILURE</code></td><td>Deletes and creates again a stack in a failed state. For tests only, because the delete removes every resource in the stack, including databases and their data.</td></tr>
+    <tr><td><code>REPLACE_ON_FAILURE</code></td><td>Deletes and creates again a stack in a failed state. For tests only, because it deletes the failed stack. Resources with no <code>Retain</code> or <code>Snapshot</code> <code>DeletionPolicy</code> are deleted with it.</td></tr>
     <tr><td><code>DELETE_ONLY</code></td><td>Deletes the stack</td></tr>
   </table>
   <p>A change set is a list of the resource changes that CloudFormation will make, created before it makes them. Choose <code>CREATE_UPDATE</code> to deploy directly. Choose <code>CHANGE_SET_REPLACE</code> and then <code>CHANGE_SET_EXECUTE</code> when a person must review the changes first.</p>
