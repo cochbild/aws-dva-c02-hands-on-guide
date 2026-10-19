@@ -44,37 +44,37 @@
   <h3>Git repositories and triggers</h3>
   <ul>
     <li>A commit to a Git repository (CodeCommit, GitHub, GitLab, Bitbucket) can start a pipeline. CodePipeline uses EventBridge or a connection to detect the change.</li>
-    <li>Use branches for environments and Git tags for releases. A V2 pipeline can filter triggers on branches, tags, and file paths.</li>
+    <li>Use branches for environments and Git tags for releases. For example, a push to the <code>dev</code> branch deploys to test, and a push of tag <code>v1.4.0</code> starts the production release. A V2 pipeline can filter triggers on branches, tags, and file paths, so that only the matching pushes start it.</li>
   </ul>
   <h3>CodeCommit (short note)</h3>
   <ul>
     <li>AWS CodeCommit is a managed Git service. IAM controls access. Exam guide v2.1 does not list it, but questions can still describe it.</li>
     <li>AWS closed CodeCommit to new customers in July 2024. AWS made it available to new customers again in November 2025.</li>
-    <li>HTTPS Git credentials and SSH keys belong to an IAM user. With federated access or temporary credentials, use <code>git-remote-codecommit</code>.</li>
-    <li>To stop some users from pushing to a branch, use an IAM <code>Deny</code> policy on <code>codecommit:GitPush</code> and the merge actions, with the <code>codecommit:References</code> condition (for example <code>refs/heads/main</code>).</li>
+    <li>HTTPS Git credentials and SSH keys belong to an IAM user. A federated user or a role has no IAM user, so it cannot get these credentials. For federated access or temporary credentials, use <code>git-remote-codecommit</code>. This Git extension signs each Git request with the AWS credentials of your AWS CLI profile. It needs no Git credentials.</li>
+    <li>To stop some users from pushing to a branch, use an IAM <code>Deny</code> policy on <code>codecommit:GitPush</code> and the merge actions, with the <code>codecommit:References</code> condition (for example <code>refs/heads/main</code>). An explicit <code>Deny</code> overrides every <code>Allow</code>, so the users keep their other CodeCommit permissions. Deny the merge actions too, because otherwise a user can change <code>main</code> with a pull request merge in the console.</li>
   </ul>
   <h3>CodeArtifact</h3>
   <ul>
     <li>AWS CodeArtifact is a managed package repository for npm, PyPI, Maven, NuGet, and other formats.</li>
-    <li>A <strong>domain</strong> groups repositories. The domain stores each asset one time and encrypts all assets with one KMS key.</li>
+    <li>A <strong>domain</strong> groups repositories. An asset is a file of a package version, such as an npm .tgz file. The domain stores each asset one time, even when ten repositories hold that version. It encrypts all assets with one KMS key.</li>
     <li>A <strong>repository</strong> holds package versions. One repository can hold several package formats.</li>
-    <li>An <strong>upstream repository</strong> makes its packages available through the downstream repository endpoint.</li>
-    <li>An <strong>external connection</strong> links a repository to a public repository, such as npmjs.com, PyPI, or Maven Central. Each repository can have only one external connection.</li>
-    <li>Recommended pattern: one repository in the domain has the external connection. Other repositories use it as an upstream.</li>
-    <li>Authenticate with <code>aws codeartifact login</code> (npm, pip, twine, dotnet, nuget, swift) or <code>get-authorization-token</code> (for example, Maven and Gradle).</li>
-    <li>The token is valid for 12 hours by default. You can set 15 minutes to 12 hours.</li>
-    <li>Getting a token needs <code>codeartifact:GetAuthorizationToken</code> and <code>sts:GetServiceBearerToken</code>.</li>
+    <li>An <strong>upstream repository</strong> is a repository that another (downstream) repository searches when it does not have a requested package. The package manager uses only the downstream repository endpoint, but it gets packages from both repositories. A repository can have up to 10 upstream repositories.</li>
+    <li>An <strong>external connection</strong> links a repository to a public repository, such as npmjs.com, PyPI, or Maven Central. When a build requests a package that the repository does not have, CodeArtifact gets it from the public repository and stores a copy. Builds can still download that stored copy when the public repository has an outage. Each repository can have only one external connection.</li>
+    <li>Recommended pattern: one repository in the domain has the external connection. Other repositories use it as an upstream. Then you manage only one connection, and each public package version comes in one time for all teams.</li>
+    <li>Authenticate with <code>aws codeartifact login</code> (npm, pip, twine, dotnet, nuget, swift). This command gets a token and writes the repository endpoint and the token into the configuration of that tool. For tools that <code>login</code> does not support (for example, Maven and Gradle), call <code>get-authorization-token</code> and put the token in the tool settings yourself.</li>
+    <li>The token is valid for 12 hours by default. You can set 15 minutes to 12 hours. After it expires, the package manager gets authentication errors until you get a new token.</li>
+    <li>Getting a token needs <code>codeartifact:GetAuthorizationToken</code> and <code>sts:GetServiceBearerToken</code>. CodeArtifact tokens are service bearer tokens that AWS STS creates. Without either permission, the call fails with AccessDenied.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Builds must get open-source packages through a private, approved repository" → CodeArtifact with an external connection.</li>
+      <li>"Builds must get open-source packages through a private, approved repository" → CodeArtifact with an external connection, because builds then download from your repository, and the repository gets public packages for them.</li>
       <li>"Maven build cannot authenticate to CodeArtifact" → call <code>get-authorization-token</code> and pass the token, for example in <code>CODEARTIFACT_AUTH_TOKEN</code>.</li>
       <li>"Developers use federation or temporary credentials with CodeCommit" → <code>git-remote-codecommit</code>.</li>
       <li>"Only senior developers can push to main" → IAM <code>Deny</code> with <code>codecommit:References</code>.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/codeartifact/latest/ug/codeartifact-concepts.html">CodeArtifact concepts</a>, <a href="https://docs.aws.amazon.com/codeartifact/latest/ug/external-connection.html">External connections</a>, <a href="https://docs.aws.amazon.com/codeartifact/latest/ug/tokens-authentication.html">CodeArtifact tokens</a>, <a href="https://docs.aws.amazon.com/codecommit/latest/userguide/setting-up.html">Setting up CodeCommit</a>, <a href="https://docs.aws.amazon.com/codecommit/latest/userguide/how-to-conditional-branch.html">Limit pushes to branches</a>, <a href="https://docs.aws.amazon.com/codecommit/latest/userguide/history.html">CodeCommit document history (availability)</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-01-codecommit/README.md">Lab 8.1 CodeCommit</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/codeartifact/latest/ug/codeartifact-concepts.html">CodeArtifact concepts</a>, <a href="https://docs.aws.amazon.com/codeartifact/latest/ug/external-connection.html">External connections</a>, <a href="https://docs.aws.amazon.com/codeartifact/latest/ug/repos-upstream.html">Upstream repositories (limit of 10)</a>, <a href="https://docs.aws.amazon.com/codeartifact/latest/ug/external-connection-requesting-packages.html">Requesting packages from external connections</a>, <a href="https://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-git-remote-codecommit.html">git-remote-codecommit</a>, <a href="https://docs.aws.amazon.com/codeartifact/latest/ug/tokens-authentication.html">CodeArtifact tokens</a>, <a href="https://docs.aws.amazon.com/codecommit/latest/userguide/setting-up.html">Setting up CodeCommit</a>, <a href="https://docs.aws.amazon.com/codecommit/latest/userguide/how-to-conditional-branch.html">Limit pushes to branches</a>, <a href="https://docs.aws.amazon.com/codecommit/latest/userguide/history.html">CodeCommit document history (availability)</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-01-codecommit/README.md">Lab 8.1 CodeCommit</a>.</p>
 </section>
 
 <section id="codebuild-buildspec">
@@ -85,7 +85,7 @@
     <li>To use a different name or path, set the buildspec in the project, or set <code>buildspecOverride</code> on <code>StartBuild</code>.</li>
     <li>You can store the buildspec in an S3 bucket. The bucket must be in the same Region as the build project.</li>
     <li>A build project uses only one buildspec at a time.</li>
-    <li>Use <code>version: 0.2</code>. In 0.2, all commands run in the same shell instance, so <code>cd</code> and variables carry over.</li>
+    <li>Use <code>version: 0.2</code>. In 0.2, all commands run in the same shell instance, so a <code>cd</code> or a variable from one command is still in effect for the next command. In version 0.1, each command ran in a separate shell, so a later command did not see these changes.</li>
   </ul>
   <h3>Phases</h3>
   <table>
@@ -98,21 +98,21 @@
   <ul>
     <li>Each phase can have a <code>finally</code> block. The <code>finally</code> commands run even if a command in <code>commands</code> fails.</li>
     <li>When a command fails, CodeBuild skips the remaining commands in that block and runs the <code>finally</code> block.</li>
-    <li><code>on-failure</code> on a phase: <code>ABORT</code>, <code>CONTINUE</code> (go to the next phase), or <code>RETRY</code> variants.</li>
-    <li>CodeBuild always attempts the <code>UPLOAD_ARTIFACTS</code> phase, even if the <code>BUILD</code> phase fails.</li>
+    <li><code>on-failure</code> on a phase sets what happens when that phase fails. <code>ABORT</code> stops the build. <code>CONTINUE</code> goes to the next phase, for example to run a report step after failed tests. <code>RETRY</code> retries the build up to 3 times. <code>RETRY-count</code> and <code>RETRY-regex</code> set the number of retries and the error message that causes a retry.</li>
+    <li>CodeBuild always attempts the <code>UPLOAD_ARTIFACTS</code> phase, even if the <code>BUILD</code> phase fails. So you can get the output files of a failed build to find the cause.</li>
     <li><code>run-as</code> sets the Linux user. Without it, commands run as root.</li>
   </ul>
   <h3>Artifacts</h3>
   <ul>
     <li><code>artifacts.files</code>: the paths to include. <code>'**/*'</code> means all files, recursively.</li>
-    <li><code>discard-paths: yes</code> puts all files at the top level of the artifact, with no directories.</li>
-    <li><code>base-directory</code> makes paths relative to that directory. The directory itself is not in the artifact.</li>
-    <li><code>secondary-artifacts</code> creates more than one output artifact. The project must define each one.</li>
+    <li><code>discard-paths: yes</code> puts all files at the top level of the artifact, with no directories. Example: <code>target/app.jar</code> becomes <code>app.jar</code> at the root of the .zip file.</li>
+    <li><code>base-directory</code> makes paths relative to that directory. The directory itself is not in the artifact. Example: with <code>base-directory: dist</code>, the file <code>dist/index.html</code> is <code>index.html</code> in the artifact. Files outside <code>dist</code> are not in the artifact.</li>
+    <li><code>secondary-artifacts</code> creates more than one output artifact, for example one .zip file for CodeDeploy and one for a test team. Each identifier in the buildspec must match an artifact in the project <code>secondaryArtifacts</code> setting.</li>
     <li>You do not need <code>artifacts</code> if the build only pushes an image to Amazon ECR or only runs tests.</li>
   </ul>
   <h3>Reports</h3>
   <ul>
-    <li>The <code>reports</code> section sends test or code coverage results to a report group.</li>
+    <li>The <code>reports</code> section sends test or code coverage results to a report group. The console then shows each test with its pass or fail result, and the trend across builds. Without it, you must read test results in the build log.</li>
     <li>Test formats include JUnit XML (the default), NUnit, TestNG, Cucumber JSON, and Visual Studio TRX.</li>
     <li>Coverage formats include JaCoCo, Cobertura, Clover, and SimpleCov.</li>
   </ul>
@@ -120,7 +120,7 @@
   <table>
     <tr><th>Item</th><th>Value</th></tr>
     <tr><td>Build timeout</td><td>Default 60 minutes. Range 5 to 2,160 minutes (36 hours).</td></tr>
-    <tr><td>Queued timeout</td><td>5 to 480 minutes</td></tr>
+    <tr><td>Queued timeout (how long a build can wait for compute before it starts)</td><td>5 to 480 minutes</td></tr>
     <tr><td>Test report availability</td><td>30 days after creation</td></tr>
   </table>
   <div class="exam-signals">
@@ -128,7 +128,7 @@
     <ul>
       <li>"Run a cleanup command even when tests fail" → put it in the phase <code>finally</code> block.</li>
       <li>"Use buildspec-release.yml for some builds" → set the buildspec path in the project, or override it on <code>StartBuild</code>.</li>
-      <li>"appspec.yml must be at the root of the artifact" → list it in <code>artifacts.files</code>. Use <code>discard-paths</code> or <code>base-directory</code> to control the layout.</li>
+      <li>"appspec.yml must be at the root of the artifact" → list it in <code>artifacts.files</code>. Use <code>discard-paths</code> or <code>base-directory</code> to control the layout. CodeDeploy reads <code>appspec.yml</code> only from the root of the bundle, so a deployment fails if the file is in a subdirectory.</li>
       <li>"Show test pass and fail trends" → CodeBuild <code>reports</code>.</li>
     </ul>
   </div>
@@ -141,11 +141,11 @@
   <ul>
     <li><code>env.variables</code> holds plaintext values. The console and the AWS CLI can show them. Do not put secrets there.</li>
     <li><code>env.parameter-store</code> reads values from Systems Manager Parameter Store. The service role needs <code>ssm:GetParameters</code>.</li>
-    <li><code>env.secrets-manager</code> reads from Secrets Manager. Format: <code>secret-id:json-key:version-stage:version-id</code>. Only <code>secret-id</code> is required.</li>
-    <li>For a secret in another account, use the secret ARN, not the name.</li>
-    <li>CodeBuild masks Parameter Store and Secrets Manager values in the logs. A changed value (for example, Base64) is not masked.</li>
-    <li><code>env.exported-variables</code> makes variables available to later actions in CodePipeline.</li>
-    <li>Do not create variables that start with <code>CODEBUILD_</code>. AWS reserves this prefix.</li>
+    <li><code>env.secrets-manager</code> reads from Secrets Manager. Format: <code>secret-id:json-key:version-stage:version-id</code>. Only <code>secret-id</code> is required. Example: <code>DB_PASSWORD: prod/db:password</code> puts the <code>password</code> key of the JSON secret <code>prod/db</code> into the variable <code>DB_PASSWORD</code>. Without a <code>json-key</code>, the variable gets the whole secret text.</li>
+    <li>For a secret in another account, use the secret ARN, not the name. A secret name finds secrets only in the account of the build.</li>
+    <li>CodeBuild masks Parameter Store and Secrets Manager values in the logs. Masking matches only the exact stored value. If a command changes the value (for example, Base64 encoding) and prints it, the log shows the changed value.</li>
+    <li><code>env.exported-variables</code> makes variables available to later actions in CodePipeline. Example: the build exports <code>IMAGE_TAG</code>, and the deploy action uses it as <code>#{BuildVariables.IMAGE_TAG}</code>, where <code>BuildVariables</code> is the namespace of the build action.</li>
+    <li>Do not create variables that start with <code>CODEBUILD_</code>. AWS reserves this prefix for the variables that CodeBuild sets itself, such as <code>CODEBUILD_SRC_DIR</code>.</li>
   </ul>
   <h3>Precedence when one name is set in more than one place</h3>
   <ol>
@@ -153,50 +153,54 @@
     <li>The value in the build project.</li>
     <li>The value in the buildspec (lowest).</li>
   </ol>
+  <p>Use this order to change a value for one build without editing the buildspec. For example, set <code>STAGE=prod</code> in the <code>StartBuild</code> call to override <code>STAGE=dev</code> in the buildspec.</p>
   <h3>Cache</h3>
   <ul>
-    <li>Two cache types: Amazon S3 and local.</li>
-    <li>Local cache modes: source cache, Docker layer cache, and custom cache. You can select one or more.</li>
+    <li>A cache keeps files, such as downloaded dependencies, from one build so that later builds do not download or build them again.</li>
+    <li>Two cache types: Amazon S3 and local. An S3 cache is in a bucket, so every build host can use it. Choose it for small to medium files that take longer to build than to download.</li>
+    <li>A local cache is on the build host, so only builds that run on that host can use it. Choose it for large files and frequent builds, because it has no network transfer time. Local cache does not work for builds in a VPC.</li>
+    <li>Local cache modes: source cache (Git metadata, so a build downloads only new commits), Docker layer cache (image layers), and custom cache (directories that you list in the buildspec <code>cache</code> paths). You can select one or more.</li>
     <li>Docker layer cache works on Linux only and requires privileged mode.</li>
   </ul>
   <h3>Docker builds</h3>
   <ul>
     <li>To run <code>docker build</code> in a build, turn on privileged mode. It lets the Docker daemon run in the build container.</li>
-    <li>To push to Amazon ECR, the service role needs ECR permissions, and the build must sign in to ECR first.</li>
+    <li>To push to Amazon ECR, the service role needs ECR permissions, and the build must sign in to ECR first. The <code>docker push</code> command uses the Docker sign-in, not the IAM role, so it fails without <code>docker login</code>.</li>
   </ul>
   <h3>VPC</h3>
   <ul>
-    <li>Configure a VPC, subnets, and security groups to reach private resources such as an RDS database.</li>
-    <li>Select private subnets only. Route internet traffic through a NAT gateway or NAT instance.</li>
-    <li>An internet gateway alone does not work. CodeBuild does not assign public IP addresses to its network interfaces.</li>
-    <li>Security groups for builds need no inbound rules.</li>
+    <li>By default, a build runs outside your VPC and cannot reach private resources. Configure a VPC, subnets, and security groups to reach private resources such as an RDS database.</li>
+    <li>Select private subnets only. Route internet traffic through a NAT gateway or NAT instance. Without that route, commands such as <code>pip install</code> or <code>npm install</code> time out.</li>
+    <li>An internet gateway alone does not work. A resource needs a public IP address to use an internet gateway, and CodeBuild does not assign public IP addresses to its network interfaces.</li>
+    <li>Security groups for builds need no inbound rules. The build only opens outbound connections, and security groups allow the response traffic automatically.</li>
   </ul>
   <h3>Logs and permissions</h3>
   <ul>
     <li>CodeBuild sends build logs to CloudWatch Logs, Amazon S3, or both.</li>
-    <li>The build runs with the project service role. Add permissions there, not to the user who starts the build.</li>
+    <li>The build runs with the project service role. Add permissions there, not to the user who starts the build. A missing permission shows as an AccessDenied error in the build log, even when the user who started the build has that permission.</li>
     <li>To test a buildspec on your computer, run the CodeBuild agent locally with Docker (<code>codebuild_build.sh</code>).</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
-      <li>"Database password is in plaintext in the buildspec" → move it to Secrets Manager or a SecureString parameter. Reference it in <code>env</code>.</li>
-      <li>"Build in a VPC cannot download packages" → private subnet with a route to a NAT gateway.</li>
-      <li>"Cannot connect to the Docker daemon" → turn on privileged mode.</li>
+      <li>"Database password is in plaintext in the buildspec" → move it to Secrets Manager or a SecureString parameter. Reference it in <code>env</code>. The build gets the same variable name, and CodeBuild masks the value in logs.</li>
+      <li>"Build in a VPC cannot download packages" → private subnet with a route to a NAT gateway, because the build has no public IP address.</li>
+      <li>"Cannot connect to the Docker daemon" → turn on privileged mode. Without it, the Docker daemon cannot start in the build container.</li>
       <li>"Builds download the same dependencies every time" → configure a cache.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html#build-spec.env">Buildspec env section</a>, <a href="https://docs.aws.amazon.com/codebuild/latest/userguide/build-caching.html">Build caching</a>, <a href="https://docs.aws.amazon.com/codebuild/latest/userguide/vpc-support.html">CodeBuild with a VPC</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-02-codebuild/README.md">Lab 8.2 CodeBuild</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html#build-spec.env">Buildspec env section</a>, <a href="https://docs.aws.amazon.com/codebuild/latest/userguide/build-caching.html">Build caching</a>, <a href="https://docs.aws.amazon.com/codebuild/latest/userguide/caching-s3.html">Amazon S3 caching</a>, <a href="https://docs.aws.amazon.com/codebuild/latest/userguide/caching-local.html">Local caching (modes, no VPC support)</a>, <a href="https://docs.aws.amazon.com/codebuild/latest/userguide/vpc-support.html">CodeBuild with a VPC</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-02-codebuild/README.md">Lab 8.2 CodeBuild</a>.</p>
 </section>
 
 <section id="codedeploy-lambda">
   <h2>CodeDeploy for Lambda and AWS SAM traffic shifting</h2>
   <h3>Key facts</h3>
   <ul>
-    <li>CodeDeploy shifts traffic between two versions of a function through an alias. Clients must invoke the alias.</li>
+    <li>A Lambda alias is a name (for example <code>live</code>) that points to a function version. An alias can send a percentage of invocations to a second version. CodeDeploy shifts traffic by changing these alias weights.</li>
+    <li>Clients must invoke the alias. A call with the unqualified function name runs <code>$LATEST</code>, so it skips the alias and the traffic split.</li>
     <li>The Lambda AppSpec lists the function <code>Name</code>, <code>Alias</code>, <code>CurrentVersion</code>, and <code>TargetVersion</code>.</li>
     <li>Lambda deployments have no agent and no instances. Only traffic moves.</li>
-    <li>You can create a custom canary or linear configuration.</li>
+    <li>You can create a custom canary or linear configuration when the predefined percentages and intervals do not fit, for example 20 percent every 5 minutes.</li>
   </ul>
   <h3>Predefined deployment configurations</h3>
   <table>
@@ -205,16 +209,17 @@
     <tr><td>Linear</td><td><code>Linear10PercentEvery1Minute</code>, <code>Every2Minutes</code>, <code>Every3Minutes</code>, <code>Every10Minutes</code></td><td>10 percent more at each interval until all traffic moves</td></tr>
     <tr><td>All at once</td><td><code>AllAtOnce</code></td><td>All traffic at once</td></tr>
   </table>
+  <p>Choose canary to test the new version on a small share of users for a fixed time, and then move the rest in one step. Choose linear to increase traffic in equal steps, so that a problem affects fewer users before an alarm stops it. Choose all at once when speed matters more than risk, for example in a development account.</p>
   <h3>Hooks</h3>
   <ul>
-    <li>Two hooks: <code>BeforeAllowTraffic</code> (before any traffic moves) and <code>AfterAllowTraffic</code> (after all traffic moves).</li>
+    <li>Two hooks: <code>BeforeAllowTraffic</code> (before any traffic moves) and <code>AfterAllowTraffic</code> (after all traffic moves). Use <code>BeforeAllowTraffic</code> to run tests against the new version before any user reaches it. Use <code>AfterAllowTraffic</code> to check the result after the shift.</li>
     <li>Each hook is a Lambda function. It must call <code>PutLifecycleEventHookExecutionStatus</code> with <code>Succeeded</code> or <code>Failed</code>.</li>
     <li>If CodeDeploy gets no status within one hour, the deployment fails.</li>
     <li>The hook function role needs the <code>codedeploy:PutLifecycleEventHookExecutionStatus</code> permission.</li>
   </ul>
   <h3>AWS SAM</h3>
   <ul>
-    <li><code>AutoPublishAlias</code> publishes a new version when the code changes and points the alias at it.</li>
+    <li><code>AutoPublishAlias</code> publishes a new version when the code changes and points the alias at it. <code>DeploymentPreference</code> needs it: without <code>AutoPublishAlias</code>, SAM returns an error.</li>
     <li><code>DeploymentPreference</code> sets <code>Type</code> (for example <code>Canary10Percent10Minutes</code>), <code>Alarms</code>, and <code>Hooks</code> (<code>PreTraffic</code>, <code>PostTraffic</code>).</li>
     <li>SAM creates the CodeDeploy application and deployment group for you.</li>
     <li>If a hook fails or an alarm goes into the ALARM state, CodeDeploy rolls back the deployment.</li>
@@ -228,7 +233,7 @@
       <li>"Hook tests pass, but the deployment fails after one hour" → the hook did not call <code>PutLifecycleEventHookExecutionStatus</code>.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-configurations.html">Deployment configurations</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/reference-appspec-file-structure-hooks.html">AppSpec hooks</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/automating-updates-to-serverless-apps.html">SAM gradual deployments</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-03-codedeploy-lambda/README.md">Lab 8.3 CodeDeploy for Lambda</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-configurations.html">Deployment configurations</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/reference-appspec-file-structure-hooks.html">AppSpec hooks</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/automating-updates-to-serverless-apps.html">SAM gradual deployments</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-deploymentpreference.html">SAM DeploymentPreference</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-03-codedeploy-lambda/README.md">Lab 8.3 CodeDeploy for Lambda</a>.</p>
 </section>
 
 <section id="codedeploy-ec2">
@@ -237,8 +242,8 @@
   <ul>
     <li>The CodeDeploy agent must run on each instance. It downloads the revision and runs the hook scripts.</li>
     <li>The instances need an IAM instance profile that can read the revision from Amazon S3 (or GitHub).</li>
-    <li>CodeDeploy needs a service role. For EC2/On-Premises, attach the <code>AWSCodeDeployRole</code> managed policy.</li>
-    <li>A deployment group selects instances by tags or by Auto Scaling group.</li>
+    <li>CodeDeploy needs a service role. CodeDeploy uses it to read instance tags, Auto Scaling groups, and load balancers. For EC2/On-Premises, attach the <code>AWSCodeDeployRole</code> managed policy.</li>
+    <li>A deployment group selects instances by tags or by Auto Scaling group. Choose an Auto Scaling group when the fleet scales: CodeDeploy then installs the current revision on each new instance that the group launches.</li>
     <li>Put <code>appspec.yml</code> at the root of the revision bundle. The <code>files</code> section maps source to destination.</li>
   </ul>
   <h3>In-place compared to blue/green</h3>
@@ -248,12 +253,13 @@
     <tr><td>Traffic</td><td>Each instance is out of service during its update</td><td>The load balancer moves traffic to the replacement instances</td></tr>
     <tr><td>Rollback</td><td>Deploy the last good revision again</td><td>Send traffic back to the original instances, if you keep them</td></tr>
   </table>
+  <p>Choose in-place when you cannot pay for extra instances and a slower rollback is acceptable. Choose blue/green when you need a fast rollback and no loss of capacity, and you can pay for a second set of instances during the deployment.</p>
   <h3>Hook order (in-place, with a load balancer)</h3>
   <p><code>BeforeBlockTraffic</code> → BlockTraffic → <code>AfterBlockTraffic</code> → <code>ApplicationStop</code> → DownloadBundle → <code>BeforeInstall</code> → Install → <code>AfterInstall</code> → <code>ApplicationStart</code> → <code>ValidateService</code> → <code>BeforeAllowTraffic</code> → AllowTraffic → <code>AfterAllowTraffic</code></p>
   <ul>
     <li>DownloadBundle, Install, BlockTraffic, and AllowTraffic are reserved for the agent. You cannot attach scripts to them.</li>
     <li>The six traffic hooks run only if the deployment group has a load balancer.</li>
-    <li><code>ApplicationStop</code> uses the AppSpec and scripts from the <strong>last successful</strong> revision. It does not run on the first deployment to an instance.</li>
+    <li><code>ApplicationStop</code> uses the AppSpec and scripts from the <strong>last successful</strong> revision. The reason: it must stop the application that runs now, and only the old revision knows how to stop it. It does not run on the first deployment to an instance, because there is no old revision.</li>
     <li>If a broken <code>ApplicationStop</code> script blocks every deployment, create a deployment with <code>--ignore-application-stop-failures</code>.</li>
     <li>Use <code>BeforeInstall</code> for pre-install tasks, <code>AfterInstall</code> for configuration and permissions, and <code>ValidateService</code> to check the result.</li>
   </ul>
@@ -267,22 +273,23 @@
   <h3>Deployment configurations (EC2/On-Premises)</h3>
   <table>
     <tr><th>Name</th><th>In-place behavior</th></tr>
-    <tr><td><code>CodeDeployDefault.OneAtATime</code> (default)</td><td>One instance at a time. Fails at the first failure, except on the last instance.</td></tr>
+    <tr><td><code>CodeDeployDefault.OneAtATime</code> (default)</td><td>One instance at a time. The deployment fails as soon as any instance except the last one fails. A failure on only the last instance still gives a successful deployment.</td></tr>
     <tr><td><code>CodeDeployDefault.HalfAtATime</code></td><td>Up to half of the instances at a time. Succeeds if at least half succeed.</td></tr>
     <tr><td><code>CodeDeployDefault.AllAtOnce</code></td><td>All instances at once. Succeeds if at least one instance succeeds.</td></tr>
-    <tr><td>Custom</td><td>Set a minimum healthy hosts value (number or percentage). Zonal settings need a custom configuration.</td></tr>
+    <tr><td>Custom</td><td>Set a minimum healthy hosts value (number or percentage): the instances that must stay in service during the deployment. A zonal configuration also sets healthy hosts for each Availability Zone, so CodeDeploy updates one zone at a time. Zonal settings need a custom configuration.</td></tr>
   </table>
+  <p>Choose <code>OneAtATime</code> for the most capacity and the slowest deployment. Choose <code>HalfAtATime</code> for a balance. Choose <code>AllAtOnce</code> for the fastest deployment when a short loss of capacity is acceptable.</p>
   <h3>Rollbacks</h3>
   <ul>
     <li>A rollback is a new deployment with a new deployment ID. It deploys the last known good revision.</li>
     <li>Turn on automatic rollback on the deployment group or deployment. Triggers: the deployment fails, or a CloudWatch alarm threshold is met.</li>
-    <li>For files that are already at the destination, select one: fail the deployment, overwrite, or retain.</li>
+    <li>A file can be at the destination that no earlier deployment put there, for example a file that someone copied manually. For such files, select one: fail the deployment (the default), overwrite the file with the revision version, or retain the file on the instance.</li>
   </ul>
   <h3>Troubleshooting</h3>
   <ul>
     <li>Deployment log (Amazon Linux): <code>/opt/codedeploy-agent/deployment-root/deployment-logs/codedeploy-agent-deployments.log</code>.</li>
     <li>Agent log: <code>/var/log/aws/codedeploy-agent/codedeploy-agent.log</code>. Script output: <code>scripts.log</code> under the deployment folder.</li>
-    <li>To see the logs in CloudWatch, install the CloudWatch agent on the instances.</li>
+    <li>The CodeDeploy agent writes these logs only to the instance disk. To see the logs in CloudWatch, install the CloudWatch agent on the instances.</li>
     <li>Common causes of failure: the agent is not running, the tags do not match, or the instance profile cannot read the bucket.</li>
     <li>Other deployment logs: CodeBuild writes build logs to CloudWatch Logs. CloudFormation stack events show the first resource that failed.</li>
   </ul>
@@ -295,16 +302,17 @@
       <li>"Deploy fast but keep half of the fleet in service" → <code>HalfAtATime</code>.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/reference-appspec-file-structure-hooks.html">AppSpec hooks</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-configurations.html">Deployment configurations</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/deployments-rollback-and-redeploy.html">Rollback and redeploy</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/troubleshooting-ec2-instances.html">Troubleshoot instances</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/deployments-view-logs.html">Deployment logs</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-04-codedeploy-ec2/README.md">Lab 8.4 CodeDeploy for EC2</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/reference-appspec-file-structure-hooks.html">AppSpec hooks</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-configurations.html">Deployment configurations</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/deployments-rollback-and-redeploy.html">Rollback and redeploy</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/APIReference/API_CreateDeployment.html">CreateDeployment (fileExistsBehavior default)</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-configurations-create.html">Custom and zonal configurations</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/troubleshooting-ec2-instances.html">Troubleshoot instances</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/deployments-view-logs.html">Deployment logs</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-04-codedeploy-ec2/README.md">Lab 8.4 CodeDeploy for EC2</a>.</p>
 </section>
 
 <section id="codedeploy-ecs">
   <h2>CodeDeploy blue/green for Amazon ECS</h2>
   <h3>Key facts</h3>
   <ul>
-    <li>CodeDeploy creates a replacement (green) task set with the new task definition. Then it moves load balancer traffic to it.</li>
-    <li>The ECS service must use the <code>CODE_DEPLOY</code> deployment controller.</li>
-    <li>The deployment group names two target groups and a production listener. A test listener is optional.</li>
+    <li>A task set is a group of tasks in one service that all run the same task definition. CodeDeploy creates a replacement (green) task set with the new task definition. Then it moves load balancer traffic to it from the original (blue) task set.</li>
+    <li>The ECS service must use the <code>CODE_DEPLOY</code> deployment controller. This setting gives control of deployments for the service to CodeDeploy instead of ECS.</li>
+    <li>The deployment group names two target groups and a production listener. One target group holds the blue tasks and the other holds the green tasks. CodeDeploy moves traffic by changing which target group the production listener sends traffic to.</li>
+    <li>A test listener is optional. It is a second listener, for example on port 8080, that sends traffic to the green tasks before customers reach them. Use it to run tests on the new version.</li>
     <li>The ECS AppSpec lists <code>TaskDefinition</code>, and <code>LoadBalancerInfo</code> with <code>ContainerName</code> and <code>ContainerPort</code>.</li>
     <li>ECS deployments have no agent. Hooks are Lambda functions, as for Lambda deployments.</li>
     <li>The service role can use the <code>AWSCodeDeployRoleForECS</code> managed policy.</li>
@@ -341,12 +349,12 @@
   <h2>CodePipeline: stages, actions, approvals, and executions</h2>
   <h3>Key facts</h3>
   <ul>
-    <li>A pipeline has stages. Each stage has actions. Actions in a stage can run in parallel or in order (<code>runOrder</code>).</li>
-    <li>Action categories: Source, Build, Test, Deploy, Approval, Invoke.</li>
+    <li>A pipeline has stages. Each stage has actions. Actions in a stage can run in parallel or in order (<code>runOrder</code>). Actions with the same <code>runOrder</code> number run in parallel. An action with a higher number starts after the lower numbers finish.</li>
+    <li>Action categories: Source, Build, Test, Deploy, Approval, Invoke. An Invoke action runs a Lambda function or a Step Functions state machine, for example to run a custom check.</li>
     <li>Actions pass input and output artifacts through an S3 artifact store.</li>
     <li>With more than one source action, all source actions run again when one source changes.</li>
     <li>A failed action stops the execution. You can retry the failed stage, or a newer execution can take its place.</li>
-    <li>Disable a transition to stop executions from entering a stage.</li>
+    <li>A transition is the link between two stages. Disable a transition to stop executions from entering a stage, for example during a production change freeze. Executions wait at the transition until you enable it again. A disabled transition sends no notification.</li>
     <li>If a CloudFormation deploy action fails, the error message shows the first failed resource when the role has <code>cloudformation:DescribeStackEvents</code>.</li>
   </ul>
   <h3>Manual approval</h3>
@@ -363,6 +371,7 @@
     <tr><td><code>QUEUED</code></td><td>Executions run one by one, in order. None is skipped.</td><td>V2 only</td></tr>
     <tr><td><code>PARALLEL</code></td><td>Executions run at the same time and do not wait. No stage rollback.</td><td>V2 only</td></tr>
   </table>
+  <p>A stage processes one execution at a time in <code>SUPERSEDED</code> and <code>QUEUED</code> modes. Choose <code>SUPERSEDED</code> when only the newest commit matters, because it skips older waiting executions. Choose <code>QUEUED</code> when every commit must deploy, in order. Choose <code>PARALLEL</code> when executions are independent, for example to test feature branches at the same time.</p>
   <h3>V2-only features</h3>
   <ul>
     <li>Triggers with filters on Git tags, branches, pull requests, and file paths.</li>
@@ -377,6 +386,7 @@
     <tr><td><code>REPLACE_ON_FAILURE</code></td><td>Deletes and creates again a stack in a failed state. For tests only.</td></tr>
     <tr><td><code>DELETE_ONLY</code></td><td>Deletes the stack</td></tr>
   </table>
+  <p>A change set is a list of the resource changes that CloudFormation will make, created before it makes them. Choose <code>CREATE_UPDATE</code> to deploy directly. Choose <code>CHANGE_SET_REPLACE</code> and then <code>CHANGE_SET_EXECUTE</code> when a person must review the changes first.</p>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
@@ -400,12 +410,13 @@
     <tr><td>EC2 instance profile</td><td>The CodeDeploy agent on each instance</td><td>Read access to the revision bucket</td></tr>
     <tr><td>CloudFormation role (<code>RoleArn</code>)</td><td>CloudFormation in a deploy action</td><td>Permission to create the stack resources. The pipeline role needs <code>iam:PassRole</code> for it.</td></tr>
   </table>
+  <p><code>iam:PassRole</code> is the permission to give a role to an AWS service. Without it, the deploy action fails with an AccessDenied error that names <code>iam:PassRole</code>. This check stops a user from giving a service more permissions than the user has.</p>
   <h3>Cross-account pipelines</h3>
   <ul>
-    <li>Use a customer managed AWS KMS key for the artifact store. The default AWS managed key does not work across accounts.</li>
+    <li>Use a customer managed AWS KMS key for the artifact store. The other account must decrypt the artifacts, so the key policy must allow it. You cannot change the key policy of an AWS managed key, so the default key does not work across accounts.</li>
     <li>The key policy must allow the other account. The artifact bucket policy must also allow it.</li>
     <li>The other account creates a role that the pipeline service role can assume. The action uses that role (<code>roleArn</code>).</li>
-    <li>For cross-account actions, identify the key by key ID or key ARN. Aliases work only in the account that owns the key.</li>
+    <li>For cross-account actions, identify the key by key ID or key ARN. An alias is looked up in the account that uses it, so the other account cannot find your key by its alias.</li>
   </ul>
   <h3>Least privilege</h3>
   <ul>
@@ -428,7 +439,7 @@
   <h2>AWS CDK: constructs, bootstrap, and CLI commands</h2>
   <h3>Key facts</h3>
   <ul>
-    <li>The AWS CDK defines infrastructure in code (TypeScript, Python, Java, C#, Go). It synthesizes CloudFormation templates.</li>
+    <li>The AWS CDK defines infrastructure in code (TypeScript, Python, Java, C#, Go). It synthesizes CloudFormation templates: it runs your code and writes the CloudFormation template that the code describes.</li>
     <li>A CDK deployment is a CloudFormation stack deployment. Rollback and change sets work as in CloudFormation.</li>
     <li>CDK v1 support ended on June 1, 2023. Use CDK v2.</li>
   </ul>
@@ -439,12 +450,13 @@
     <tr><td>L2</td><td>One resource with useful defaults and helper methods</td><td><code>lambda.Function</code>, <code>table.grantReadData(fn)</code></td></tr>
     <tr><td>L3 (patterns)</td><td>Several resources that work together</td><td><code>LambdaRestApi</code></td></tr>
   </table>
+  <p>Choose L2 for most resources, because it has safe defaults and grant methods for least-privilege IAM policies. Choose L1 when you need a CloudFormation property that the L2 construct does not support. Choose L3 when a pattern matches your whole design, for example an API Gateway API in front of one Lambda function.</p>
   <h3>Bootstrap</h3>
   <ul>
     <li>Bootstrap each AWS environment (account and Region) before you deploy to it: <code>cdk bootstrap aws://ACCOUNT/REGION</code>.</li>
-    <li>Bootstrap creates an S3 bucket for assets, an ECR repository for images, and IAM roles for deployment.</li>
+    <li>Bootstrap creates an S3 bucket for assets, an ECR repository for images, and IAM roles for deployment. Assets are local files that the app needs, such as Lambda code folders and Docker images. <code>cdk deploy</code> uploads them to this bucket and repository.</li>
     <li>The bootstrap stack name is <code>CDKToolkit</code> by default.</li>
-    <li>Without bootstrap, only stacks with no assets and a template under 51,200 bytes deploy.</li>
+    <li>Without bootstrap, only stacks with no assets and a template under 51,200 bytes deploy. 51,200 bytes is the CloudFormation limit for a template that is sent directly in the API call. A larger template must first go to an S3 bucket, and the bootstrap stack creates that bucket.</li>
   </ul>
   <h3>CLI commands</h3>
   <table>
@@ -452,7 +464,7 @@
     <tr><td><code>cdk synth</code></td><td>Synthesizes the CloudFormation template locally</td></tr>
     <tr><td><code>cdk diff</code></td><td>Compares the app with the deployed stack</td></tr>
     <tr><td><code>cdk deploy</code></td><td>Synthesizes and deploys through CloudFormation. Asks for approval of security-broadening changes by default.</td></tr>
-    <tr><td><code>cdk deploy --hotswap</code></td><td>Updates some resources (for example, Lambda code) directly through service APIs. Development only, because it causes drift.</td></tr>
+    <tr><td><code>cdk deploy --hotswap</code></td><td>Updates some resources (for example, Lambda code) directly through service APIs. Development only, because it causes drift: the real resources no longer match what the CloudFormation stack records.</td></tr>
     <tr><td><code>cdk watch</code></td><td>Deploys automatically when files change. Uses hotswap by default.</td></tr>
     <tr><td><code>cdk destroy</code></td><td>Deletes the stack. The <code>CDKToolkit</code> stack stays.</td></tr>
   </table>
@@ -465,7 +477,7 @@
       <li>"Fastest code update loop in a dev account" → <code>cdk watch</code> or <code>--hotswap</code>. Never in production.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html">CDK bootstrapping</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/ref-cli-cmd-deploy.html">cdk deploy reference</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-07-cdk-introduction/README.md">Lab 8.7 CDK introduction</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html">CDK bootstrapping</a>, <a href="https://docs.aws.amazon.com/cdk/v2/guide/ref-cli-cmd-deploy.html">cdk deploy reference</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cloudformation-limits.html">CloudFormation quotas (template body size)</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-07-cdk-introduction/README.md">Lab 8.7 CDK introduction</a>.</p>
 </section>
 
 <section id="ecs-tasks">
@@ -474,9 +486,9 @@
   <ul>
     <li>A task definition is the versioned blueprint: images, CPU, memory, ports, environment, roles, and network mode. Each change makes a new revision.</li>
     <li>A task is a running copy of a task definition. A service keeps the desired number of tasks running and connects to a load balancer.</li>
-    <li>Fargate tasks must use the <code>awsvpc</code> network mode. Each task gets its own elastic network interface and private IP address.</li>
-    <li>The EC2 launch type also supports <code>bridge</code>, <code>host</code>, and <code>none</code>.</li>
-    <li>Task placement strategies apply to the EC2 launch type: <code>binpack</code>, <code>random</code>, and <code>spread</code>.</li>
+    <li>Fargate tasks must use the <code>awsvpc</code> network mode. Each task gets its own elastic network interface and private IP address, so you can attach security groups to each task. A Fargate task definition with another network mode fails to register.</li>
+    <li>The EC2 launch type also supports <code>bridge</code>, <code>host</code>, and <code>none</code>. In <code>bridge</code> mode, containers use a Docker virtual network and map container ports to host ports. In <code>host</code> mode, containers use the network of the EC2 instance directly. In <code>none</code> mode, containers have no external network.</li>
+    <li>Task placement strategies choose the EC2 instance for each new task. They apply to the EC2 launch type only. <code>binpack</code> fills each instance before it uses the next one, so you need fewer instances (lower cost). <code>spread</code> places tasks evenly, for example across Availability Zones (higher availability). <code>random</code> places tasks on any instance that fits.</li>
   </ul>
   <h3>Numbers to memorize</h3>
   <table>
@@ -490,7 +502,8 @@
     <li><code>minimumHealthyPercent</code> is the lower limit of running, healthy tasks. It rounds up.</li>
     <li><code>maximumPercent</code> is the upper limit of running and pending tasks. It rounds down.</li>
     <li>Example: 4 tasks, minimum 50 percent: ECS can stop 2 old tasks before it starts 2 new tasks. No extra capacity is needed.</li>
-    <li>The deployment circuit breaker fails a deployment when tasks cannot reach a steady state. With rollback on, ECS returns to the last successful deployment.</li>
+    <li>With the defaults (100 and 200 percent), ECS starts new tasks before it stops old ones. The cluster must have free capacity for up to twice the desired count during the deployment.</li>
+    <li>The deployment circuit breaker fails a deployment when tasks cannot reach a steady state (the desired number of tasks running and healthy). Without it, ECS keeps starting failing tasks again and again. With rollback on, ECS returns to the last successful deployment.</li>
     <li>CloudWatch alarms can also fail and roll back a rolling deployment, based on application metrics.</li>
     <li>The circuit breaker works only with the rolling update (<code>ECS</code>) deployment type.</li>
   </ul>
@@ -505,7 +518,7 @@
     <h3>Exam signals</h3>
     <ul>
       <li>"Move from EC2 bridge mode to Fargate" → change the network mode to <code>awsvpc</code>.</li>
-      <li>"Deploy without extra cluster capacity" → lower <code>minimumHealthyPercent</code>, keep <code>maximumPercent</code> at 100.</li>
+      <li>"Deploy without extra cluster capacity" → lower <code>minimumHealthyPercent</code>, keep <code>maximumPercent</code> at 100. A maximum of 100 stops ECS from running more tasks than the desired count, and the lower minimum lets ECS stop old tasks first.</li>
       <li>"New tasks keep failing; stop and go back automatically" → deployment circuit breaker with rollback.</li>
     </ul>
   </div>
@@ -527,7 +540,7 @@
     <li>Reference a Secrets Manager secret or a Parameter Store parameter in the container <code>secrets</code> section.</li>
     <li>The execution role needs <code>secretsmanager:GetSecretValue</code> or <code>ssm:GetParameters</code>.</li>
     <li>It also needs <code>kms:Decrypt</code> if the secret uses a customer managed key.</li>
-    <li>ECS injects the values as environment variables when the container starts.</li>
+    <li>ECS injects the values as environment variables when the container starts. The agent gets the values before the container runs, so it uses the execution role, not the task role. If the agent cannot get a value, the task stops before the container starts.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
@@ -535,7 +548,7 @@
       <li>"Task cannot pull its image" or "no logs in CloudWatch" → task execution role.</li>
       <li>"Container code gets AccessDenied from S3 or DynamoDB" → task role.</li>
       <li>"Task fails to start because it cannot get a secret" → execution role lacks <code>secretsmanager:GetSecretValue</code>.</li>
-      <li>"Do not put credentials in the image" → use the task role.</li>
+      <li>"Do not put credentials in the image" → use the task role. ECS gives the containers temporary credentials for the task role, and the AWS SDK finds them automatically.</li>
     </ul>
   </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html">Task execution IAM role</a>, <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html">Task IAM role</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-08-ecs-fargate/README.md">Lab 8.8 ECS Fargate</a>.</p>
@@ -548,7 +561,7 @@
     <li>The Docker CLI does not support IAM authentication. Get a token first: <code>aws ecr get-login-password | docker login --username AWS --password-stdin REGISTRY</code>.</li>
     <li>The token is valid for 12 hours. It has the same permissions as the IAM principal that got it.</li>
     <li>Getting a token needs <code>ecr:GetAuthorizationToken</code>. Pulling also needs <code>ecr:BatchGetImage</code> and <code>ecr:GetDownloadUrlForLayer</code>.</li>
-    <li>For cross-account pulls, add a repository policy that allows the other account.</li>
+    <li>For cross-account pulls, add a repository policy that allows the other account. A repository policy is a resource-based policy on the repository. The pulling principal also needs the ECR pull permissions in its own account.</li>
   </ul>
   <h3>Image scanning</h3>
   <table>
@@ -556,13 +569,14 @@
     <tr><td>Basic</td><td>Operating system vulnerabilities (CVE database)</td><td>Manual or scan on push</td></tr>
     <tr><td>Enhanced (Amazon Inspector)</td><td>Operating system and programming language packages</td><td>Scan on push or continuous. Amazon Inspector sends findings to EventBridge.</td></tr>
   </table>
+  <p>Choose basic scanning for operating system CVEs at no extra Amazon Inspector cost. Choose enhanced scanning when you must find vulnerabilities in language packages (for example npm or pip packages), or when images must be scanned again as new CVEs appear.</p>
   <h3>Tags and lifecycle</h3>
   <ul>
-    <li>Tag immutability stops a push that uses an existing tag. ECR returns <code>ImageTagAlreadyExistsException</code>.</li>
+    <li>A tag is a name, such as <code>v1.4.2</code>, that points to one image. By default, a new push can move a tag to a different image. Tag immutability stops a push that uses an existing tag. ECR returns <code>ImageTagAlreadyExistsException</code>. So a tag always means the same image in test and in production.</li>
     <li>Immutability applies to all tags, except tags you list as exclusions.</li>
     <li>Lifecycle policies delete images automatically, for example untagged images older than a number of days, or more than a count.</li>
-    <li>You cannot change the encryption settings of a repository after you create it.</li>
-    <li>Use image tags as approved versions: deploy a specific version tag (for example <code>v1.4.2</code>) to test, then the same tag to production. Do not deploy from <code>latest</code>.</li>
+    <li>You cannot change the encryption settings of a repository after you create it. To change them, create a new repository and push the images to it.</li>
+    <li>Use image tags as approved versions: deploy a specific version tag (for example <code>v1.4.2</code>) to test, then the same tag to production. Do not deploy from <code>latest</code>. Each new push moves <code>latest</code>, so production could get an image that nobody tested.</li>
     <li>ECS resolves an image tag to an image digest when a deployment starts. All tasks in the deployment run the same image, even if someone pushes the tag again.</li>
   </ul>
   <div class="exam-signals">
@@ -589,11 +603,12 @@
     <tr><td>Traffic splitting</td><td>No</td><td>New instances. A percentage of traffic goes to them.</td><td>Only the test traffic</td><td>Reroute traffic, terminate new instances</td></tr>
     <tr><td>Blue/green (not a policy)</td><td>No</td><td>A new environment</td><td>Minimal</td><td>Swap the URLs back</td></tr>
   </table>
+  <p>Choose All at once for speed when downtime is acceptable, for example in development. Choose Rolling to avoid downtime with no extra instance cost, if reduced capacity is acceptable. Choose Rolling with additional batch to keep full capacity for the cost of one extra batch. Choose Immutable for the safest deployment and the fastest rollback. Choose Traffic splitting to test the new version on a percentage of real users first.</p>
   <ul>
-    <li>Only blue/green changes DNS. All other methods keep the same DNS name.</li>
+    <li>Only blue/green changes DNS. All other methods keep the same DNS name. After a DNS change, some clients keep the old address in their DNS cache for a time, so they reach the old environment.</li>
     <li>Rolling, Rolling with additional batch, and Traffic splitting need a load-balanced environment. Traffic splitting needs an Application Load Balancer.</li>
     <li>All at once and Immutable also work in single-instance environments.</li>
-    <li>Traffic splitting defaults: 10 percent of traffic to the new version, evaluation time 5 minutes.</li>
+    <li>Traffic splitting defaults: 10 percent of traffic to the new version, evaluation time 5 minutes. During the evaluation time, Elastic Beanstalk watches the health of the new instances. If they stay healthy, it moves all traffic to them and terminates the old instances. If not, it moves traffic back and terminates the new instances.</li>
     <li>Batch size: a percentage or a fixed number of instances.</li>
   </ul>
   <h3>Blue/green with Elastic Beanstalk</h3>
@@ -601,7 +616,7 @@
     <li>Clone or create a second environment and deploy the new version there.</li>
     <li>Test it, then use <strong>Swap environment URLs</strong> (CNAME swap).</li>
     <li>Use it when the new version cannot run alongside the old version, or when resource configuration changes.</li>
-    <li>A database that is coupled to one environment blocks this pattern. Keep the database outside the environment.</li>
+    <li>A database that is coupled to one environment blocks this pattern. When you terminate the old environment, its deletion policy deletes the database, or keeps only a snapshot, unless the policy is Retain. Keep the database outside the environment.</li>
   </ul>
   <div class="exam-signals">
     <h3>Exam signals</h3>
@@ -613,7 +628,7 @@
       <li>"New platform version cannot run next to the old one" → blue/green with a CNAME swap.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.deploy-existing-version.html">Deployment policies</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/command-options-general.html#command-options-general-elasticbeanstalkcommand">aws:elasticbeanstalk:command options (defaults)</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.CNAMESwap.html">Blue/green with CNAME swap</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-09-beanstalk-and-amplify/README.md">Lab 8.9 Beanstalk and Amplify</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.deploy-existing-version.html">Deployment policies</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.rolling-version-deploy.html">Deployment policies and settings (traffic splitting)</a>,<a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/command-options-general.html#command-options-general-elasticbeanstalkcommand">aws:elasticbeanstalk:command options (defaults)</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.CNAMESwap.html">Blue/green with CNAME swap</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-09-beanstalk-and-amplify/README.md">Lab 8.9 Beanstalk and Amplify</a>.</p>
 </section>
 
 <section id="eb-env-config">
@@ -621,17 +636,17 @@
   <h3>Key facts</h3>
   <ul>
     <li>An application has application versions and environments. Each environment runs one version.</li>
-    <li>Web server environments serve HTTP. Worker environments process messages from an Amazon SQS queue.</li>
-    <li>In a worker environment, a daemon reads the queue and sends an HTTP POST to <code>http://localhost/</code> on port 80.</li>
-    <li>A <code>200 OK</code> response deletes the message. Other responses return the message to the queue after a timeout.</li>
-    <li>Put <code>cron.yaml</code> in the source bundle to queue periodic tasks. Periodic tasks do not work with a FIFO queue.</li>
+    <li>Web server environments serve HTTP. Worker environments process messages from an Amazon SQS queue. Use a worker environment for long tasks, such as image processing or email, so that the web tier stays fast.</li>
+    <li>In a worker environment, a daemon (a background process that Elastic Beanstalk runs on each instance) reads the queue. It sends each message as an HTTP POST to <code>http://localhost/</code> on port 80. Your application only handles the POST request.</li>
+    <li>A <code>200 OK</code> response deletes the message. Any other response returns the message to the queue after the error visibility timeout, so another attempt can process it. After the maximum retries (default 10), the message goes to the dead-letter queue, which an automatically generated queue has by default.</li>
+    <li>Put <code>cron.yaml</code> in the source bundle to queue periodic tasks. Leader election makes one instance put each task in the queue, and one instance processes it, so the job does not run on every instance. Periodic tasks do not work with a FIFO queue.</li>
     <li>Elastic Beanstalk uses CloudFormation to create the environment resources.</li>
   </ul>
   <h3>Platform hooks (Amazon Linux 2 and later)</h3>
   <ul>
     <li>Put executable scripts in <code>.platform/hooks/</code> in the source bundle: <code>prebuild</code>, <code>predeploy</code>, and <code>postdeploy</code>.</li>
     <li><code>prebuild</code> runs after the bundle is extracted, before the app and web server are configured. <code>predeploy</code> runs before the app moves to its final location. <code>postdeploy</code> runs last.</li>
-    <li><code>.platform/confighooks/</code> uses the same subdirectories for configuration deployments that do not replace instances.</li>
+    <li><code>.platform/confighooks/</code> uses the same subdirectories for configuration deployments that do not replace instances. A configuration deployment applies changed environment settings, such as environment variables, with no new application version.</li>
     <li>Files in each directory run in lexicographical order, as root. A non-zero exit code fails the deployment.</li>
     <li><code>.ebextensions</code> <code>commands</code> run before <code>prebuild</code>. <code>container_commands</code> run before <code>predeploy</code>.</li>
   </ul>
@@ -644,17 +659,17 @@
   </ol>
   <ul>
     <li><code>.ebextensions</code> files are YAML or JSON files with the <code>.config</code> extension, at the root of the source bundle.</li>
-    <li>The console overrides <code>DeploymentPolicy</code> and batch size settings with recommended values. You cannot set these in a configuration file for an environment created in the console.</li>
+    <li>The console and the EB CLI apply recommended values for <code>DeploymentPolicy</code> and batch size. These are direct settings, so they override the same options in <code>.ebextensions</code>. To use a configuration file for these options, remove the recommended values first.</li>
   </ul>
   <h3>Databases</h3>
   <ul>
     <li>A database that you add in Elastic Beanstalk is coupled to the environment. The app gets <code>RDS_HOSTNAME</code>, <code>RDS_PORT</code>, <code>RDS_DB_NAME</code>, <code>RDS_USERNAME</code>, and <code>RDS_PASSWORD</code>.</li>
-    <li>Deletion policy for a coupled database: Snapshot, Delete, or Retain.</li>
+    <li>A coupled database has the same lifecycle as the environment. When you terminate the environment, its deletion policy decides what happens to the database: Snapshot, Delete, or Retain.</li>
     <li>For production, use a decoupled database (external to the environment). Several environments can use it, and blue/green works.</li>
   </ul>
   <h3>Application versions</h3>
   <ul>
-    <li>Quota: 1,000 application versions per Region, across all applications.</li>
+    <li>Quota: 1,000 application versions per Region, across all applications. At the quota, you cannot create a new version, so deployments of new code fail.</li>
     <li>A lifecycle policy deletes old versions by count or by age. It can also delete the source bundle from Amazon S3.</li>
   </ul>
   <div class="exam-signals">
@@ -666,7 +681,7 @@
       <li>"Value in .ebextensions is ignored" → a setting with higher precedence (direct or saved configuration) overrides it.</li>
     </ul>
   </div>
-  <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/command-options.html">Configuration options and precedence</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features-managing-env-tiers.html">Worker environments</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.db.html">Adding a database</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/applications-lifecycle.html">Version lifecycle</a>, <a href="https://docs.aws.amazon.com/general/latest/gr/elasticbeanstalk.html">Elastic Beanstalk quotas</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-09-beanstalk-and-amplify/README.md">Lab 8.9 Beanstalk and Amplify</a>.</p>
+  <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/command-options.html">Configuration options and precedence</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features-managing-env-tiers.html">Worker environments (retries, dead-letter queue, leader election)</a>,<a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/using-features.managing.db.html">Adding a database</a>, <a href="https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/applications-lifecycle.html">Version lifecycle</a>, <a href="https://docs.aws.amazon.com/general/latest/gr/elasticbeanstalk.html">Elastic Beanstalk quotas</a>. Lab: <a href="../../../module-08-cicd-pipelines/lab-09-beanstalk-and-amplify/README.md">Lab 8.9 Beanstalk and Amplify</a>.</p>
 </section>
 
 <section id="cicd-amplify">
@@ -678,9 +693,9 @@
     <li>Each connected branch is a separate environment with its own URL, for example main for production and dev for testing. Merge to a branch to promote an approved version.</li>
     <li>Build settings: the console settings apply unless the repository has an <code>amplify.yml</code> file at its root.</li>
     <li>Web previews deploy each pull request to a unique preview URL. Amplify deletes the preview when the pull request closes.</li>
-    <li>For public repositories, web previews are not available for apps that need an IAM service role.</li>
-    <li>Access control protects a branch, or all branches, with a user name and password.</li>
-    <li>Each pull request preview counts toward the quota of 50 branches for each app.</li>
+    <li>For public repositories, web previews are not available for apps that need an IAM service role. This rule stops other people from opening a pull request with code that runs with the IAM permissions of your app.</li>
+    <li>Access control protects a branch, or all branches, with a user name and password. Use it to keep a test site private without changes to the application code.</li>
+    <li>Each pull request preview counts toward the quota of 50 branches for each app. Close pull requests when they are done, so that open previews do not use up this quota.</li>
   </ul>
   <h3>When to use what</h3>
   <table>
