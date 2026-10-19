@@ -41,7 +41,7 @@ window.QUESTION_BANKS.push({ setId: "g-dev-practices", questions: [
       { text: "Set max attempts to 1 for the SDK client.", correct: false,
         why: "A value of 1 turns off retries. Throttled writes fail at once, and the request rate does not slow down." }
     ],
-    explanation: "Adaptive retry mode is standard mode plus a client-side rate limiter. It suits a client that sends to one resource and gets frequent throttling." },
+    explanation: "Adaptive retry mode is standard mode plus a client-side rate limiter. It suits a client that sends to one resource and gets frequent throttling, because the limiter slows all requests from that client." },
 
   { id: "gdev-004", topic: "dev-sdk-retries", domain: 4,
     stem: "A developer reviews CloudWatch logs for an application that uses the AWS SDK with default retry settings. The developer wants to know which errors the SDK already retries automatically, so the application code does not need extra retry logic for them. Which errors will the SDK retry automatically? (Choose two.)",
@@ -201,7 +201,7 @@ window.QUESTION_BANKS.push({ setId: "g-dev-practices", questions: [
       { text: "Turn on long polling for the queue.", correct: false,
         why: "Long polling reduces empty responses. It does not change at-least-once delivery, so duplicates continue." }
     ],
-    explanation: "SQS standard queues, asynchronous Lambda invocations, and EventBridge deliver at least once. Make the handler idempotent with a key and a conditional write." },
+    explanation: "SQS standard queues, asynchronous Lambda invocations, and EventBridge deliver at least once, so the same message can arrive more than one time. Make the handler idempotent with a key and a conditional write." },
 
   { id: "gdev-015", topic: "dev-idempotency", domain: 1,
     stem: "A Python Lambda function behind Amazon API Gateway creates bookings. Clients retry when they get a timeout, and some bookings are created two times. The developer must make the function idempotent with the LEAST custom code. Which solution will meet these requirements?",
@@ -319,7 +319,7 @@ window.QUESTION_BANKS.push({ setId: "g-dev-practices", questions: [
       { text: "Increase the metadata response hop limit to 64.", correct: false,
         why: "The hop limit controls how far the token response can travel. It does not require IMDSv2, and a large value weakens protection." }
     ],
-    explanation: "IMDSv2 needs a session token from a PUT request. Require it with HttpTokens=required, and use a current SDK, which supports IMDSv2." },
+    explanation: "IMDSv2 needs a session token from a PUT request, which a typical SSRF request cannot send. Require it with HttpTokens=required, and use a current SDK, which supports IMDSv2." },
 
   { id: "gdev-023", topic: "dev-cli-cloudshell", domain: 2,
     stem: "A developer must confirm that a new IAM role can launch Amazon EC2 instances of a specific type. The check must not launch any instance or create cost. Which solution will meet these requirements?",
