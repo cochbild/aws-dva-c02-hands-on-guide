@@ -73,7 +73,7 @@
     <ul>
       <li>"Read the object immediately after the PUT returns" → S3 is strongly consistent. No delay or retry loop is necessary.</li>
       <li>"503 Slow Down at high request rates" → more prefixes. The request rate limit applies to each prefix.</li>
-      <li>"503 Slow Down at high request rates" → also retry with exponential backoff. The 503 errors stop when S3 finishes scaling.</li>
+      <li>"503 Slow Down at high request rates" → retry with exponential backoff. The 503 errors stop when S3 finishes scaling.</li>
       <li>"Do not overwrite the object if the key exists" → conditional write with <code>If-None-Match: *</code>. S3 returns 412 if the key exists.</li>
     </ul>
   </div>
@@ -127,15 +127,17 @@
       <li>All S3 storage classes in the comparison table have the same durability: 11 nines.</li>
       <li>S3 Standard has 99.99% designed availability, no minimum storage duration, and no minimum billable size.</li>
       <li>S3 Standard-IA has 99.9% availability, a 30-day minimum duration, a 128 KB minimum billable size, and a retrieval fee.</li>
-      <li>S3 One Zone-IA has 99.5% availability, one Availability Zone, a 30-day minimum duration, and a 128 KB minimum billable size.</li>
-      <li>S3 Glacier Instant Retrieval gives millisecond access, with a 90-day minimum duration and a 128 KB minimum billable size.</li>
+      <li>S3 One Zone-IA has 99.5% availability, one Availability Zone, a 30-day minimum duration, a 128 KB minimum billable size, and a retrieval fee.</li>
+      <li>S3 Glacier Instant Retrieval gives millisecond access with a retrieval fee, a 90-day minimum duration, and a 128 KB minimum billable size.</li>
       <li>S3 Glacier Flexible Retrieval has a 90-day minimum duration and needs a restore before a read: minutes to hours.</li>
       <li>S3 Glacier Deep Archive has a 180-day minimum duration and needs a restore before a read: hours.</li>
+      <li>S3 Intelligent-Tiering has no minimum storage duration and no minimum billable size.</li>
+      <li>The optional Intelligent-Tiering archive tiers need a restore before a read.</li>
       <li>S3 Intelligent-Tiering and Glacier Instant Retrieval have 99.9% availability. Flexible Retrieval and Deep Archive have 99.99% after restore.</li>
       <li>S3 bills an object that is smaller than the minimum billable size as if the object were 128 KB.</li>
       <li>If you delete or move an object before its minimum storage duration, you pay for the rest of that duration.</li>
       <li>Choose S3 Standard for data read more than once a month, and Standard-IA or One Zone-IA for about once a month.</li>
-      <li>Choose Glacier Instant Retrieval for about once a quarter, Flexible Retrieval for once a year, and Deep Archive for less.</li>
+      <li>Choose Glacier Instant Retrieval for about once a quarter, Flexible Retrieval for about once a year, and Deep Archive for less than once a year.</li>
       <li>Glacier Flexible Retrieval and Deep Archive add 40 KB of metadata to each archived object: 32 KB archive rate, 8 KB Standard rate.</li>
       <li><strong>Intelligent-Tiering</strong> moves an object to Infrequent Access after 30 days with no access, and to Archive Instant Access after 90 days.</li>
       <li>A read moves an Intelligent-Tiering object back to the Frequent Access tier.</li>
@@ -220,6 +222,7 @@
       <li>In a versioned bucket, <code>Expiration</code> on the current version adds a delete marker and does not remove data.</li>
       <li>You pay for a noncurrent version until a <code>NoncurrentVersionExpiration</code> action deletes the version.</li>
       <li>An <strong>expired object delete marker</strong> is a delete marker with no noncurrent versions.</li>
+      <li>An expired object delete marker stays after its old versions expire and has a minimal storage charge.</li>
       <li>To remove expired object delete markers, set <code>ExpiredObjectDeleteMarker</code> to <code>true</code>.</li>
       <li><code>ExpiredObjectDeleteMarker</code> cannot be in the same rule as <code>Days</code>. Put <code>ExpiredObjectDeleteMarker</code> in a separate rule.</li>
       <li><code>AbortIncompleteMultipartUpload</code> deletes the parts of incomplete multipart uploads after a number of days.</li>
@@ -522,7 +525,7 @@
       <li>Keep <code>ExpiresIn</code> short, so that a leaked presigned URL works for less time.</li>
       <li>The bucket policy condition <code>s3:signatureAge</code> (in milliseconds) limits the life of every presigned URL for the bucket.</li>
       <li>A Deny with <code>NumericGreaterThan</code> <code>s3:signatureAge</code> <code>600000</code> rejects signatures older than 10 minutes.</li>
-      <li>The conditions <code>aws:SourceIp</code>, <code>aws:SourceVpce</code>, and <code>aws:SourceVpc</code> limit the network path of presigned URL requests.</li>
+      <li><code>aws:SourceIp</code> (public endpoint) or <code>aws:SourceVpce</code> / <code>aws:SourceVpc</code> (VPC endpoint) limit the network path of presigned URL requests.</li>
       <li>A <strong>presigned POST</strong> lets an HTML form or browser script upload directly to S3. The backend signs a POST policy.</li>
       <li>A POST policy has an <code>expiration</code> and <code>conditions</code>.</li>
       <li>POST policy conditions can fix the bucket, limit the key with <code>starts-with</code>, and limit the size with <code>content-length-range</code>.</li>
@@ -607,9 +610,11 @@
       <li><strong>SSE-S3</strong> (<code>AES256</code>) is the default for all new uploads since January 5, 2023, at no extra cost.</li>
       <li>With SSE-S3, Amazon S3 manages the key.</li>
       <li>SSE-KMS (<code>aws:kms</code>) uses the AWS managed key <code>aws/s3</code> or a customer managed key.</li>
-      <li>SSE-KMS gives key policy control and a CloudTrail record of key use. SSE-KMS adds KMS request charges.</li>
+      <li>SSE-KMS gives key policy control and a CloudTrail record of each key use.</li>
+      <li>SSE-KMS adds KMS request charges.</li>
       <li>DSSE-KMS (<code>aws:kms:dsse</code>) gives two independent layers of encryption, for compliance rules that require multilayer encryption.</li>
-      <li>DSSE-KMS costs more than SSE-KMS and does not support S3 Bucket Keys.</li>
+      <li>DSSE-KMS costs more than SSE-KMS.</li>
+      <li>DSSE-KMS does not support S3 Bucket Keys.</li>
       <li>With SSE-C, you send the key with each request, and S3 never stores the key.</li>
       <li>With client-side encryption, you encrypt before upload, and S3 never sees plaintext.</li>
       <li>Choose SSE-S3 when you need encryption with no key management.</li>
@@ -850,6 +855,7 @@
       <li>An S3 static website has an index document and an optional error document.</li>
       <li>The S3 website endpoint supports redirects.</li>
       <li>The S3 website endpoint serves only publicly readable content.</li>
+      <li>The S3 REST endpoint serves public and private content. The website endpoint serves only public content.</li>
       <li>For an S3 website, turn off Block Public Access and allow <code>s3:GetObject</code> to everyone. If not, every page returns 403.</li>
       <li>The S3 website endpoint does not support HTTPS or access points.</li>
       <li>The S3 website endpoint supports only GET and HEAD on objects.</li>
@@ -869,8 +875,9 @@
       <li>Before a cross-origin request such as a PUT, the browser sends a preflight <code>OPTIONS</code> request.</li>
       <li>If no CORS rule matches the preflight, the browser blocks the real request and shows a CORS error.</li>
       <li>The CORS rule elements are <code>AllowedOrigins</code>, <code>AllowedMethods</code>, <code>AllowedHeaders</code>, <code>ExposeHeaders</code>, and <code>MaxAgeSeconds</code>.</li>
-      <li><code>AllowedHeaders</code> lists the request headers allowed in the preflight. <code>MaxAgeSeconds</code> sets how long the browser caches the preflight response.</li>
-      <li>A CORS configuration can have up to 100 rules. The console accepts only JSON.</li>
+      <li><code>AllowedHeaders</code> lists the request headers that the preflight allows.</li>
+      <li><code>MaxAgeSeconds</code> sets how long the browser caches the preflight response.</li>
+      <li>A CORS configuration can have up to 100 rules.</li>
       <li>S3 uses the first CORS rule that matches the origin, the method, and the requested headers.</li>
       <li>CORS does not grant permission. Policies and ACLs still apply.</li>
       <li>To read a response header such as <code>ETag</code> in JavaScript, list the header in <code>ExposeHeaders</code>.</li>
@@ -1000,7 +1007,6 @@
     <ul>
       <li>Since November 7, 2025, S3 Object Lambda is available only to existing customers and to some AWS Partner Network partners.</li>
       <li>Alternatives to Object Lambda: invoke Lambda through CloudFront, API Gateway, or a function URL, or process the data in the client.</li>
-      <li>The exam guide was written before the Object Lambda change. Expect current AWS designs to use the alternatives.</li>
       <li><strong>S3 Object Lambda</strong> runs your Lambda function on GET, HEAD, and LIST requests to change the data that S3 returns.</li>
       <li>Object Lambda does not change the stored object.</li>
       <li>Applications send requests to an Object Lambda Access Point, which invokes the function.</li>
