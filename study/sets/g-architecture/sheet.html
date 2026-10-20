@@ -34,17 +34,81 @@
 
 <section id="arch-event-driven">
   <h2>Event-driven architecture and fanout</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>An <strong>event</strong> tells that something happened. Example: "OrderPlaced".</li>
+      <li>A <strong>command</strong> tells one receiver to do something. Example: "ChargeCard".</li>
+      <li>An event producer does not know the consumers. You add a consumer with no change to the producer.</li>
+      <li><strong>Fanout</strong> sends a copy of one event to many consumers at the same time.</li>
+      <li>In fanout, a slow or failed consumer does not delay the other consumers.</li>
+      <li>For SNS fanout, publish one time to a topic and subscribe one SQS queue for each consumer.</li>
+      <li>An SNS standard topic pushes each message to its subscribers and does not keep the message for later reads.</li>
+      <li>When an SNS endpoint stays down, SNS retries, then discards the message unless the subscription has a dead-letter queue.</li>
+      <li>An SQS queue stores its copy until the consumer reads and deletes it, so a slow consumer loses no messages.</li>
+      <li>One EventBridge rule sends a matching event to up to 5 targets. You cannot raise this quota.</li>
+      <li>For more than 5 EventBridge targets, add more rules with the same event pattern.</li>
+      <li>AWS docs now call the rule-based EventBridge bus "Custom Event Bus - Classic". The default event bus is a Classic bus.</li>
+      <li>The newer EventBridge "Custom Event Bus" (2026) uses subscribers and keeps events for replay. Older study material and the exam use rules and targets.</li>
+      <li>An SNS <strong>filter policy</strong> sends a subscriber only the messages that it needs.</li>
+      <li>An SNS filter policy acts on message attributes or on the message body (the filter policy scope setting).</li>
+      <li>SNS message attributes are optional name-value pairs (metadata) that the publisher sends with the message body.</li>
+      <li>An SNS subscriber with no filter policy gets every message.</li>
+      <li>A Lambda subscriber with no SNS filter policy runs, and costs money, for messages that it only discards.</li>
+      <li>An EventBridge event pattern matches on any field in the event, including fields inside the event detail.</li>
+      <li>Use EventBridge to route on event content, for AWS service events, and for SaaS partner events.</li>
+      <li>AWS services send AWS service events to the default event bus automatically. Example: an EC2 instance state change.</li>
+      <li>An SNS FIFO topic keeps the message order and removes duplicate messages.</li>
+      <li>An SNS FIFO topic delivers to SQS FIFO and SQS standard queues only. It cannot deliver to Lambda, HTTP(S), email, or SMS.</li>
+      <li>To process SNS FIFO messages in Lambda, subscribe an SQS FIFO queue and let Lambda read from the queue.</li>
+      <li>Use SNS for one message to many consumers, high throughput, and a simple attribute or body filter.</li>
+      <li>Use EventBridge for content routing, AWS service events, SaaS events, and archive and replay.</li>
+      <li>Use SQS when one consumer group pulls work at its own speed, or to buffer spikes.</li>
+      <li>Use Kinesis Data Streams for an ordered, replayable stream with many readers of the same records.</li>
+      <li>The consumers of one SQS queue share the work. One consumer reads and deletes each message.</li>
+      <li>Kinesis Data Streams keeps records for 24 hours by default, and up to 365 days.</li>
+      <li>EventBridge can archive events and replay them to the rules later. Example: reprocess events after a defect fix.</li>
+      <li>For SNS to SQS fanout, the queue policy must allow <code>sns.amazonaws.com</code> to do <code>sqs:SendMessage</code>.</li>
+      <li>Without an <code>sqs:SendMessage</code> allow for <code>sns.amazonaws.com</code> in the queue policy, the publish succeeds, but the queue stays empty.</li>
+      <li>Add an <code>aws:SourceArn</code> condition with the topic ARN to the queue policy. Without it, any SNS topic can send to the queue.</li>
+      <li>The <strong>confused deputy</strong> problem: a trusted service does an action for a party that has no permission of its own.</li>
+      <li>For cross-account EventBridge, the receiver event bus needs a resource-based policy that allows the sender accounts or the organization ID.</li>
+      <li>For cross-account EventBridge, each sender account creates a rule with the receiver bus ARN as the target.</li>
+      <li>Since March 2, 2023, a new rule target on an event bus in another account needs an IAM role.</li>
+      <li>The EventBridge console creates the cross-account IAM role for you. With the CLI, you create it yourself.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Add new consumers without changing the producer" → publish events to SNS or EventBridge. The producer does not know the consumers, and each new consumer adds its own subscription or rule.</li>
+      <li>"Each consumer must process every order, at its own speed, and not lose messages" → SNS topic with one SQS queue for each consumer. SNS gives each queue its own copy, and each queue stores the messages until its consumer reads them.</li>
+      <li>"Route events by a field inside the event body to different services" → EventBridge rules with event patterns, because an event pattern can match any field in the event and send it to many target types.</li>
+      <li>"SNS publishes succeed but the queue gets nothing" → the queue policy does not allow <code>sqs:SendMessage</code> from the topic. SNS accepts the publish, then fails when it delivers to the queue.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li>An <strong>event</strong> tells that something happened (for example, "OrderPlaced"). A <strong>command</strong> tells one receiver to do something (for example, "ChargeCard").</li>
     <li>A producer publishes an event and does not know the consumers. You can add a consumer without a change to the producer.</li>
     <li><strong>Fanout</strong> sends a copy of one event to many consumers at the same time. Each consumer processes its copy on its own, so a slow or failed consumer does not delay the others.</li>
-    <li>Fanout with Amazon SNS: publish one time to a topic, and subscribe one Amazon SQS queue for each consumer. SNS pushes each message to its subscribers and does not keep it for a subscriber to read later. When an endpoint (for example, an HTTPS server) stays down, SNS retries, then discards the message unless the subscription has a dead-letter queue. An SQS queue stores its copy until the consumer reads and deletes it, so a consumer that is down or slow does not lose messages.</li>
+    <li>Fanout with Amazon SNS: publish one time to a topic, and subscribe one Amazon SQS queue for each consumer.</li>
+    <li>SNS pushes each message to its subscribers and does not keep it for a subscriber to read later. When an endpoint (for example, an HTTPS server) stays down, SNS retries, then discards the message unless the subscription has a dead-letter queue.</li>
+    <li>An SQS queue stores its copy until the consumer reads and deletes it, so a consumer that is down or slow does not lose messages.</li>
     <li>Fanout with Amazon EventBridge: one rule can send a matching event to up to 5 targets. You cannot raise this quota. For more consumers, add more rules with the same event pattern.</li>
-    <li>AWS docs now call the rule-based bus "Custom Event Bus - Classic". The default event bus is a Classic bus. The newer "Custom Event Bus" (2026) uses subscribers and keeps events for replay. Older study material and the exam use rules and targets.</li>
-    <li>SNS filter policies send a subscriber only the messages it needs. Message attributes are optional name-value pairs (metadata) that the publisher sends with the message body. A filter policy acts on message attributes or on the message body (the filter policy scope setting). With no filter policy, a subscriber gets every message. A Lambda subscriber then runs, and costs money, for messages that it only discards.</li>
-    <li>EventBridge event patterns match on any field in the event, including fields inside the event detail. AWS service events are events that AWS services send to the default event bus automatically, for example an EC2 instance state change. Use EventBridge for routing on event content, for AWS service events, and for events from SaaS partner applications.</li>
-    <li>An SNS FIFO (first-in, first-out) topic keeps the order of messages and removes duplicate messages. SNS FIFO topics deliver to SQS FIFO queues and SQS standard queues. They do not deliver directly to Lambda, HTTP(S), email, or SMS endpoints. To process these messages in Lambda, subscribe an SQS FIFO queue and let Lambda read from the queue.</li>
+    <li>AWS docs now call the rule-based bus "Custom Event Bus - Classic". The default event bus is a Classic bus.</li>
+    <li>The newer "Custom Event Bus" (2026) uses subscribers and keeps events for replay. Older study material and the exam use rules and targets.</li>
+    <li>SNS filter policies send a subscriber only the messages it needs.</li>
+    <li>Message attributes are optional name-value pairs (metadata) that the publisher sends with the message body.</li>
+    <li>A filter policy acts on message attributes or on the message body (the filter policy scope setting).</li>
+    <li>With no filter policy, a subscriber gets every message. A Lambda subscriber then runs, and costs money, for messages that it only discards.</li>
+    <li>EventBridge event patterns match on any field in the event, including fields inside the event detail.</li>
+    <li>AWS service events are events that AWS services send to the default event bus automatically, for example an EC2 instance state change.</li>
+    <li>Use EventBridge for routing on event content, for AWS service events, and for events from SaaS partner applications.</li>
+    <li>An SNS FIFO (first-in, first-out) topic keeps the order of messages and removes duplicate messages.</li>
+    <li>SNS FIFO topics deliver to SQS FIFO queues and SQS standard queues. They do not deliver directly to Lambda, HTTP(S), email, or SMS endpoints.</li>
+    <li>To process these messages in Lambda, subscribe an SQS FIFO queue and let Lambda read from the queue.</li>
   </ul>
   <h3>Which service</h3>
   <table>
@@ -54,27 +118,55 @@
     <tr><td>One consumer group pulls work at its own speed, buffer for spikes</td><td>Amazon SQS queue</td></tr>
     <tr><td>Ordered, replayable stream with many readers of the same records</td><td>Amazon Kinesis Data Streams (see Module 5)</td></tr>
   </table>
-  <p>SNS and EventBridge push a copy of each event to every matching subscriber or target. An SQS queue holds each message until one consumer reads and deletes it, so the consumers of one queue share the work. Kinesis Data Streams keeps records for the retention period (24 hours by default, up to 365 days), so many readers can read the same records in order and read them again. EventBridge can also archive events and replay them to the rules later, for example to reprocess events after a defect fix.</p>
+  <p>SNS and EventBridge push a copy of each event to every matching subscriber or target. An SQS queue holds each message until one consumer reads and deletes it, so the consumers of one queue share the work.</p>
+  <p>Kinesis Data Streams keeps records for the retention period (24 hours by default, up to 365 days), so many readers can read the same records in order and read them again.</p>
+  <p>EventBridge can also archive events and replay them to the rules later, for example to reprocess events after a defect fix.</p>
   <h3>Security</h3>
   <ul>
     <li>For SNS to SQS fanout, the queue policy must allow the <code>sns.amazonaws.com</code> service principal to do <code>sqs:SendMessage</code>. SNS, not your publisher, sends the message to the queue. Without this statement, the publish to the topic still succeeds, but SNS cannot deliver to the queue, and the queue stays empty.</li>
     <li>Add the <code>aws:SourceArn</code> condition with the topic ARN. Without it, any SNS topic, including a topic in another account, can send messages to the queue through the SNS service principal. This risk is the confused deputy problem: a trusted service does an action for a party that has no permission of its own.</li>
-    <li>Cross-account EventBridge has two parts. First, the receiver event bus needs a resource-based policy that allows the sender accounts (or the organization ID). Without it, the receiver bus does not accept their events. Second, each sender account creates a rule with the receiver bus ARN as the target. Since March 2, 2023, a new rule target on an event bus in another account needs an IAM role. The role lets EventBridge send events to that bus. The console creates this role for you. With the CLI, you create it yourself.</li>
+    <li>Cross-account EventBridge has two parts. First, the receiver event bus needs a resource-based policy that allows the sender accounts (or the organization ID). Without it, the receiver bus does not accept their events.</li>
+    <li>Second, each sender account creates a rule with the receiver bus ARN as the target.</li>
+    <li>Since March 2, 2023, a new rule target on an event bus in another account needs an IAM role. The role lets EventBridge send events to that bus.</li>
+    <li>The console creates this role for you. With the CLI, you create it yourself.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Add new consumers without changing the producer" → publish events to SNS or EventBridge. The producer sends to the topic or bus and does not know the consumers. Each new consumer adds its own subscription or rule.</li>
-      <li>"Each consumer must process every order, at its own speed, and not lose messages" → SNS topic with one SQS queue for each consumer. SNS gives each queue its own copy, and each queue stores the messages until its consumer reads them.</li>
-      <li>"Route events by a field inside the event body to different services" → EventBridge rules with event patterns, because an event pattern can match any field in the event and send it to many target types.</li>
-      <li>"SNS publishes succeed but the queue gets nothing" → the queue policy does not allow <code>sqs:SendMessage</code> from the topic. SNS accepts the publish, then fails when it delivers to the queue.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html">SNS fanout to SQS</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/subscribe-sqs-queue-to-sns-topic.html">Queue policy for an SNS subscription</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html">SNS message filtering</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-quota.html">EventBridge quotas (5 targets for each rule, not adjustable)</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-message-delivery-retries.html">SNS delivery retries</a>, <a href="https://docs.aws.amazon.com/streams/latest/dev/kinesis-extended-retention.html">Kinesis Data Streams retention period</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-cross-account.html">EventBridge cross-account events (IAM role since March 2, 2023)</a>. Lab: <a href="../../../module-05-messaging-events/lab-02-sns-fanout/README.md">Lab 5.2 SNS fanout</a>, <a href="../../../module-05-messaging-events/lab-03-eventbridge-rules/README.md">Lab 5.3 EventBridge rules</a>.</p>
 </section>
 
 <section id="arch-microservices">
   <h2>Monolithic compared with microservices</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>A <strong>monolith</strong> deploys as one unit. A small change deploys the whole application.</li>
+      <li>A monolith scales as a whole, and one defect can stop the whole application.</li>
+      <li>Each <strong>microservice</strong> deploys on its own and scales on its own load.</li>
+      <li>Microservices have partial failure: one service can fail while the other services continue.</li>
+      <li>Microservices call each other over the network: HTTP APIs, queues, events.</li>
+      <li>Choose a monolith for a small application or a small team.</li>
+      <li>Choose microservices when separate teams must deploy and scale parts independently.</li>
+      <li>Microservices add more network calls and more deployments to operate.</li>
+      <li><strong>Database per service</strong>: no other service reads or writes the tables of a service directly.</li>
+      <li>Other services use the API or the events of a service to get its data.</li>
+      <li>A shared table lets a schema change by one team break another service.</li>
+      <li>Network calls add latency and can fail with a timeout or a service that is down.</li>
+      <li>Set a timeout on each network call, so that the caller does not wait without end.</li>
+      <li>Retry with backoff: wait longer before each new retry, so that retries do not overload a recovering service.</li>
+      <li>Use asynchronous messages where the caller does not need an immediate answer.</li>
+      <li>AWS X-Ray (distributed tracing) records the time that each service spends on one request.</li>
+      <li>A <strong>correlation ID</strong> is a unique ID that the first service creates and every service writes in its logs.</li>
+      <li>A transaction across services cannot use one database transaction. Use a saga.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Teams must deploy and scale components independently" → microservices with separate deployments.</li>
+      <li>"One service reads another service's table directly, and schema changes break it" → give each service its own data store and expose an API or events. The API or event format stays the same when the internal tables change.</li>
+      <li>"Find which service in a chain causes latency" → AWS X-Ray traces across services. The trace map shows the time spent in each service.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Comparison</h3>
   <table>
     <tr><th>Item</th><th>Monolith</th><th>Microservices</th></tr>
@@ -84,28 +176,77 @@
     <tr><td>Calls between parts</td><td>In-process function calls.</td><td>Network calls (HTTP APIs, queues, events).</td></tr>
     <tr><td>Failure</td><td>One defect can stop the whole application.</td><td>Partial failure: one service can fail while others continue.</td></tr>
   </table>
-  <p>Choose a monolith for a small application or a small team, where one deployment is simple. Choose microservices when separate teams must deploy and scale parts of the application independently. Microservices add more network calls and more deployments to operate.</p>
+  <p>Choose a monolith for a small application or a small team, where one deployment is simple. Choose microservices when separate teams must deploy and scale parts of the application independently.</p>
+  <p>Microservices add more network calls and more deployments to operate.</p>
   <h3>Key facts</h3>
   <ul>
     <li>Database per service: no other service reads or writes the tables of a service directly. When two services share a table, a schema change by one team can break the other service. The teams then cannot deploy independently.</li>
-    <li>Network calls add latency and can fail in ways that in-process calls cannot, for example a timeout or a service that is down. Set a timeout on each call, so that the caller does not wait without end for a slow service. Retry with backoff: wait longer before each new retry, so that retries do not overload a service that is recovering. Use asynchronous messages where the caller does not need an immediate answer.</li>
-    <li>A request can cross many services, and each service writes its own logs. Distributed tracing (AWS X-Ray) records the time that each service spends on one request. A correlation ID is a unique ID that the first service creates. Each service passes it on and writes it in its logs, so you can find all log lines for one request.</li>
+    <li>Network calls add latency and can fail in ways that in-process calls cannot, for example a timeout or a service that is down.</li>
+    <li>Set a timeout on each call, so that the caller does not wait without end for a slow service.</li>
+    <li>Retry with backoff: wait longer before each new retry, so that retries do not overload a service that is recovering.</li>
+    <li>Use asynchronous messages where the caller does not need an immediate answer.</li>
+    <li>A request can cross many services, and each service writes its own logs. Distributed tracing (AWS X-Ray) records the time that each service spends on one request.</li>
+    <li>A correlation ID is a unique ID that the first service creates. Each service passes it on and writes it in its logs, so you can find all log lines for one request.</li>
     <li>A transaction that spans services cannot use one database transaction. Use a saga (see the orchestration topic).</li>
     <li>Typical AWS building blocks: API Gateway or an Application Load Balancer in front, and Lambda or containers for compute. Each service uses DynamoDB or RDS, with SQS, SNS, or EventBridge between services.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Teams must deploy and scale components independently" → microservices with separate deployments.</li>
-      <li>"One service reads another service's table directly, and schema changes break it" → give each service its own data store and expose an API or events. The API or event format stays the same when the internal tables change.</li>
-      <li>"Find which service in a chain causes latency" → AWS X-Ray traces across services. The trace map shows the time spent in each service.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/whitepapers/latest/microservices-on-aws/microservices-on-aws.html">Implementing Microservices on AWS (whitepaper)</a>. Lab: <a href="../../../module-10-capstone/README.md">Module 10 capstone</a>.</p>
 </section>
 
 <section id="arch-orchestration">
   <h2>Orchestration compared with choreography</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>In <strong>orchestration</strong>, one controller runs the steps in order and handles errors. The AWS service is Step Functions.</li>
+      <li>In <strong>choreography</strong>, no controller exists. Each service reacts to events and publishes new events.</li>
+      <li>Choreography on AWS uses EventBridge, SNS, and SQS.</li>
+      <li>Orchestration shows the state of each run in one place: the execution history.</li>
+      <li>In choreography, the flow is spread across services, so tracing is harder.</li>
+      <li>To change an orchestrated flow, change the workflow definition.</li>
+      <li>In choreography, you add a consumer with no change to the other services.</li>
+      <li>In orchestration, services depend on the controller. In choreography, events couple services loosely.</li>
+      <li>Choose orchestration for a fixed step order, one place to see each run, or a step that waits for a person.</li>
+      <li>Choose choreography when services must stay independent and new consumers react to events with no change to other services.</li>
+      <li>A <strong>saga</strong> is a series of local transactions, one in each service.</li>
+      <li>A local transaction changes only the database of that one service.</li>
+      <li>A saga keeps data consistent without a distributed transaction (two-phase commit).</li>
+      <li>When a saga step fails, the saga runs <strong>compensating transactions</strong> that undo the earlier steps. Example: refund the payment, then release the inventory.</li>
+      <li>Saga participants must be idempotent, because a step can run again after a failure or a retry.</li>
+      <li>An idempotent operation gives the same result when it runs two times as when it runs one time.</li>
+      <li>To make a step idempotent, pass a unique request ID and record it with a conditional write.</li>
+      <li>A saga gives eventual consistency, not isolation. Other requests can see the data between steps.</li>
+      <li>A Step Functions Catch field on a Task state sends a failed task to a compensation state.</li>
+      <li>A Step Functions Choice state can send the workflow to compensation, based on a result value.</li>
+      <li>A Standard workflow runs for up to 1 year. An Express workflow runs for up to 5 minutes.</li>
+      <li>A Standard workflow has exactly-once execution.</li>
+      <li>An Express workflow is at least once when asynchronous, and at most once when synchronous.</li>
+      <li>Standard workflow price is based on the number of state transitions.</li>
+      <li>Express workflow price is based on the number of executions, the duration, and the memory.</li>
+      <li>Step Functions keeps Standard execution history for 90 days.</li>
+      <li>Express execution history is only in CloudWatch Logs, and only if you turn on logging.</li>
+      <li>Only Standard workflows support <code>.waitForTaskToken</code> and <code>.sync</code>. Express workflows cannot use them.</li>
+      <li><code>.waitForTaskToken</code> pauses the workflow until an external system returns a task token.</li>
+      <li><code>.sync</code> starts a job (for example, an ECS task or a Glue job) and waits until it finishes.</li>
+      <li>Exactly once: Step Functions never runs a step more than one time, unless you add a Retry.</li>
+      <li>At least once: an execution can run more than one time, so the steps must be idempotent.</li>
+      <li>At most once: a failed synchronous Express execution does not start again automatically.</li>
+      <li>Choose Standard for long workflows, non-idempotent steps such as payments, and callback waits.</li>
+      <li>Choose Express for high-volume, short, idempotent event processing. For many short runs, Express costs less.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Central visibility of each order's progress", "run steps in a fixed order with error handling" → orchestration with Step Functions. Step Functions keeps the execution history of each run.</li>
+      <li>"Human approval step" → orchestration with a Step Functions Standard workflow. A Standard workflow can pause for a person with <code>.waitForTaskToken</code>.</li>
+      <li>"Add consumers without changing the producer", "services must not know each other" → choreography with EventBridge or SNS, because producers publish events and do not call the consumers.</li>
+      <li>"Undo earlier steps when a later step fails across services" → saga with compensating transactions, because one database transaction cannot span the databases of many services.</li>
+      <li>"Non-idempotent step such as a payment, workflow can run for days" → Standard workflow. Standard runs each step exactly once for up to 1 year, but asynchronous Express is at least once and stops at 5 minutes.</li>
+      <li>"Very high volume of short event processing, at lowest cost" → Express workflow, because Express is priced by executions, duration, and memory, not by each state transition.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Comparison</h3>
   <table>
     <tr><th>Item</th><th>Orchestration</th><th>Choreography</th></tr>
@@ -118,10 +259,14 @@
   <p>Choose orchestration when the steps must run in a fixed order, when you need one place to see the state of each run, or when a step waits for a person. Choose choreography when services must stay independent and new consumers must react to events without a change to other services.</p>
   <h3>Saga pattern</h3>
   <ul>
-    <li>A saga is a series of local transactions, one in each service. A local transaction changes only the database of that one service. Each microservice owns its database, so one database transaction cannot cover all the steps. A saga keeps data consistent without a distributed transaction (two-phase commit, where one coordinator makes all databases commit together or not at all).</li>
+    <li>A saga is a series of local transactions, one in each service. A local transaction changes only the database of that one service.</li>
+    <li>Each microservice owns its database, so one database transaction cannot cover all the steps. A saga keeps data consistent without a distributed transaction (two-phase commit, where one coordinator makes all databases commit together or not at all).</li>
     <li>If a step fails, the saga runs <strong>compensating transactions</strong> that undo the earlier steps (for example, refund the payment, then release the inventory).</li>
-    <li>Saga participants must be idempotent. An idempotent operation gives the same result when it runs two times as when it runs one time. A step can run again after a failure or a retry. Without idempotency, a repeated refund step can refund a customer two times. A common fix: pass a unique request ID and record it with a conditional write, so that a repeated request does nothing.</li>
-    <li>A saga gives eventual consistency, not isolation. Isolation means that other requests do not see the changes of a transaction until it completes. In a saga, each step commits at once. Other requests can see data between steps, for example inventory that is reserved and then released by a compensating transaction.</li>
+    <li>Saga participants must be idempotent. An idempotent operation gives the same result when it runs two times as when it runs one time.</li>
+    <li>A step can run again after a failure or a retry. Without idempotency, a repeated refund step can refund a customer two times.</li>
+    <li>A common fix: pass a unique request ID and record it with a conditional write, so that a repeated request does nothing.</li>
+    <li>A saga gives eventual consistency, not isolation. Isolation means that other requests do not see the changes of a transaction until it completes.</li>
+    <li>In a saga, each step commits at once. Other requests can see data between steps, for example inventory that is reserved and then released by a compensating transaction.</li>
     <li>Step Functions can act as the saga orchestrator. Add a Catch field to a Task state: when the task fails, the Catch sends the workflow to a compensation state (for example, RefundPayment). A Choice state can also send the workflow to compensation, based on a result value.</li>
   </ul>
   <h3>Step Functions workflow types</h3>
@@ -134,22 +279,56 @@
     <tr><td>Wait for a callback (<code>.waitForTaskToken</code>) or a job (<code>.sync</code>)</td><td>Yes</td><td>No</td></tr>
   </table>
   <p><code>.waitForTaskToken</code> pauses the workflow until an external system returns a task token. <code>.sync</code> starts a job (for example, an ECS task or a Glue job) and waits until it finishes.</p>
-  <p>Exactly once means that Step Functions never runs a step more than one time, unless you add a Retry. At least once means that an execution can run more than one time, so the steps must be idempotent. At most once means that a failed synchronous Express execution does not start again automatically. Choose Standard for long workflows, for non-idempotent steps such as payments, and for callback waits. Choose Express for high-volume, short, idempotent event processing. For many short runs, the Express price (executions, duration, memory) is lower than a price for each state transition.</p>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Central visibility of each order's progress", "human approval step", "run steps in a fixed order with error handling" → orchestration with Step Functions. Step Functions keeps the execution history of each run. A Standard workflow can pause for a person with <code>.waitForTaskToken</code>.</li>
-      <li>"Add consumers without changing the producer", "services must not know each other" → choreography with EventBridge or SNS, because producers publish events and do not call the consumers.</li>
-      <li>"Undo earlier steps when a later step fails across services" → saga with compensating transactions, because one database transaction cannot span the databases of many services.</li>
-      <li>"Non-idempotent step such as a payment, workflow can run for days" → Standard workflow. Standard runs each step exactly once and can run for up to 1 year. Asynchronous Express is at least once and stops at 5 minutes.</li>
-      <li>"Very high volume of short event processing, at lowest cost" → Express workflow, because Express is priced by executions, duration, and memory, not by each state transition.</li>
-    </ul>
-  </div>
+  <p>Exactly once means that Step Functions never runs a step more than one time, unless you add a Retry. At least once means that an execution can run more than one time, so the steps must be idempotent. At most once means that a failed synchronous Express execution does not start again automatically.</p>
+  <p>Choose Standard for long workflows, for non-idempotent steps such as payments, and for callback waits. Choose Express for high-volume, short, idempotent event processing.</p>
+  <p>For many short runs, the Express price (executions, duration, memory) is lower than a price for each state transition.</p>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html">Choosing a Step Functions workflow type</a>, <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga-orchestration.html">Saga orchestration pattern</a>, <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga-choreography.html">Saga choreography pattern</a>. Lab: <a href="../../../module-06-step-functions/lab-02-standard-vs-express/README.md">Lab 6.2 Standard compared with Express</a>, <a href="../../../module-06-step-functions/lab-03-error-handling/README.md">Lab 6.3 Error handling</a>.</p>
 </section>
 
 <section id="arch-coupling-sync">
   <h2>Coupling and synchronous compared with asynchronous</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>With <strong>tight coupling</strong>, the caller calls the callee directly and waits. A slow or failed callee makes the caller slow or fail.</li>
+      <li>With <strong>loose coupling</strong>, a queue, topic, or event bus sits between the components. Each side can fail, scale, or change on its own.</li>
+      <li>A <strong>synchronous</strong> caller waits for the result. Examples: API Gateway to Lambda, Lambda <code>RequestResponse</code>, Step Functions <code>StartSyncExecution</code>.</li>
+      <li>An <strong>asynchronous</strong> caller gets an acknowledgment and continues. Examples: Lambda <code>Event</code> invocation, SQS, SNS, EventBridge.</li>
+      <li>Use synchronous calls only when the caller needs the answer now. Example: a price check before checkout.</li>
+      <li>Each synchronous call adds the latency of the callee to the caller, and the caller fails when the callee fails.</li>
+      <li><strong>Load leveling</strong>: an SQS queue absorbs traffic spikes, and consumers read at a rate that the backend supports.</li>
+      <li>Without a queue, a traffic spike can make the backend run out of connections or throttle requests.</li>
+      <li>A queue keeps messages while the consumer is down. The consumer continues when it comes back.</li>
+      <li>SQS deletes a message when the retention period ends. A consumer that is down for longer loses those messages.</li>
+      <li>Most AWS asynchronous delivery is at least once: a consumer can get the same message more than one time.</li>
+      <li>An SQS message that the consumer does not delete becomes visible again after the visibility timeout.</li>
+      <li>Make asynchronous consumers idempotent, for example with a conditional write on a request ID.</li>
+      <li>A <strong>dead-letter queue</strong> (DLQ) is a separate queue that keeps messages that fail many times.</li>
+      <li>The SQS redrive policy sets <code>maxReceiveCount</code>: after that many receives without a delete, SQS moves the message to the DLQ.</li>
+      <li>Without a DLQ, a bad message comes back again and again and uses consumer capacity.</li>
+      <li>In an SQS FIFO queue without a DLQ, a bad message blocks the later messages in its message group.</li>
+      <li>SQS message retention has a default of 4 days and a range of 60 seconds to 14 days.</li>
+      <li>The SQS maximum message size is 1 MiB (1,048,576 bytes). Older study material says 256 KB.</li>
+      <li>For an SQS payload larger than 1 MiB, store the payload in S3 and send a reference.</li>
+      <li>The SQS Extended Client Library uploads a large payload to S3 and puts a pointer in the message.</li>
+      <li>The SQS visibility timeout has a default of 30 seconds and a maximum of 12 hours.</li>
+      <li>The <strong>visibility timeout</strong> is the time that a received message stays hidden from other consumers.</li>
+      <li>Set the visibility timeout longer than the processing time, or a second consumer processes the same message.</li>
+      <li>The API Gateway REST API integration timeout is 50 ms to 29 seconds by default.</li>
+      <li>You can request a longer integration timeout for Regional and private APIs, but not for edge-optimized APIs.</li>
+      <li>When the backend does not answer within the integration timeout, API Gateway returns HTTP 504 ("Endpoint request timed out").</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Backend database fails during traffic spikes" → put an SQS queue in front of the writer (load leveling). The queue stores the spike, and the writer reads at a steady rate.</li>
+      <li>"Order service must keep taking orders when the shipping service is down" → asynchronous messages through a queue. The queue stores the orders until the shipping service reads them.</li>
+      <li>"Long job behind an API times out" → accept the request, queue the work, return an ID, and let the client check status later. API Gateway returns HTTP 504 after the integration timeout (29 seconds by default).</li>
+      <li>"Duplicate processing after a retry" → idempotent consumer (for example, a conditional write on a request ID). A second write with the same ID fails the condition, so the work does not run again.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li><strong>Tight coupling</strong>: the caller calls the callee directly and waits. If the callee is slow or down, the caller is slow or fails too.</li>
@@ -157,10 +336,16 @@
     <li><strong>Synchronous</strong>: the caller waits for the result. Examples: API Gateway to Lambda, Lambda <code>RequestResponse</code> invocation, Step Functions synchronous Express (<code>StartSyncExecution</code>).</li>
     <li><strong>Asynchronous</strong>: the caller gets an acknowledgment and continues. Examples: Lambda <code>Event</code> invocation, SQS, SNS, EventBridge.</li>
     <li>Use synchronous calls only when the caller needs the answer now (for example, a price check before checkout). Each synchronous call adds the latency of the callee to the caller, and the caller fails when the callee fails.</li>
-    <li><strong>Load leveling</strong>: an SQS queue absorbs traffic spikes. Producers write to the queue at any rate, and consumers read at a rate that the backend can support. Without the queue, a spike sends all writes to the backend at once. The backend can then run out of connections or throttle requests.</li>
-    <li>A queue keeps messages when the consumer is down. The consumer continues when it comes back. SQS deletes a message when the retention period ends. A consumer that is down for longer than the retention period loses those messages.</li>
-    <li>Asynchronous delivery is at least once in most AWS services: a consumer can get the same message more than one time. For example, a consumer fails before it deletes an SQS message. The message becomes visible again after the visibility timeout, and SQS delivers it again. Make consumers idempotent (see the saga topic), for example with a conditional write on a request ID.</li>
-    <li>A dead-letter queue (DLQ) is a separate queue that keeps messages that fail many times. In SQS, the redrive policy sets <code>maxReceiveCount</code>. After that many receives without a delete, SQS moves the message to the DLQ. Without a DLQ, a bad message comes back again and again and uses consumer capacity. In a FIFO queue, it also blocks the later messages in its message group.</li>
+    <li><strong>Load leveling</strong>: an SQS queue absorbs traffic spikes. Producers write to the queue at any rate, and consumers read at a rate that the backend can support.</li>
+    <li>Without the queue, a spike sends all writes to the backend at once. The backend can then run out of connections or throttle requests.</li>
+    <li>A queue keeps messages when the consumer is down. The consumer continues when it comes back.</li>
+    <li>SQS deletes a message when the retention period ends. A consumer that is down for longer than the retention period loses those messages.</li>
+    <li>Asynchronous delivery is at least once in most AWS services: a consumer can get the same message more than one time.</li>
+    <li>For example, a consumer fails before it deletes an SQS message. The message becomes visible again after the visibility timeout, and SQS delivers it again.</li>
+    <li>Make consumers idempotent (see the saga topic), for example with a conditional write on a request ID.</li>
+    <li>A dead-letter queue (DLQ) is a separate queue that keeps messages that fail many times.</li>
+    <li>In SQS, the redrive policy sets <code>maxReceiveCount</code>. After that many receives without a delete, SQS moves the message to the DLQ.</li>
+    <li>Without a DLQ, a bad message comes back again and again and uses consumer capacity. In a FIFO queue, it also blocks the later messages in its message group.</li>
   </ul>
   <h3>Numbers to memorize</h3>
   <table>
@@ -170,28 +355,60 @@
     <tr><td>SQS visibility timeout</td><td>Default 30 seconds. Maximum 12 hours.</td></tr>
     <tr><td>API Gateway REST API integration timeout</td><td>50 ms to 29 seconds by default. You can request more for Regional and private APIs, not for edge-optimized APIs.</td></tr>
   </table>
-  <p>The visibility timeout is the time that a received message stays hidden from other consumers. If the consumer does not delete the message before the timeout ends, the message becomes visible again, and another consumer can receive it. Set the visibility timeout longer than the processing time, or a second consumer processes the same message. When the backend of an API Gateway REST API does not answer within the integration timeout, API Gateway returns HTTP 504 ("Endpoint request timed out") to the client.</p>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Backend database fails during traffic spikes" → put an SQS queue in front of the writer (load leveling). The queue stores the spike, and the writer reads at a steady rate.</li>
-      <li>"Order service must keep taking orders when the shipping service is down" → asynchronous messages through a queue. The queue stores the orders until the shipping service reads them.</li>
-      <li>"Long job behind an API times out" → API Gateway returns HTTP 504 after the integration timeout (29 seconds by default). Accept the request, queue the work, return an ID, and let the client check status later.</li>
-      <li>"Duplicate processing after a retry" → idempotent consumer (for example, a conditional write on a request ID). A second write with the same ID fails the condition, so the work does not run again.</li>
-    </ul>
-  </div>
+  <p>The visibility timeout is the time that a received message stays hidden from other consumers. If the consumer does not delete the message before the timeout ends, the message becomes visible again, and another consumer can receive it. Set the visibility timeout longer than the processing time, or a second consumer processes the same message.</p>
+  <p>When the backend of an API Gateway REST API does not answer within the integration timeout, API Gateway returns HTTP 504 ("Endpoint request timed out") to the client.</p>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html">SQS message quotas</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-execution-service-limits-table.html">API Gateway REST API quotas</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async.html">Lambda asynchronous invocation</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html">SQS visibility timeout</a>, <a href="https://repost.aws/knowledge-center/api-gateway-rest-api-504-errors">API Gateway 504 errors</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/supported-gateway-response-types.html">API Gateway gateway response types (INTEGRATION_TIMEOUT = 504)</a>. Lab: <a href="../../../module-05-messaging-events/lab-01-sqs-standard-vs-fifo/README.md">Lab 5.1 SQS standard compared with FIFO</a>, <a href="../../../module-05-messaging-events/lab-04-dlq-and-redrive/README.md">Lab 5.4 DLQ and redrive</a>.</p>
 </section>
 
 <section id="arch-stateless">
   <h2>Stateful compared with stateless</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>A <strong>stateless</strong> component keeps no client data between requests. Any instance can serve any request.</li>
+      <li>A <strong>stateful</strong> component keeps client data, such as a session or a cart, in its own memory or disk.</li>
+      <li>Stateless compute scales out and in easily, because an instance can stop with no lost session.</li>
+      <li>To make compute stateless, store the session state in DynamoDB or ElastiCache.</li>
+      <li>Choose DynamoDB for sessions when sessions must be durable and you want a serverless store.</li>
+      <li>DynamoDB TTL deletes an item after the expiry time (Unix epoch seconds) in an item attribute, with no write cost.</li>
+      <li>DynamoDB TTL deletion usually occurs within a few days, so check the expiry time when you read a session.</li>
+      <li>Choose ElastiCache for sessions when you need the lowest latency, because ElastiCache keeps data in memory.</li>
+      <li>ElastiCache session data in one node is lost when that node fails, unless the cluster has replicas.</li>
+      <li>Do not keep durable state in Lambda global variables or <code>/tmp</code>. Each execution environment has its own copy.</li>
+      <li>Lambda can end an execution environment at any time.</li>
+      <li>Do not keep durable state on one EC2 instance or container, because Auto Scaling can terminate it.</li>
+      <li>A DynamoDB atomic counter (<code>UpdateItem</code> with <code>ADD</code>) changes the value on the server, so parallel updates do not overwrite each other.</li>
+      <li><strong>Sticky sessions</strong> (session affinity) send all requests from one client to the same target. The client must support cookies.</li>
+      <li>Duration-based stickiness uses the load balancer cookie <code>AWSALB</code> for a duration of 1 second to 7 days.</li>
+      <li>Use duration-based stickiness when the application has no session cookie of its own.</li>
+      <li>Application-based stickiness follows the application session cookie with the load balancer cookie <code>AWSALBAPP</code>.</li>
+      <li>Use application-based stickiness when the application already has a session cookie.</li>
+      <li>Stickiness is a target group setting and needs no code change.</li>
+      <li>Sticky sessions let a stateful application run behind a load balancer.</li>
+      <li>Sticky sessions can make load uneven: existing clients stay on their old targets, and new targets get only new clients.</li>
+      <li>When a sticky target fails, its clients go to another target, and the session data in its memory is lost.</li>
+      <li>Sticky sessions are a workaround. The better design is an external session store.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Users are logged out when Auto Scaling removes an instance" → move sessions to ElastiCache or DynamoDB.</li>
+      <li>"Shopping cart must survive instance failure and scale with traffic" → external session store, stateless instances.</li>
+      <li>"Lambda function counts requests in a global variable, and the count is wrong" → DynamoDB atomic counter: an <code>UpdateItem</code> call with an <code>ADD</code> expression. Each environment has its own memory, but the atomic counter changes the value on the server, so parallel updates do not overwrite each other.</li>
+      <li>"Legacy application keeps sessions in memory, fastest fix with no code change" → ALB sticky sessions, because stickiness is a target group setting and needs no code change.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li>A <strong>stateless</strong> component keeps no client data between requests. Any instance can serve any request.</li>
     <li>A <strong>stateful</strong> component keeps client data (for example, a session or a cart) in its own memory or disk.</li>
     <li>Stateless compute scales out and in easily. An instance can stop at any time and no session is lost.</li>
     <li>Make compute stateless: store session state outside the compute, in DynamoDB or Amazon ElastiCache.</li>
-    <li>Choose DynamoDB for sessions when sessions must be durable and you want a serverless store. With Time to Live (TTL), you store an expiry time (Unix epoch seconds) in an item attribute. DynamoDB then deletes the item after that time, with no write cost. Deletion usually occurs within a few days, so check the expiry time when you read a session. Choose ElastiCache for sessions when you need the lowest latency, because it keeps data in memory. Session data in one node is lost when that node fails, unless the cluster has replicas.</li>
+    <li>Choose DynamoDB for sessions when sessions must be durable and you want a serverless store.</li>
+    <li>With Time to Live (TTL), you store an expiry time (Unix epoch seconds) in an item attribute. DynamoDB then deletes the item after that time, with no write cost. Deletion usually occurs within a few days, so check the expiry time when you read a session.</li>
+    <li>Choose ElastiCache for sessions when you need the lowest latency, because it keeps data in memory. Session data in one node is lost when that node fails, unless the cluster has replicas.</li>
     <li>Do not keep durable state in Lambda global variables or <code>/tmp</code>. Each execution environment has its own copy, and Lambda can end an environment at any time.</li>
     <li>Do not keep durable state on one EC2 instance or container. Auto Scaling can terminate it.</li>
   </ul>
@@ -200,23 +417,69 @@
     <li>Sticky sessions (session affinity) send all requests from one client to the same target. The client must support cookies.</li>
     <li>Duration-based stickiness: the load balancer creates a cookie named <code>AWSALB</code> and keeps the client on one target for a duration that you set (1 second to 7 days). Use it when the application has no session cookie of its own.</li>
     <li>Application-based stickiness: the application sets its own session cookie, and the load balancer adds its own <code>AWSALBAPP</code> cookie to follow it. Use it when the application already has a session cookie and stickiness must follow that session.</li>
-    <li>Sticky sessions let a stateful application run behind a load balancer. But load can become uneven, because existing clients stay on their old targets and new targets get only new clients. When a target fails, the load balancer sends its clients to another target, and the session data in the memory of the failed target is lost.</li>
+    <li>Sticky sessions let a stateful application run behind a load balancer. But load can become uneven, because existing clients stay on their old targets and new targets get only new clients.</li>
+    <li>When a target fails, the load balancer sends its clients to another target, and the session data in the memory of the failed target is lost.</li>
     <li>Sticky sessions are a workaround. The better design is an external session store.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Users are logged out when Auto Scaling removes an instance" → move sessions to ElastiCache or DynamoDB.</li>
-      <li>"Shopping cart must survive instance failure and scale with traffic" → external session store, stateless instances.</li>
-      <li>"Lambda function counts requests in a global variable, and the count is wrong" → each environment has its own memory. Use a DynamoDB atomic counter: an <code>UpdateItem</code> call with an <code>ADD</code> expression changes the value on the server, so parallel updates do not overwrite each other.</li>
-      <li>"Legacy application keeps sessions in memory, fastest fix with no code change" → ALB sticky sessions, because stickiness is a target group setting and needs no code change.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/edit-target-group-attributes.html#sticky-sessions">ALB sticky sessions</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html">Lambda execution environment</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/TTL.html">DynamoDB Time to Live</a>. Lab: <a href="../../../module-02-dynamodb-deep-dive/lab-10-elasticache-redis/README.md">Lab 2.10 ElastiCache</a>.</p>
 </section>
 
 <section id="arch-caching-layers">
   <h2>Application-level caching</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li><strong>CloudFront</strong> caches HTTP responses at edge locations for all users near an edge location.</li>
+      <li>The <strong>API Gateway cache</strong> (REST APIs only) caches integration responses for each stage, by cache key.</li>
+      <li><strong>ElastiCache</strong> (Valkey, Redis OSS, Memcached) caches any data that your code puts there, for all application instances.</li>
+      <li><strong>DAX</strong> caches DynamoDB items and query results with no change to the data access logic.</li>
+      <li>A Lambda cache in global variables or <code>/tmp</code> serves only that one execution environment.</li>
+      <li>Set a TTL (time to live) on every cached item.</li>
+      <li>A short TTL gives fresher data, but more cache misses and more backend calls.</li>
+      <li>A long TTL gives more cache hits, but users can see old data for longer.</li>
+      <li><strong>Lazy loading</strong> reads the cache first. On a miss, the code reads the database and writes the result to the cache.</li>
+      <li>Lazy loading caches only requested data, but a cached item stays stale after a database change until its TTL ends.</li>
+      <li><strong>Write-through</strong> writes to the cache each time the code writes to the database.</li>
+      <li>A write-through cache stays current, but it also holds data that nobody reads.</li>
+      <li>Use a TTL with both lazy loading and write-through.</li>
+      <li>You turn on the API Gateway cache for a stage. The cache costs money for each hour, by cache size.</li>
+      <li>The API Gateway cache TTL has a default of 300 seconds and a maximum of 3,600 seconds.</li>
+      <li>An API Gateway cache TTL of 0 turns caching off.</li>
+      <li>API Gateway caches only GET methods by default. Override the method settings to cache other methods.</li>
+      <li>An API Gateway cache key can include headers, path parameters, and query strings.</li>
+      <li>If a parameter changes the response but is not in the cache key, a client can get a response made for another value.</li>
+      <li>A client sends <code>Cache-Control: max-age=0</code> to skip the API Gateway cache and replace the entry with a fresh response.</li>
+      <li>Turn on Require authorization, and allow <code>execute-api:InvalidateCache</code> only for the clients that need it.</li>
+      <li>Without Require authorization, any client can invalidate cache entries, and many invalidations increase backend calls and latency.</li>
+      <li>For an unauthorized invalidation request, you choose: fail it with HTTP 403, or ignore the header.</li>
+      <li>To flush the whole stage cache, use the console or <code>flush-stage-cache</code>.</li>
+      <li>After an API Gateway cache flush, every request reaches the backend until the cache fills again.</li>
+      <li>A CloudFront cache policy sets the minimum, default, and maximum TTL.</li>
+      <li>CloudFront uses the origin <code>Cache-Control: max-age</code> value, but keeps it inside the minimum and maximum TTL.</li>
+      <li>With no caching header from the origin, CloudFront uses the default TTL, or the minimum TTL if that is larger.</li>
+      <li>CloudFront legacy cache settings (no cache policy) have a default TTL of 24 hours.</li>
+      <li>To remove CloudFront content before it expires, create an invalidation.</li>
+      <li>A versioned file name (for example, <code>app-v2.js</code>) is a new cached object, so users get the new file at once.</li>
+      <li>DAX is a write-through cache. Writes through DAX update DynamoDB first, then the item cache.</li>
+      <li>DAX passes strongly consistent reads to DynamoDB and does not cache the result.</li>
+      <li>DAX serves only eventually consistent reads from cache.</li>
+      <li>Writes made directly to DynamoDB do not update the DAX cache. The item stays stale until its TTL expires.</li>
+      <li>The DAX item cache (<code>GetItem</code>, <code>BatchGetItem</code>) and query cache (<code>Query</code>, <code>Scan</code>) are separate.</li>
+      <li>An item update does not refresh cached DAX <code>Query</code> and <code>Scan</code> results. Those results can be old until their TTL expires.</li>
+      <li>The DAX client uses the same API calls as the DynamoDB client.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Same GET response for many users, reduce backend calls, no code change" → API Gateway cache or CloudFront. Both return the cached response without a call to the backend.</li>
+      <li>"DynamoDB reads need microsecond latency with minimal code change" → DAX, because the DAX client uses the same API calls as the DynamoDB client.</li>
+      <li>"Read needs strongly consistent data" → DAX does not help. It sends the read to DynamoDB.</li>
+      <li>"Cache results of an expensive RDS query for many instances" → ElastiCache, because all instances share it, and it can cache any data, not only DynamoDB data.</li>
+      <li>"Some clients must be able to force a fresh response" → <code>Cache-Control: max-age=0</code> with the <code>execute-api:InvalidateCache</code> permission.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Where to cache</h3>
   <table>
     <tr><th>Layer</th><th>What it caches</th><th>Who shares the cache</th></tr>
@@ -238,13 +501,18 @@
     <li>Only REST APIs have a cache. You turn it on for a stage. It costs money for each hour, by cache size.</li>
     <li>TTL: default 300 seconds, maximum 3,600 seconds. TTL 0 turns caching off.</li>
     <li>Only GET methods are cached by default. Override method settings to cache other methods.</li>
-    <li>A cache key is the set of request parts that API Gateway uses to decide whether two requests get the same cached response. Cache keys can include headers, path parameters, and query strings. Each key value gets its own cache entry. If a parameter changes the response but is not in the cache key, a client can get a cached response that was made for a different value.</li>
-    <li>A client can send <code>Cache-Control: max-age=0</code> to skip the cache and replace the entry with a fresh response. Turn on Require authorization, and allow <code>execute-api:InvalidateCache</code> only for the clients that need it. Without this setting, any client can invalidate entries, and many invalidations increase backend calls and latency. You choose what happens to an unauthorized request: fail it with HTTP 403, or ignore the header.</li>
+    <li>A cache key is the set of request parts that API Gateway uses to decide whether two requests get the same cached response. Cache keys can include headers, path parameters, and query strings.</li>
+    <li>Each key value gets its own cache entry. If a parameter changes the response but is not in the cache key, a client can get a cached response that was made for a different value.</li>
+    <li>A client can send <code>Cache-Control: max-age=0</code> to skip the cache and replace the entry with a fresh response.</li>
+    <li>Turn on Require authorization, and allow <code>execute-api:InvalidateCache</code> only for the clients that need it. Without this setting, any client can invalidate entries, and many invalidations increase backend calls and latency.</li>
+    <li>You choose what happens to an unauthorized request: fail it with HTTP 403, or ignore the header.</li>
     <li>Flush the whole stage cache from the console or the CLI (<code>flush-stage-cache</code>), for example after a deployment that changes the responses. Until the cache fills again, every request reaches the backend.</li>
   </ul>
   <h3>CloudFront TTL</h3>
   <ul>
-    <li>A cache policy sets minimum, default, and maximum TTL. The origin can send <code>Cache-Control: max-age</code>. CloudFront uses that value but keeps it inside the minimum and maximum TTL. CloudFront uses the default TTL (or the minimum TTL, if that is larger) when the origin sends no caching header.</li>
+    <li>A cache policy sets minimum, default, and maximum TTL.</li>
+    <li>The origin can send <code>Cache-Control: max-age</code>. CloudFront uses that value but keeps it inside the minimum and maximum TTL.</li>
+    <li>CloudFront uses the default TTL (or the minimum TTL, if that is larger) when the origin sends no caching header.</li>
     <li>A distribution that uses the older per-behavior TTL settings instead of a cache policy (legacy cache settings) has a default TTL of 24 hours.</li>
     <li>To remove content before it expires, create an invalidation. Or use versioned file names (for example, <code>app-v2.js</code>): a new name is a new cached object, so users get the new file at once.</li>
   </ul>
@@ -255,21 +523,61 @@
     <li>Writes made directly to DynamoDB (not through DAX) do not update the DAX cache. The item stays stale until its TTL expires.</li>
     <li>The item cache (<code>GetItem</code>, <code>BatchGetItem</code>) and the query cache (<code>Query</code>, <code>Scan</code>) are separate. An item update does not refresh cached <code>Query</code> and <code>Scan</code> results. Those results can return old data until their TTL expires.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Same GET response for many users, reduce backend calls, no code change" → API Gateway cache or CloudFront. Both return the cached response without a call to the backend.</li>
-      <li>"DynamoDB reads need microsecond latency with minimal code change" → DAX, because the DAX client uses the same API calls as the DynamoDB client.</li>
-      <li>"Read needs strongly consistent data" → DAX does not help. It sends the read to DynamoDB.</li>
-      <li>"Cache results of an expensive RDS query for many instances" → ElastiCache, because all instances share it, and it can cache any data, not only DynamoDB data.</li>
-      <li>"Some clients must be able to force a fresh response" → <code>Cache-Control: max-age=0</code> with the <code>execute-api:InvalidateCache</code> permission.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-caching.html">API Gateway caching</a>, <a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Expiration.html">CloudFront expiration</a>, <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DAX.consistency.html">DAX and consistency</a>, <a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Strategies.html">ElastiCache caching strategies</a>. Lab: <a href="../../../module-02-dynamodb-deep-dive/lab-10-elasticache-redis/README.md">Lab 2.10 ElastiCache</a>, <a href="../../../module-04-api-gateway-cognito/README.md">Module 4 overview</a>.</p>
 </section>
 
 <section id="arch-storage-options">
   <h2>Storage options: block, file, object, ephemeral</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li><strong>Block storage</strong> is a raw disk for one operating system, which puts its own file system on it.</li>
+      <li><strong>File storage</strong> is a shared directory tree that many clients mount over the network.</li>
+      <li><strong>Object storage</strong> keeps each file as a whole object under a key, with access through an HTTPS API.</li>
+      <li>Object storage writes whole objects, and reads objects or byte ranges of objects.</li>
+      <li><strong>Ephemeral storage</strong> is temporary. The data goes away with the instance or the execution environment.</li>
+      <li>EBS is block storage in one Availability Zone. An EBS volume attaches to an instance in the same Availability Zone.</li>
+      <li>EBS data persists independently from the instance life.</li>
+      <li>To use EBS data in another Availability Zone, create a snapshot, then create a new volume from it.</li>
+      <li>EBS Multi-Attach attaches one volume to up to 16 Nitro-based instances in the same Availability Zone.</li>
+      <li>EBS Multi-Attach works only with Provisioned IOPS SSD volumes (<code>io1</code>, <code>io2</code>).</li>
+      <li>Use EBS Multi-Attach for clustered applications that control writes to shared storage.</li>
+      <li>EBS Multi-Attach needs a cluster-aware file system, which coordinates writes from many instances.</li>
+      <li>XFS and EXT4 do not coordinate writes, so many writers on Multi-Attach can corrupt or lose data.</li>
+      <li>EFS is shared file storage (NFS) that many clients use at the same time.</li>
+      <li>EFS Regional file systems store data across Availability Zones. EFS One Zone file systems use one Availability Zone.</li>
+      <li>EFS uses NFS version 4 (4.0 and 4.1).</li>
+      <li>EC2, ECS, EKS, Fargate, and Lambda can mount EFS.</li>
+      <li>EFS does not support Windows instances.</li>
+      <li>EFS grows and shrinks automatically. You do not provision capacity.</li>
+      <li>To mount EFS, a Lambda function must connect to the VPC, because mount targets are endpoints in VPC subnets.</li>
+      <li>Create an EFS mount target in each Availability Zone that the Lambda function uses.</li>
+      <li>Lambda with EFS needs an access point and a local mount path that starts with <code>/mnt/</code>.</li>
+      <li>Security groups must allow NFS traffic on port 2049 between the function and the EFS mount targets.</li>
+      <li>With an EFS IAM policy, the execution role needs <code>elasticfilesystem:ClientMount</code>, and <code>elasticfilesystem:ClientWrite</code> to write.</li>
+      <li>An EFS <strong>access point</strong> sets the POSIX user, group, and root directory for each client.</li>
+      <li>Use an EFS access point to limit an application to one directory.</li>
+      <li>S3 is object storage with an HTTPS API from anywhere, by key. S3 is not a mounted disk.</li>
+      <li>Amazon S3 Files (2026) is a separate S3 file system with mount targets and an access point.</li>
+      <li>EC2 and Lambda can mount Amazon S3 Files over NFS. Older study material says S3 is object storage only.</li>
+      <li>EC2 instance store is block storage on the host, for only the one instance.</li>
+      <li>Instance store disks are physically attached to the host computer, so instance store is the fastest local disk.</li>
+      <li>Instance store data survives a reboot. Instance store data is lost on stop, hibernate, or terminate.</li>
+      <li>Lambda <code>/tmp</code> is ephemeral storage for one execution environment, with a size of 512 MB to 10,240 MB.</li>
+      <li>Lambda <code>/tmp</code> data is lost when the execution environment ends.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Many Lambda functions or containers must share files with a file system interface" → EFS.</li>
+      <li>"Scratch data, fastest local disk, loss is acceptable" → instance store, because its disks are physically attached to the host computer.</li>
+      <li>"Boot or database volume for one instance" → EBS.</li>
+      <li>"Store large objects for many readers over HTTP at low cost" → S3.</li>
+      <li>"Data on a disk is missing after the instance was stopped and started" → the data was on instance store. Instance store data does not survive a stop, but EBS data does.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Comparison</h3>
   <table>
     <tr><th>Storage</th><th>Type</th><th>Scope and access</th><th>Persistence</th></tr>
@@ -279,7 +587,10 @@
     <tr><td>EC2 instance store</td><td>Block, on the host</td><td>Only the one instance</td><td>Kept on reboot. Lost on stop, hibernate, or terminate.</td></tr>
     <tr><td>Lambda <code>/tmp</code></td><td>Ephemeral</td><td>Only one execution environment</td><td>Lost when the environment ends. Size 512 MB to 10,240 MB.</td></tr>
   </table>
-  <p>Block storage is a raw disk for one operating system, which puts its own file system on it. File storage is a shared directory tree that many clients mount over the network. Object storage keeps each file as a whole object under a key, and you write whole objects and read objects, or byte ranges of them, through an HTTPS API. Ephemeral storage is temporary: the data goes away with the instance or the execution environment.</p>
+  <p>Block storage is a raw disk for one operating system, which puts its own file system on it.</p>
+  <p>File storage is a shared directory tree that many clients mount over the network.</p>
+  <p>Object storage keeps each file as a whole object under a key, and you write whole objects and read objects, or byte ranges of them, through an HTTPS API.</p>
+  <p>Ephemeral storage is temporary: the data goes away with the instance or the execution environment.</p>
   <h3>EBS</h3>
   <ul>
     <li>To use the data in another Availability Zone, create a snapshot, then create a new volume from it.</li>
@@ -295,21 +606,55 @@
     <li>If the file system has an IAM policy, the execution role needs <code>elasticfilesystem:ClientMount</code>, and <code>elasticfilesystem:ClientWrite</code> for write access.</li>
     <li>An access point sets the POSIX user, group, and root directory for each client. Use it to limit an application to one directory.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Many Lambda functions or containers must share files with a file system interface" → EFS.</li>
-      <li>"Scratch data, fastest local disk, loss is acceptable" → instance store, because its disks are physically attached to the host computer.</li>
-      <li>"Boot or database volume for one instance" → EBS.</li>
-      <li>"Store large objects for many readers over HTTP at low cost" → S3.</li>
-      <li>"Data on a disk is missing after the instance was stopped and started" → it was on instance store. Instance store data does not survive a stop. EBS data does.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volumes.html">EBS volumes</a>, <a href="https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volumes-multi.html">EBS Multi-Attach</a>, <a href="https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html">What is Amazon EFS</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-filesystem-efs.html">Lambda with EFS</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-store-lifetime.html">Instance store data persistence</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files.html">Amazon S3 Files</a>. Lab: <a href="../../../module-01-lambda-fundamentals/README.md">Module 1 overview</a>.</p>
 </section>
 
 <section id="arch-purpose-built-data">
   <h2>Purpose-built data stores</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Use DynamoDB for key-value or document access by key, at any scale, serverless.</li>
+      <li>Use RDS or Aurora for relational data, joins, complex SQL, and transactions across tables.</li>
+      <li>Use ElastiCache for microsecond to sub-millisecond reads, caches, sessions, and leaderboards.</li>
+      <li>Use OpenSearch Service for full-text search, fuzzy match, relevance ranking, and log analytics.</li>
+      <li>Use Athena for ad hoc SQL on files in S3, with no servers and no data load.</li>
+      <li>Use S3 for large binary objects, files, and a data lake.</li>
+      <li>DynamoDB has no joins and no foreign keys.</li>
+      <li>DynamoDB finds items fast only by key, so DynamoDB is not good at text search.</li>
+      <li>A DynamoDB <code>Scan</code> with a <code>contains</code> filter reads every item and uses read capacity for all of them.</li>
+      <li>A DynamoDB <code>contains</code> filter gives no relevance ranking and no match for misspelled words.</li>
+      <li>To search DynamoDB data, keep DynamoDB as the main store and copy the data to OpenSearch Service.</li>
+      <li>With the DynamoDB <strong>zero-ETL integration</strong>, AWS runs the copy to OpenSearch Service through Amazon OpenSearch Ingestion.</li>
+      <li>The zero-ETL integration loads a first snapshot through export to S3, then copies changes from DynamoDB Streams.</li>
+      <li>The zero-ETL integration needs point-in-time recovery (PITR), because export to S3 needs PITR.</li>
+      <li>The zero-ETL integration needs DynamoDB Streams with new and old images.</li>
+      <li>The zero-ETL integration does not use the read or write capacity of the table.</li>
+      <li>DynamoDB Streams to a Lambda function that writes to OpenSearch Service also works, but needs custom code.</li>
+      <li>Athena runs standard SQL on data in S3, with no infrastructure to manage.</li>
+      <li>Athena charges for the data that each query scans. Less data scanned gives lower cost and faster queries.</li>
+      <li>Partition Athena data under Hive-style S3 prefixes. Example: <code>year=2026/month=10/</code>.</li>
+      <li>An Athena query with the partition column in the <code>WHERE</code> clause scans only that partition.</li>
+      <li>Use columnar formats (Apache Parquet, ORC) and compression, so Athena reads only the columns that the query needs.</li>
+      <li>Athena gets the list of partitions of a table from the AWS Glue Data Catalog.</li>
+      <li>When files arrive under a new S3 prefix, add the new partition, or Athena queries do not see the data.</li>
+      <li><code>MSCK REPAIR TABLE</code> scans S3 and adds new Hive-style partitions.</li>
+      <li>Athena partition projection calculates the partitions from table properties, so you do not add them.</li>
+      <li>An Athena <strong>workgroup</strong> is a named group of users and queries with shared settings.</li>
+      <li>An Athena workgroup can set a data scanned limit for each query. Athena cancels a query that scans more.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Search product descriptions by keywords, with relevance" → OpenSearch Service.</li>
+      <li>"Search DynamoDB data with the least operational overhead" → DynamoDB zero-ETL integration with OpenSearch Service, because AWS runs the pipeline and you write no copy code.</li>
+      <li>"Query logs in S3 with SQL occasionally, no servers" → Athena.</li>
+      <li>"Athena queries cost too much" → partition the data, convert to Parquet, and compress. Athena charges for the data that each query scans, and each change reduces that amount.</li>
+      <li>"Joins across many tables with referential integrity" → RDS or Aurora, not DynamoDB. DynamoDB has no joins and no foreign keys.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Choose by access pattern</h3>
   <table>
     <tr><th>Access pattern</th><th>Data store</th></tr>
@@ -322,7 +667,8 @@
   </table>
   <h3>OpenSearch Service</h3>
   <ul>
-    <li>DynamoDB is not good at text search, because it finds items fast only by key. A <code>Scan</code> with a <code>contains</code> filter reads every item in the table and uses read capacity for all of them. It then drops the items that do not match. It also gives no relevance ranking and no match for misspelled words.</li>
+    <li>DynamoDB is not good at text search, because it finds items fast only by key.</li>
+    <li>A <code>Scan</code> with a <code>contains</code> filter reads every item in the table and uses read capacity for all of them. It then drops the items that do not match. It also gives no relevance ranking and no match for misspelled words.</li>
     <li>Keep DynamoDB as the main store, and copy the data to OpenSearch Service for search.</li>
     <li>ETL (extract, transform, load) is a copy pipeline that you build and run yourself. With the DynamoDB zero-ETL integration, AWS runs the copy for you through Amazon OpenSearch Ingestion. It loads a first snapshot through export to S3, then copies changes from DynamoDB Streams.</li>
     <li>The integration needs point-in-time recovery (PITR), because export to S3 needs it. It also needs DynamoDB Streams with new and old images, so that each change record contains the item data. It does not use the table's read or write capacity.</li>
@@ -334,19 +680,11 @@
     <li>You pay for the data that each query scans. Less data scanned means lower cost and faster queries.</li>
     <li>Partition the data: put each group of files under its own S3 prefix (for example, <code>year=2026/month=10/</code>). This <code>name=value</code> form is called Hive style. A query with the partition column in the <code>WHERE</code> clause scans only that partition.</li>
     <li>Use columnar formats (Apache Parquet, ORC) and compression. A columnar file stores each column separately, so Athena reads only the columns that the query needs.</li>
-    <li>Athena gets the list of partitions of a table from the AWS Glue Data Catalog. When files arrive under a new prefix, add the new partition, or queries do not see its data. <code>MSCK REPAIR TABLE</code> scans S3 and adds new Hive-style partitions. Partition projection calculates the partitions from table properties, so you do not add them.</li>
+    <li>Athena gets the list of partitions of a table from the AWS Glue Data Catalog. When files arrive under a new prefix, add the new partition, or queries do not see its data.</li>
+    <li><code>MSCK REPAIR TABLE</code> scans S3 and adds new Hive-style partitions.</li>
+    <li>Partition projection calculates the partitions from table properties, so you do not add them.</li>
     <li>An Athena workgroup is a named group of users and queries with shared settings. A workgroup can set a data scanned limit for each query. Athena cancels a query that scans more, so one unfiltered query cannot create a large bill.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Search product descriptions by keywords, with relevance" → OpenSearch Service.</li>
-      <li>"Search DynamoDB data with the least operational overhead" → DynamoDB zero-ETL integration with OpenSearch Service, because AWS runs the pipeline and you write no copy code.</li>
-      <li>"Query logs in S3 with SQL occasionally, no servers" → Athena.</li>
-      <li>"Athena queries cost too much" → partition the data, convert to Parquet, and compress. Athena charges for the data that each query scans, and each change reduces that amount.</li>
-      <li>"Joins across many tables with referential integrity" → RDS or Aurora, not DynamoDB. DynamoDB has no joins and no foreign keys.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/OpenSearchIngestionForDynamoDB.html">DynamoDB zero-ETL integration with OpenSearch Service</a>, <a href="https://docs.aws.amazon.com/athena/latest/ug/partitions.html">Athena partitions (MSCK REPAIR TABLE, partition projection)</a>, <a href="https://docs.aws.amazon.com/athena/latest/ug/columnar-storage.html">Athena columnar formats</a>, <a href="https://docs.aws.amazon.com/athena/latest/ug/workgroups-setting-control-limits-cloudwatch.html">Athena data usage controls</a>. Lab: <a href="../../../module-02-dynamodb-deep-dive/README.md">Module 2 overview</a>.</p>
 </section>
 
