@@ -39,6 +39,51 @@
 
 <section id="sqs-queue-types">
   <h2>SQS standard and FIFO queues</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Use <strong>Amazon SQS</strong> to decouple a producer from a consumer. The consumer pulls work at its own speed.</li>
+      <li>Use an SQS FIFO queue for strict order and no duplicates in a group of related messages.</li>
+      <li>Use Amazon SNS to send one message to many subscribers (push).</li>
+      <li>Use Amazon EventBridge to route events by content, receive AWS service events, or connect SaaS partners.</li>
+      <li>Use Kinesis Data Streams for an ordered, replayable stream that many consumers read at the same time.</li>
+      <li>Use Amazon Data Firehose to load streaming data into Amazon S3, Amazon Redshift, or OpenSearch with no consumer code.</li>
+      <li>Use AWS AppSync for a GraphQL API with real-time subscriptions.</li>
+      <li>A <strong>standard queue</strong> gives best-effort order and at-least-once delivery, so duplicates can occur.</li>
+      <li>A standard queue supports nearly unlimited API calls each second.</li>
+      <li>Standard queue consumers must be <strong>idempotent</strong>, because a message can arrive more than one time.</li>
+      <li>Choose a standard queue for the most throughput when the consumer can handle duplicates and a changed order.</li>
+      <li>A <strong>FIFO queue</strong> keeps strict order inside each <code>MessageGroupId</code>.</li>
+      <li>A FIFO queue name must end in <code>.fifo</code>.</li>
+      <li>A FIFO queue requires a <code>MessageGroupId</code> on every message.</li>
+      <li>Choose a FIFO queue when the order of related messages matters or when a duplicate causes harm.</li>
+      <li>A FIFO queue allows 300 transactions each second for each API action, for the whole queue, not for each group.</li>
+      <li>A FIFO queue with batches of 10 messages handles 3,000 messages each second.</li>
+      <li>Batch API calls (<code>SendMessageBatch</code>, <code>DeleteMessageBatch</code>) take a maximum of 10 messages.</li>
+      <li>FIFO <strong>high throughput mode</strong> is a queue setting. Its limit depends on the Region, for example 70,000 transactions each second in US East (N. Virginia).</li>
+      <li>A FIFO queue does not support a per-message delay (message timer). Use a queue-level delay.</li>
+      <li>A FIFO queue does not deliver a second message with the same deduplication ID in the 5-minute deduplication interval.</li>
+      <li>A FIFO queue needs a <code>MessageDeduplicationId</code> or content-based deduplication. Without either, <code>SendMessage</code> fails.</li>
+      <li><strong>Content-based deduplication</strong> uses a SHA-256 hash of the message body, not the message attributes.</li>
+      <li>Send your own <code>MessageDeduplicationId</code> when identical bodies must count as different messages, or different bodies as one message.</li>
+      <li>SQS tracks a deduplication ID until the 5-minute interval ends, also after the message is deleted.</li>
+      <li>A FIFO queue does not deliver the next message of a group while an earlier message of that group is in flight.</li>
+      <li>One slow message in a FIFO queue blocks all later messages of its group.</li>
+      <li>The number of active <code>MessageGroupId</code> values limits how many FIFO consumers can work at the same time.</li>
+      <li>On a standard queue, a <code>MessageGroupId</code> turns on <strong>fair queues</strong> and identifies a tenant.</li>
+      <li>Fair queues deliver the messages of other tenants first when one tenant makes a backlog. Fair queues do not give order.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Process each customer's orders in order, but process different customers in parallel" → FIFO queue, <code>MessageGroupId</code> = customer ID. Order is kept inside a group, and different groups are processed at the same time.</li>
+      <li>"Producer retries can send the same order twice; process it one time" → FIFO queue with deduplication. SQS does not deliver a second message with the same deduplication ID in the 5-minute interval.</li>
+      <li>"Messages have a timestamp in the body, but repeats must be removed" → explicit <code>MessageDeduplicationId</code>, not content-based deduplication. The timestamp makes each body different, so the body hash is different and SQS does not see a duplicate.</li>
+      <li>"Highest throughput, order not important" → standard queue with idempotent consumers. A standard queue has nearly unlimited throughput, and idempotent consumers make the duplicates harmless.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Which service for which pattern</h3>
   <table>
     <tr><th>Need</th><th>Use</th></tr>
@@ -60,35 +105,82 @@
     <tr><td><code>MessageGroupId</code></td><td>Optional (turns on fair queues)</td><td>Required on every message</td></tr>
     <tr><td>Per-message delay (message timer)</td><td>Supported</td><td>Not supported. Use a queue-level delay.</td></tr>
   </table>
-  <p>"Best effort" order means that SQS usually delivers messages in the order they were sent, but some messages can arrive out of order. "At least once" means that SQS can deliver a copy of a message a second time. Choose a standard queue when you need the most throughput and your consumer can handle duplicates and a changed order. Choose a FIFO queue when the order of related messages matters, for example the steps of one order. Also choose it when a duplicate causes harm, for example a second payment.</p>
-  <p>Fair queues: on a standard queue, the <code>MessageGroupId</code> identifies a tenant, for example a customer. One tenant can send a large burst and make a backlog. SQS then delivers the messages of the other tenants first, so that their messages do not wait. It does not give order on a standard queue.</p>
+  <p>"Best effort" order means that SQS usually delivers messages in the order they were sent, but some messages can arrive out of order. "At least once" means that SQS can deliver a copy of a message a second time.</p>
+  <p>Choose a standard queue when you need the most throughput and your consumer can handle duplicates and a changed order.</p>
+  <p>Choose a FIFO queue when the order of related messages matters, for example the steps of one order. Also choose it when a duplicate causes harm, for example a second payment.</p>
+  <p>Fair queues: on a standard queue, the <code>MessageGroupId</code> identifies a tenant, for example a customer. One tenant can send a large burst and make a backlog.</p>
+  <p>SQS then delivers the messages of the other tenants first, so that their messages do not wait. The <code>MessageGroupId</code> does not give order on a standard queue.</p>
   <h3>Key facts</h3>
   <ul>
-    <li>Standard queue consumers must be <strong>idempotent</strong>, because a message can arrive more than one time. Idempotent means that processing the same message two times gives the same result as one time. Example: before the consumer charges a card, it checks whether it already processed that order ID. Without this check, a duplicate message charges the customer two times.</li>
+    <li>Standard queue consumers must be <strong>idempotent</strong>, because a message can arrive more than one time. Idempotent means that processing the same message two times gives the same result as one time.</li>
+    <li>Example: before the consumer charges a card, it checks whether it already processed that order ID. Without this check, a duplicate message charges the customer two times.</li>
     <li>FIFO deduplication: SQS needs a deduplication ID for every message. Send a <code>MessageDeduplicationId</code>, or turn on <strong>content-based deduplication</strong> so that SQS makes the ID for you. If you do neither, <code>SendMessage</code> fails with an error.</li>
     <li>If a second message with the same deduplication ID arrives in the 5-minute interval, SQS accepts the send call but does not deliver the second message. So a producer can safely retry a send that timed out.</li>
     <li>Content-based deduplication uses a SHA-256 hash of the message <strong>body</strong>. It does not use the message attributes.</li>
     <li>Send your own <code>MessageDeduplicationId</code> when identical bodies must count as different messages, or different bodies must count as one message.</li>
     <li>SQS continues to track a deduplication ID after the message is deleted, until the 5-minute interval ends.</li>
-    <li>In a FIFO queue, the next message of a group is not available while an earlier message of that group is in flight. "In flight" means that a consumer received the message but did not delete it yet. SQS holds the rest of the group so that the group stays in order. One slow message therefore blocks all later messages of its group.</li>
+    <li>In a FIFO queue, the next message of a group is not available while an earlier message of that group is in flight. "In flight" means that a consumer received the message but did not delete it yet.</li>
+    <li>SQS holds the rest of the group so that the group stays in order. One slow message therefore blocks all later messages of its group.</li>
     <li>To get more parallel processing from a FIFO queue, use many different <code>MessageGroupId</code> values. Only one consumer at a time can hold messages of a group, so the number of active groups limits how many consumers can work at the same time.</li>
     <li>High throughput mode for FIFO queues is set on the queue. Turn it on when 300 transactions each second for each API action is not enough. Its limit depends on the Region (for example, up to 70,000 transactions each second without batching in US East (N. Virginia)).</li>
     <li>Batch API calls (<code>SendMessageBatch</code>, <code>DeleteMessageBatch</code>) take a maximum of 10 messages.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Process each customer's orders in order, but process different customers in parallel" → FIFO queue, <code>MessageGroupId</code> = customer ID. Order is kept inside a group, and different groups are processed at the same time.</li>
-      <li>"Producer retries can send the same order twice; process it one time" → FIFO queue with deduplication. SQS does not deliver a second message with the same deduplication ID in the 5-minute interval.</li>
-      <li>"Messages have a timestamp in the body, but repeats must be removed" → explicit <code>MessageDeduplicationId</code>, not content-based deduplication. The timestamp makes each body different, so the body hash is different and SQS does not see a duplicate.</li>
-      <li>"Highest throughput, order not important" → standard queue with idempotent consumers. A standard queue has nearly unlimited throughput, and idempotent consumers make the duplicates harmless.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html">SQS message quotas</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues-exactly-once-processing.html">FIFO exactly-once processing</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/high-throughput-fifo.html">High throughput for FIFO queues</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SendMessage.html">SendMessage (deduplication ID)</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-fair-queues.html">Fair queues</a>. Lab: <a href="../../../module-05-messaging-events/lab-01-sqs-standard-vs-fifo/README.md">Lab 5.1 SQS standard vs FIFO</a>.</p>
 </section>
 
 <section id="sqs-visibility-polling">
   <h2>SQS visibility timeout, polling, delay, and Lambda consumers</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>The <strong>visibility timeout</strong> has a default of 30 seconds and a range of 0 seconds to 12 hours.</li>
+      <li>SQS message retention has a default of 4 days and a range of 60 seconds to 14 days.</li>
+      <li>An SQS delay (queue delay or message timer) has a default of 0 seconds and a maximum of 15 minutes.</li>
+      <li>The long polling wait time has a default of 0 (short polling) and a maximum of 20 seconds.</li>
+      <li>The SQS message size limit is 1 MiB (1,048,576 bytes). Older study material says 256 KB.</li>
+      <li>The <strong>SQS Extended Client Library</strong> stores payloads up to 2 GB in Amazon S3 (Java and Python libraries).</li>
+      <li>One SQS message can have a maximum of 10 message attributes.</li>
+      <li>A standard queue allows about 120,000 in-flight messages (received but not deleted).</li>
+      <li>At the in-flight limit, a short-poll <code>ReceiveMessage</code> returns an <code>OverLimit</code> error, and a long poll returns no new messages.</li>
+      <li>A received message stays in the queue, but other consumers cannot see it for the visibility timeout.</li>
+      <li>The consumer must call <code>DeleteMessage</code> before the visibility timeout ends, or the message becomes visible again.</li>
+      <li>Use <code>ChangeMessageVisibility</code> at intervals (a heartbeat) to extend the visibility timeout for a long task.</li>
+      <li>The 12-hour visibility timeout maximum counts from the first receive.</li>
+      <li>Set the visibility timeout to 0 with <code>ChangeMessageVisibility</code> to release a message to other consumers at once.</li>
+      <li>For a Lambda event source mapping, set the visibility timeout to at least 6 times the function timeout.</li>
+      <li>Lambda rejects an SQS mapping if the function timeout is more than the visibility timeout.</li>
+      <li><strong>Short polling</strong> (default) asks only a subset of servers and can return a "false empty" response.</li>
+      <li>SQS bills each empty receive response as a request.</li>
+      <li><strong>Long polling</strong> asks all servers and waits for a message, so it reduces empty responses and cost.</li>
+      <li>The queue attribute <code>ReceiveMessageWaitTimeSeconds</code> turns on long polling for all receives with no consumer code change.</li>
+      <li><code>WaitTimeSeconds</code> on one <code>ReceiveMessage</code> call overrides the queue attribute for that call.</li>
+      <li>A delay hides a message when it is added to the queue. A visibility timeout hides a message after it is received.</li>
+      <li>Use a <strong>delay queue</strong> when every new message must wait. Use a message timer when only some messages must wait.</li>
+      <li>A message timer (<code>DelaySeconds</code> on one message) overrides the queue delay.</li>
+      <li>For delays longer than 15 minutes, use EventBridge Scheduler.</li>
+      <li>By default, when a Lambda function returns an error, all messages of the SQS batch return to the queue.</li>
+      <li>Set <code>FunctionResponseTypes</code> to <code>ReportBatchItemFailures</code> so that only the failed messages return to the queue.</li>
+      <li>With <strong>partial batch response</strong>, the function returns the failed message IDs in <code>batchItemFailures</code>.</li>
+      <li>Event source mapping filter criteria use EventBridge pattern syntax on the message <code>body</code> or the record metadata.</li>
+      <li>An event source mapping allows 5 filters by default, with a quota increase to 10.</li>
+      <li>For SQS, Lambda deletes the messages that do not match the filter, so no other consumer can read them.</li>
+      <li>The batching window (<code>MaximumBatchingWindowInSeconds</code>) is the time Lambda waits to fill a batch.</li>
+      <li>For a standard queue batch size over 10, the batching window must be at least 1 second.</li>
+      <li>With a batching window, set the visibility timeout to 6 times the function timeout plus the batching window.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Many empty ReceiveMessage responses, high cost" → long polling (<code>ReceiveMessageWaitTimeSeconds</code> = 20). Each receive waits for messages, so there are fewer empty, billable responses.</li>
+      <li>"Processing sometimes takes longer than the visibility timeout, and messages are processed twice" → increase the visibility timeout or call <code>ChangeMessageVisibility</code>. The message then stays hidden until the first consumer deletes it.</li>
+      <li>"Payload is 5 MB" → SQS Extended Client Library with Amazon S3. The SQS message limit is 1 MiB, so the library stores the payload in S3 and sends a reference.</li>
+      <li>"Every new message must wait 5 minutes before processing" → delay queue. The queue delay hides every new message for the set time (maximum 15 minutes).</li>
+      <li>"One bad message makes the whole batch run again" → <code>ReportBatchItemFailures</code>. Only the failed messages return to the queue.</li>
+      <li>"Function must not be invoked for messages it does not need" → filter criteria on the event source mapping. Lambda checks the filter before it invokes the function.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Numbers to memorize</h3>
   <table>
     <tr><th>Setting</th><th>Default</th><th>Range or maximum</th></tr>
@@ -101,14 +193,17 @@
     <tr><td>Message attributes</td><td>—</td><td>10 for each message</td></tr>
     <tr><td>In-flight messages, standard queue</td><td>—</td><td>About 120,000</td></tr>
   </table>
-  <p>In-flight messages are messages that consumers received but did not delete yet. When a standard queue reaches the in-flight limit, a short-poll <code>ReceiveMessage</code> returns an <code>OverLimit</code> error. A long poll returns no new messages. This continues until consumers delete messages or messages become visible again.</p>
+  <p>In-flight messages are messages that consumers received but did not delete yet.</p>
+  <p>When a standard queue reaches the in-flight limit, a short-poll <code>ReceiveMessage</code> returns an <code>OverLimit</code> error. A long poll returns no new messages. This continues until consumers delete messages or messages become visible again.</p>
   <h3>Visibility timeout</h3>
   <ul>
     <li>A received message stays in the queue, but other consumers cannot see it for the visibility timeout. This stops two consumers from processing the same message at the same time.</li>
     <li>The consumer must call <code>DeleteMessage</code> before the timeout ends. If it does not, the message becomes visible again and another consumer can process it.</li>
     <li>Use <code>ChangeMessageVisibility</code> to extend the timeout for a long task. Call it at intervals while the task runs (a heartbeat). The 12-hour maximum counts from the first receive.</li>
     <li>Set the visibility timeout to 0 with <code>ChangeMessageVisibility</code> to release a message at once. Use this when a consumer knows that it cannot process the message, for example during a shutdown. Another consumer can then take the message now, not after the timeout ends.</li>
-    <li>With a Lambda event source mapping, set the visibility timeout to at least 6 times the function timeout. The extra time lets Lambda retry the batch if the function is throttled. If the timeout is too short, messages become visible again while Lambda still works on them, and they are processed two times. Lambda rejects a mapping if the function timeout is more than the visibility timeout. See the Module 1 sheet for more Lambda details.</li>
+    <li>With a Lambda event source mapping, set the visibility timeout to at least 6 times the function timeout. The extra time lets Lambda retry the batch if the function is throttled.</li>
+    <li>If the timeout is too short, messages become visible again while Lambda still works on them, and they are processed two times.</li>
+    <li>Lambda rejects a mapping if the function timeout is more than the visibility timeout. See the Module 1 sheet for more Lambda details.</li>
   </ul>
   <h3>Short and long polling</h3>
   <ul>
@@ -126,38 +221,78 @@
   </ul>
   <h3>Lambda consumers (event source mapping)</h3>
   <ul>
-    <li>By default, if the function returns an error, Lambda deletes no message from the batch. All messages in the batch become visible again after the visibility timeout. The messages that succeeded are then processed again, so their side effects (for example, an email) happen again.</li>
+    <li>By default, if the function returns an error, Lambda deletes no message from the batch. All messages in the batch become visible again after the visibility timeout.</li>
+    <li>The messages that succeeded are then processed again, so their side effects (for example, an email) happen again.</li>
     <li><strong>Partial batch response</strong>: set <code>FunctionResponseTypes</code> to <code>ReportBatchItemFailures</code>. The function returns the failed message IDs in <code>batchItemFailures</code>; only those messages return to the queue.</li>
-    <li><strong>Filter criteria</strong> on the event source mapping use EventBridge pattern syntax. Filter on the message <code>body</code> or on the metadata fields of the record. Use filters so that you do not invoke, and pay for, the function for messages that it ignores. Up to 5 filters by default (quota increase to 10).</li>
+    <li><strong>Filter criteria</strong> on the event source mapping use EventBridge pattern syntax. Filter on the message <code>body</code> or on the metadata fields of the record.</li>
+    <li>Use filters so that you do not invoke, and pay for, the function for messages that it ignores. Up to 5 filters by default (quota increase to 10).</li>
     <li>For SQS, Lambda deletes messages that do not match the filter. The function is not invoked for them. No other consumer can read those messages, so do not filter out messages that another process needs.</li>
-    <li><strong>Batching window</strong> (<code>MaximumBatchingWindowInSeconds</code>): Lambda waits up to this time to fill a batch. For a batch size over 10 (standard queue), you must set it to at least 1 second. Messages stay in flight while Lambda waits. So set the visibility timeout to 6 times the function timeout plus the batching window.</li>
+    <li><strong>Batching window</strong> (<code>MaximumBatchingWindowInSeconds</code>): Lambda waits up to this time to fill a batch. For a batch size over 10 (standard queue), you must set it to at least 1 second.</li>
+    <li>Messages stay in flight while Lambda waits. So set the visibility timeout to 6 times the function timeout plus the batching window.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Many empty ReceiveMessage responses, high cost" → long polling (<code>ReceiveMessageWaitTimeSeconds</code> = 20). Each receive waits for messages, so there are fewer empty, billable responses.</li>
-      <li>"Processing sometimes takes longer than the visibility timeout, and messages are processed twice" → increase the visibility timeout or call <code>ChangeMessageVisibility</code>. The message then stays hidden until the first consumer deletes it.</li>
-      <li>"Payload is 5 MB" → SQS Extended Client Library with Amazon S3. The SQS message limit is 1 MiB, so the library stores the payload in S3 and sends a reference.</li>
-      <li>"Every new message must wait 5 minutes before processing" → delay queue. The queue delay hides every new message for the set time (maximum 15 minutes).</li>
-      <li>"One bad message makes the whole batch run again" → <code>ReportBatchItemFailures</code>. Only the failed messages return to the queue.</li>
-      <li>"Function must not be invoked for messages it does not need" → filter criteria on the event source mapping. Lambda checks the filter before it invokes the function.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html">SQS message quotas</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html">Visibility timeout (in-flight limit)</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html">Short and long polling</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-message-timers.html">Message timers</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html">Lambda with SQS</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventfiltering.html">Event filtering</a>. Lab: <a href="../../../module-05-messaging-events/lab-01-sqs-standard-vs-fifo/README.md">Lab 5.1 SQS standard vs FIFO</a>.</p>
 </section>
 
 <section id="sqs-dlq-redrive">
   <h2>SQS dead-letter queues and redrive</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>A <strong>dead-letter queue</strong> (DLQ) holds messages that consumers fail to process many times.</li>
+      <li>Without a DLQ, a poison message returns after each visibility timeout until its retention period ends.</li>
+      <li>Set the <strong>redrive policy</strong> on the source queue. The policy names the DLQ ARN and <code>maxReceiveCount</code>.</li>
+      <li><code>maxReceiveCount</code> is the number of receives before SQS moves a message to the DLQ.</li>
+      <li><code>maxReceiveCount</code> has a range of 1 to 1,000 and no default.</li>
+      <li>A very low <code>maxReceiveCount</code> moves a message to the DLQ after one temporary error.</li>
+      <li>With a Lambda consumer, AWS recommends a <code>maxReceiveCount</code> of at least 5.</li>
+      <li>The DLQ type must match the source queue type: FIFO uses a FIFO DLQ, and standard uses a standard DLQ.</li>
+      <li>The DLQ must be in the same AWS account and Region as the source queue.</li>
+      <li>SQS does not create the DLQ. Create the DLQ first as an ordinary queue.</li>
+      <li>A message moved from a standard queue keeps its original enqueue timestamp, so source time counts against DLQ retention.</li>
+      <li>Set the DLQ retention longer than the source queue retention.</li>
+      <li>A message moved from a FIFO queue gets a new enqueue timestamp in the DLQ.</li>
+      <li>A DLQ can break the exact order of a FIFO queue. Do not use a DLQ if the order of every message is critical.</li>
+      <li>SQS does not notify you when a message arrives in a DLQ. Alarm on <code>ApproximateNumberOfMessagesVisible</code> of the DLQ.</li>
+      <li>The <code>NumberOfMessagesSent</code> metric does not count messages that SQS moves to a DLQ.</li>
+      <li>The <strong>redrive allow policy</strong> is on the DLQ and sets <code>redrivePermission</code>.</li>
+      <li><code>redrivePermission</code> <code>allowAll</code> is the default and lets any source queue use the DLQ.</li>
+      <li><code>redrivePermission</code> <code>byQueue</code> allows only the listed source queue ARNs (up to 10). Use it when one team owns the DLQ.</li>
+      <li><code>redrivePermission</code> <code>denyAll</code> stops the queue from being a DLQ.</li>
+      <li><strong>DLQ redrive</strong> (<code>StartMessageMoveTask</code>) moves messages out of a DLQ so that consumers process them again.</li>
+      <li><code>StartMessageMoveTask</code> with no destination moves messages back to their original source queues.</li>
+      <li>DLQ redrive works only on a DLQ of SQS queues, not on a DLQ of a Lambda function or SNS subscription.</li>
+      <li>A queue can have one active move task, with an optional rate of up to 500 messages each second.</li>
+      <li>Use <code>ListMessageMoveTasks</code> to see move progress and <code>CancelMessageMoveTask</code> to stop a move.</li>
+      <li>Configure the DLQ at the place where the failed step happens.</li>
+      <li>For an SQS consumer, including a Lambda event source mapping, put the redrive policy on the source queue.</li>
+      <li>For an asynchronous Lambda invocation, use a Lambda on-failure destination or a function DLQ.</li>
+      <li>For SNS delivery failures, put the redrive policy on the SNS subscription.</li>
+      <li>For EventBridge delivery failures, put the DLQ on the rule target.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Poison message is retried forever" → redrive policy with a DLQ and <code>maxReceiveCount</code>. After that number of receives, SQS moves the message out of the source queue.</li>
+      <li>"Bug is fixed; reprocess the failed messages with the least effort" → DLQ redrive (<code>StartMessageMoveTask</code>). It moves the messages back with no code.</li>
+      <li>"Messages expire in the DLQ sooner than expected" → increase the DLQ retention. A standard queue keeps the original timestamp.</li>
+      <li>"Only one team's queue may use this DLQ" → redrive allow policy <code>byQueue</code>.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
-    <li>A dead-letter queue (DLQ) holds messages that consumers fail to process many times. Without a DLQ, a message that always fails (a "poison message") returns to the queue after each visibility timeout. It is received again and again until its retention period ends, and it uses consumer capacity each time.</li>
+    <li>A dead-letter queue (DLQ) holds messages that consumers fail to process many times.</li>
+    <li>Without a DLQ, a message that always fails (a "poison message") returns to the queue after each visibility timeout. It is received again and again until its retention period ends, and it uses consumer capacity each time.</li>
     <li>Set the <strong>redrive policy</strong> on the <strong>source queue</strong>. It names the dead-letter queue (DLQ) ARN and <code>maxReceiveCount</code>.</li>
     <li><code>maxReceiveCount</code> (1 to 1,000) is how many times a consumer can receive a message before SQS moves it to the DLQ. There is no default; you set it. A very low value moves a message to the DLQ after one temporary error.</li>
     <li>With Lambda, AWS recommends <code>maxReceiveCount</code> of at least 5. This gives Lambda a few retries (for example, after throttling) before SQS moves the message to the DLQ.</li>
     <li>The DLQ type must match the source: a FIFO queue uses a FIFO DLQ, and a standard queue uses a standard DLQ. A redrive policy that points to the wrong type fails.</li>
     <li>The DLQ must be in the same AWS account and Region as the source queue.</li>
     <li>SQS does not create the DLQ for you. Create it first. A DLQ is an ordinary queue.</li>
-    <li>Standard queues: a moved message keeps its <strong>original</strong> enqueue timestamp. The time in the source queue counts against the DLQ retention. Example: both queues keep messages for 4 days, and a message waits 3 days in the source. It then expires after only 1 day in the DLQ. Set the DLQ retention longer than the source retention.</li>
+    <li>Standard queues: a moved message keeps its <strong>original</strong> enqueue timestamp. The time in the source queue counts against the DLQ retention.</li>
+    <li>Example: both queues keep messages for 4 days, and a message waits 3 days in the source. It then expires after only 1 day in the DLQ.</li>
+    <li>Set the DLQ retention longer than the source retention.</li>
     <li>FIFO queues: the enqueue timestamp resets when the message moves to the DLQ.</li>
     <li>A DLQ can break the exact order of a FIFO queue. SQS moves the failed message out, and consumers then process the later messages of its group. Do not use a DLQ if the order of every message is critical.</li>
     <li>Alarm on the DLQ metric <code>ApproximateNumberOfMessagesVisible</code>. SQS does not notify you when a message arrives in a DLQ. Do not use <code>NumberOfMessagesSent</code>, because it does not count messages that SQS moves to a DLQ.</li>
@@ -187,37 +322,73 @@
     <tr><td>EventBridge delivery to a target</td><td>DLQ on the rule target</td></tr>
   </table>
   <p>Configure the DLQ at the place where the failed step happens. A queue consumer fails after it receives a message, so the DLQ is on the queue. SNS and EventBridge fail when they push to an endpoint, so the DLQ is on the subscription or the target.</p>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Poison message is retried forever" → redrive policy with a DLQ and <code>maxReceiveCount</code>. After that number of receives, SQS moves the message out of the source queue.</li>
-      <li>"Bug is fixed; reprocess the failed messages with the least effort" → DLQ redrive (<code>StartMessageMoveTask</code>). It moves the messages back with no code.</li>
-      <li>"Messages expire in the DLQ sooner than expected" → standard queue keeps the original timestamp. Increase DLQ retention.</li>
-      <li>"Only one team's queue may use this DLQ" → redrive allow policy <code>byQueue</code>.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html">SQS dead-letter queues</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-configure-dead-letter-queue.html">Configure a DLQ</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_StartMessageMoveTask.html">StartMessageMoveTask</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html">Lambda with SQS (maxReceiveCount)</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-dead-letter-queues.html">DLQ alarm metrics</a>. Lab: <a href="../../../module-05-messaging-events/lab-04-dlq-and-redrive/README.md">Lab 5.4 DLQ and redrive</a>.</p>
 </section>
 
 <section id="sqs-security">
   <h2>SQS and SNS access policies and encryption</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>A <strong>queue policy</strong> controls who can call SQS actions on the queue.</li>
+      <li>A <strong>topic policy</strong> controls who can call SNS actions, such as <code>sns:Publish</code>, on the topic.</li>
+      <li>For SNS to deliver to a queue, the queue policy must allow <code>sns.amazonaws.com</code> to call <code>sqs:SendMessage</code>.</li>
+      <li>Add an <code>aws:SourceArn</code> condition (or <code>aws:SourceAccount</code>) to prevent the <strong>confused deputy</strong> problem.</li>
+      <li>A queue policy without <code>aws:SourceArn</code> trusts SNS for any topic, also a topic in another account.</li>
+      <li>For EventBridge to deliver to a queue, allow <code>events.amazonaws.com</code> with an <code>aws:SourceArn</code> of the rule.</li>
+      <li>Cross-account access needs the other account as a principal in the resource policy and IAM permissions in that account.</li>
+      <li>Use IAM identity policies for your own users and roles. Example: <code>sqs:ReceiveMessage</code> and <code>sqs:DeleteMessage</code> for a consumer.</li>
+      <li>SQS encryption at rest uses <strong>SSE-SQS</strong> (keys that SQS manages) or <strong>SSE-KMS</strong> (an AWS KMS key).</li>
+      <li>Choose SSE-SQS when you need only encryption at rest, with no key to manage.</li>
+      <li>Choose SSE-KMS with a customer managed key to control the key policy or to see each key use in CloudTrail.</li>
+      <li>SQS SSE encrypts only the message body, not queue metadata, message metadata, or message attributes.</li>
+      <li>Do not put sensitive data in SQS message attributes.</li>
+      <li>SQS encrypts only messages sent after you turn on SSE. Messages already in the queue stay unencrypted.</li>
+      <li>All requests to an SSE queue must use HTTPS and SigV4. Other requests fail with <code>InvalidSecurity</code>.</li>
+      <li>The SQS <strong>data key reuse period</strong> has a range of 60 seconds to 24 hours and a default of 5 minutes.</li>
+      <li>A longer data key reuse period gives fewer KMS calls and lower KMS cost.</li>
+      <li>With SSE-KMS, a producer needs <code>kms:GenerateDataKey</code> and <code>kms:Decrypt</code>.</li>
+      <li>With SSE-KMS, a consumer needs <code>kms:Decrypt</code>. A Lambda function that reads an encrypted queue also needs <code>kms:Decrypt</code>.</li>
+      <li>Missing KMS permissions make the SQS call fail with <code>KmsAccessDenied</code>.</li>
+      <li>SNS topics support SSE with AWS KMS keys. SNS data in transit uses TLS.</li>
+      <li>For SNS to send to an encrypted queue, use a <strong>customer managed</strong> KMS key on the queue.</li>
+      <li>The queue key policy must allow <code>sns.amazonaws.com</code> to use <code>kms:GenerateDataKey*</code> and <code>kms:Decrypt</code>.</li>
+      <li>SNS cannot send to a queue encrypted with <code>aws/sqs</code>, because you cannot edit the key policy of that AWS managed key.</li>
+      <li>An encrypted queue that is an SNS subscription DLQ also needs a customer managed key.</li>
+      <li>A queue encrypted with <code>aws/sqs</code> cannot invoke a Lambda function in a different account.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"SNS subscription is confirmed but the queue gets no messages" → queue policy does not allow <code>sns.amazonaws.com</code>, or the KMS key policy does not allow SNS. A confirmed subscription does not give SNS permission to send to the queue or to use its key.</li>
+      <li>"Only this topic may send to the queue" → <code>aws:SourceArn</code> condition in the queue policy.</li>
+      <li>"Encrypt messages and audit key use in CloudTrail" → SSE-KMS with a customer managed key. KMS logs each use of a customer managed key in CloudTrail, but SSE-SQS uses keys that SQS owns, so you cannot set a key policy or see key use in your CloudTrail.</li>
+      <li>"Reduce KMS cost for a busy encrypted queue" → increase the data key reuse period. SQS then calls KMS less often, and KMS charges for each call.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Resource policies</h3>
   <ul>
     <li>A queue policy controls who can call SQS actions on the queue. A topic policy controls who can call SNS actions, such as <code>sns:Publish</code>, on the topic.</li>
     <li>For SNS to deliver to a queue, the <strong>queue policy</strong> must allow principal <code>sns.amazonaws.com</code> to call <code>sqs:SendMessage</code>.</li>
-    <li>Add an <code>aws:SourceArn</code> condition with the topic ARN (or <code>aws:SourceAccount</code>). This prevents the confused deputy problem. Without the condition, the policy trusts the SNS service for any topic, including a topic in another account. The owner of that topic could then use SNS to send messages into your queue. The condition allows only your topic.</li>
+    <li>Add an <code>aws:SourceArn</code> condition with the topic ARN (or <code>aws:SourceAccount</code>). This prevents the confused deputy problem.</li>
+    <li>Without the condition, the policy trusts the SNS service for any topic, including a topic in another account. The owner of that topic could then use SNS to send messages into your queue. The condition allows only your topic.</li>
     <li>The same pattern applies to EventBridge: allow <code>events.amazonaws.com</code> with an <code>aws:SourceArn</code> of the rule.</li>
     <li>Cross-account access to a queue or topic: add the other account as a principal in the resource policy. The other account must also give its users or roles the permission in their IAM policies.</li>
     <li>Use IAM identity policies for your own users and roles, for example <code>sqs:ReceiveMessage</code> and <code>sqs:DeleteMessage</code> for a consumer.</li>
   </ul>
   <h3>Encryption at rest</h3>
   <ul>
-    <li>SQS: SSE-SQS (keys that SQS manages) or SSE-KMS (an AWS KMS key). Choose SSE-SQS when you only need encryption at rest, with no key to manage. Choose SSE-KMS with a customer managed key when you must control the key policy or see each use of the key in CloudTrail.</li>
+    <li>SQS: SSE-SQS (keys that SQS manages) or SSE-KMS (an AWS KMS key).</li>
+    <li>Choose SSE-SQS when you only need encryption at rest, with no key to manage. Choose SSE-KMS with a customer managed key when you must control the key policy or see each use of the key in CloudTrail.</li>
     <li>SSE encrypts the message <strong>body</strong>. It does not encrypt queue metadata, message metadata, or message attributes. Do not put sensitive data in message attributes.</li>
     <li>SQS encrypts only messages sent after you turn on SSE. Messages already in the queue stay unencrypted.</li>
     <li>All requests to an SSE queue must use HTTPS and Signature Version 4 (SigV4). Other requests fail with an <code>InvalidSecurity</code> error.</li>
     <li>Data key reuse period: 60 seconds to 24 hours, default 5 minutes. SQS gets a data key from KMS and uses it to encrypt messages for this period. A longer period means fewer KMS calls and lower KMS cost.</li>
-    <li>With SSE-KMS, a producer needs <code>kms:GenerateDataKey</code> and <code>kms:Decrypt</code>, and a consumer needs <code>kms:Decrypt</code>. When the data key reuse period ends, SQS calls <code>GenerateDataKey</code> with the producer's permissions to get a new data key. SQS also calls <code>Decrypt</code> with the producer's and the consumer's permissions to verify the data key before it uses it. Without these permissions, the SQS call fails with a KMS access denied error (<code>KmsAccessDenied</code>). A Lambda function that reads an encrypted queue needs <code>kms:Decrypt</code>.</li>
+    <li>With SSE-KMS, a producer needs <code>kms:GenerateDataKey</code> and <code>kms:Decrypt</code>, and a consumer needs <code>kms:Decrypt</code>.</li>
+    <li>When the data key reuse period ends, SQS calls <code>GenerateDataKey</code> with the producer's permissions to get a new data key. SQS also calls <code>Decrypt</code> with the producer's and the consumer's permissions to verify the data key before it uses it.</li>
+    <li>Without these permissions, the SQS call fails with a KMS access denied error (<code>KmsAccessDenied</code>). A Lambda function that reads an encrypted queue needs <code>kms:Decrypt</code>.</li>
     <li>SNS topics also support SSE with AWS KMS keys. Data in transit uses TLS.</li>
   </ul>
   <h3>SNS to an encrypted queue</h3>
@@ -229,25 +400,56 @@
     <li>The same rule applies to an encrypted queue that is an SNS subscription DLQ.</li>
     <li>A queue encrypted with <code>aws/sqs</code> cannot invoke a Lambda function in a different account. You cannot edit the <code>aws/sqs</code> key policy to give the other account access to the key.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"SNS subscription is confirmed but the queue gets no messages" → queue policy does not allow <code>sns.amazonaws.com</code>, or the KMS key policy does not allow SNS. A confirmed subscription does not give SNS permission to send to the queue or to use its key.</li>
-      <li>"Only this topic may send to the queue" → <code>aws:SourceArn</code> condition in the queue policy.</li>
-      <li>"Encrypt messages and audit key use in CloudTrail" → SSE-KMS with a customer managed key. KMS logs each use of a customer managed key in CloudTrail. SSE-SQS uses keys that SQS owns, so you cannot set a key policy or see key use in your CloudTrail.</li>
-      <li>"Reduce KMS cost for a busy encrypted queue" → increase the data key reuse period. SQS then calls KMS less often, and KMS charges for each call.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/sns/latest/dg/subscribe-sqs-queue-to-sns-topic.html">Subscribe a queue to a topic</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-enable-encryption-for-topic-sqs-queue-subscriptions.html">SNS with an encrypted queue</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-server-side-encryption.html">SQS encryption at rest</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-key-management.html">SQS key management</a>, <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SendMessage.html">SendMessage errors (KmsAccessDenied)</a>. Lab: <a href="../../../module-05-messaging-events/lab-02-sns-fanout/README.md">Lab 5.2 SNS fan-out</a>.</p>
 </section>
 
 <section id="sns-fanout-filtering">
   <h2>SNS fan-out, filter policies, and raw delivery</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>SNS is push-based publish/subscribe. SNS delivers a copy of each message to each subscription.</li>
+      <li><strong>Fan-out</strong> means that one message goes to many receivers.</li>
+      <li>SNS standard topic subscription types include SQS, Lambda, HTTP/HTTPS, email, SMS, mobile push, and Amazon Data Firehose.</li>
+      <li>SNS does not store messages. When a subscriber is down, SNS retries for a limited time and then discards the message.</li>
+      <li>For durable fan-out, subscribe SQS queues to the SNS topic. Each queue keeps its copy for up to 14 days.</li>
+      <li>SNS invokes a Lambda subscriber asynchronously, so the publisher does not get the function result.</li>
+      <li>When a Lambda subscriber fails, Lambda retries by the asynchronous invocation rules, not SNS.</li>
+      <li>The SNS message size has a default maximum of 256 KiB.</li>
+      <li>Set the topic attribute <code>MaximumMessageSize</code> to allow SNS messages up to 1 MiB.</li>
+      <li>For SNS payloads over 1 MiB, use the SNS Extended Client Library (payload in Amazon S3, up to 2 GB).</li>
+      <li><code>PublishBatch</code> takes up to 10 messages.</li>
+      <li>A <strong>filter policy</strong> is a JSON document on a subscription, not on the topic.</li>
+      <li>A subscription with no filter policy receives every message.</li>
+      <li><code>FilterPolicyScope</code> is <code>MessageAttributes</code> (default) or <code>MessageBody</code>.</li>
+      <li>To filter on the message body, the body must be valid JSON.</li>
+      <li>SNS does not deliver a message that does not match, so filters save Lambda invocations and SQS receives.</li>
+      <li>Filter policy operators include exact match, <code>prefix</code>, <code>suffix</code>, <code>anything-but</code>, <code>numeric</code>, <code>exists</code>, and <code>cidr</code>.</li>
+      <li>An SNS topic allows 200 filter policies.</li>
+      <li>A new or changed filter policy can take up to 15 minutes to take full effect.</li>
+      <li>By default, SNS wraps the message in a JSON envelope, and the payload is in the <code>Message</code> field.</li>
+      <li>Set <code>RawMessageDelivery</code> to <code>true</code> to deliver only the message body.</li>
+      <li><strong>Raw message delivery</strong> works on SQS, HTTP/S, and Firehose subscriptions.</li>
+      <li>Raw delivery to SQS sends a maximum of 10 message attributes. SNS discards a message with more.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"One order event must go to billing, shipping, and analytics queues" → SNS topic with three SQS subscriptions. SNS puts a copy in each queue, and each team reads its own queue.</li>
+      <li>"Each consumer wants only some messages, with no code change in the publisher" → subscription filter policies. SNS checks the policy of each subscription before delivery.</li>
+      <li>"Filter on a field in the JSON payload" → <code>FilterPolicyScope</code> = <code>MessageBody</code>. The default scope checks only the message attributes.</li>
+      <li>"Consumer code must not parse the SNS envelope" → raw message delivery.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
-    <li>SNS is push-based publish/subscribe. A publisher sends one message; SNS delivers a copy to each subscription. "Push" means that SNS sends the message to the subscribers at once; they do not poll for it. Sending one message to many receivers is called "fan-out".</li>
+    <li>SNS is push-based publish/subscribe. A publisher sends one message; SNS delivers a copy to each subscription.</li>
+    <li>"Push" means that SNS sends the message to the subscribers at once; they do not poll for it. Sending one message to many receivers is called "fan-out".</li>
     <li>Standard topic subscription types include SQS, Lambda, HTTP/HTTPS, email, SMS, mobile push, and Amazon Data Firehose.</li>
-    <li>SNS does not store messages for consumers. If a subscriber is down, SNS retries for a limited time and then discards the message. For durable fan-out, subscribe SQS queues to the topic (SNS to SQS fan-out). Each queue keeps its copy (up to 14 days), and each consumer reads its queue at its own speed.</li>
+    <li>SNS does not store messages for consumers. If a subscriber is down, SNS retries for a limited time and then discards the message.</li>
+    <li>For durable fan-out, subscribe SQS queues to the topic (SNS to SQS fan-out). Each queue keeps its copy (up to 14 days), and each consumer reads its queue at its own speed.</li>
     <li>SNS invokes a Lambda subscriber asynchronously. The publisher does not get the function result. If the function fails, Lambda retries it by the rules of asynchronous invocation, not SNS.</li>
     <li>Message size: default maximum 256 KiB. Set the topic attribute <code>MaximumMessageSize</code> to allow up to 1 MiB.</li>
     <li>For payloads over 1 MiB, use the SNS Extended Client Library (payload in Amazon S3, up to 2 GB).</li>
@@ -269,20 +471,47 @@
     <li>Set <code>RawMessageDelivery</code> to <code>true</code> on an SQS, HTTP/S, or Firehose subscription to deliver only the message body. Use it when the consumer expects your original payload, not the SNS envelope.</li>
     <li>With raw delivery to SQS, a maximum of 10 message attributes is sent. SNS discards messages with more, so that subscription never gets them.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"One order event must go to billing, shipping, and analytics queues" → SNS topic with three SQS subscriptions. SNS puts a copy in each queue, and each team reads its own queue.</li>
-      <li>"Each consumer wants only some messages, with no code change in the publisher" → subscription filter policies. SNS checks the policy of each subscription before delivery.</li>
-      <li>"Filter on a field in the JSON payload" → <code>FilterPolicyScope</code> = <code>MessageBody</code>. The default scope checks only the message attributes.</li>
-      <li>"Consumer code must not parse the SNS envelope" → raw message delivery.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html">SNS message filtering</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-subscription-filter-policies.html">Subscription filter policies</a>, <a href="https://docs.aws.amazon.com/sns/latest/api/API_SetSubscriptionAttributes.html">SetSubscriptionAttributes</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-large-payload-raw-message-delivery.html">Raw message delivery</a>, <a href="https://docs.aws.amazon.com/general/latest/gr/sns.html">SNS quotas</a>. Lab: <a href="../../../module-05-messaging-events/lab-02-sns-fanout/README.md">Lab 5.2 SNS fan-out</a>.</p>
 </section>
 
 <section id="sns-delivery">
   <h2>SNS delivery retries, dead-letter queues, and FIFO topics</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>SNS retries AWS managed endpoints (SQS, Lambda) with 100,015 attempts over 23 days.</li>
+      <li>You cannot change the SNS retry policy for AWS managed endpoints.</li>
+      <li>SNS retries email (SMTP), SMS, and mobile push endpoints with 50 attempts over 6 hours.</li>
+      <li>Only HTTP/S endpoints accept a custom <strong>delivery policy</strong>, at the topic or subscription level.</li>
+      <li>An HTTP/S delivery policy allows a maximum total retry time of 3,600 seconds.</li>
+      <li>SNS retries server-side errors. For HTTP/S, SNS retries 5xx and 429 responses.</li>
+      <li>SNS does not retry client-side errors, for example a deleted endpoint or a policy that blocks delivery.</li>
+      <li>When retries end, or after a client-side error, SNS discards the message unless the subscription has a DLQ.</li>
+      <li>Attach an SNS DLQ to the <strong>subscription</strong> with a redrive policy (<code>deadLetterTargetArn</code>), not to the topic.</li>
+      <li>An SNS DLQ is an SQS queue in the same account and Region as the subscription.</li>
+      <li>A standard topic subscription uses a standard queue DLQ. A FIFO topic subscription uses a FIFO queue DLQ.</li>
+      <li>AWS recommends the maximum retention (14 days) for an SNS subscription DLQ.</li>
+      <li>An SNS <strong>FIFO topic</strong> keeps strict order inside each <code>MessageGroupId</code>.</li>
+      <li>An SNS FIFO topic deduplicates in a 5-minute interval with <code>MessageDeduplicationId</code> or content-based deduplication.</li>
+      <li>An SNS FIFO topic delivers only to SQS queues, FIFO or standard.</li>
+      <li>An SNS FIFO topic cannot deliver to Lambda, HTTP/S, email, SMS, or mobile push.</li>
+      <li>To reach Lambda from an SNS FIFO topic, subscribe a queue and use the queue as the function trigger.</li>
+      <li>With <code>FifoThroughputScope</code> = <code>MessageGroup</code>, each message group receives 300 messages each second.</li>
+      <li>With <code>FifoThroughputScope</code> = <code>Topic</code>, the topic shares one limit: 3,000 messages or 20 MB each second by default.</li>
+      <li>Choose <code>FifoThroughputScope</code> = <code>MessageGroup</code> when you have many message groups and need more total throughput.</li>
+      <li>SNS FIFO topics support message archiving and replay. SNS standard topics do not.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Keep messages that SNS could not deliver" → DLQ on the subscription. Without it, SNS discards the message when retries end.</li>
+      <li>"HTTP endpoint is overloaded by retries" → custom HTTP/S delivery policy (for example, <code>maxReceivesPerSecond</code>). This setting limits the average number of deliveries each second to that subscription.</li>
+      <li>"Fan out ordered price updates to several services" → SNS FIFO topic to SQS FIFO queues. The topic keeps the order, and each FIFO queue keeps it for its consumer.</li>
+      <li>"FIFO topic must notify a Lambda function" → topic to SQS queue, then queue to Lambda.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Delivery retries</h3>
   <table>
     <tr><th>Endpoint type</th><th>Default retry policy</th></tr>
@@ -309,23 +538,62 @@
     <li>Strict order inside each <code>MessageGroupId</code>, and deduplication in a 5-minute interval (<code>MessageDeduplicationId</code> or content-based).</li>
     <li>A FIFO topic delivers only to SQS queues: FIFO queues and standard queues.</li>
     <li>A FIFO topic cannot deliver to Lambda, HTTP/S, email, SMS, or mobile push. To reach Lambda, subscribe a queue and use it as the function trigger.</li>
-    <li>Throughput depends on the topic attribute <code>FifoThroughputScope</code>. With <code>MessageGroup</code>, each message group can receive 300 messages each second, so the total grows with the number of groups. With <code>Topic</code>, the whole topic shares one limit: by default 3,000 messages each second or 20 MB each second. Choose <code>MessageGroup</code> when you have many message groups and need more total throughput.</li>
+    <li>Throughput depends on the topic attribute <code>FifoThroughputScope</code>. With <code>MessageGroup</code>, each message group can receive 300 messages each second, so the total grows with the number of groups.</li>
+    <li>With <code>Topic</code>, the whole topic shares one limit: by default 3,000 messages each second or 20 MB each second.</li>
+    <li>Choose <code>MessageGroup</code> when you have many message groups and need more total throughput.</li>
     <li>FIFO topics support message archiving and replay. Standard topics do not. Use replay to send past messages again to a subscriber, for example after you fix a bug in it.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Keep messages that SNS could not deliver" → DLQ on the subscription. Without it, SNS discards the message when retries end.</li>
-      <li>"HTTP endpoint is overloaded by retries" → custom HTTP/S delivery policy (for example, <code>maxReceivesPerSecond</code>). This setting limits the average number of deliveries each second to that subscription.</li>
-      <li>"Fan out ordered price updates to several services" → SNS FIFO topic to SQS FIFO queues. The topic keeps the order, and each FIFO queue keeps it for its consumer.</li>
-      <li>"FIFO topic must notify a Lambda function" → topic to SQS queue, then queue to Lambda.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-message-delivery-retries.html">SNS delivery retries</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-dead-letter-queues.html">SNS dead-letter queues</a>, <a href="https://docs.aws.amazon.com/sns/latest/dg/fifo-message-delivery.html">FIFO topic delivery</a>, <a href="https://docs.aws.amazon.com/general/latest/gr/sns.html">SNS quotas (FIFO throughput)</a>. Lab: <a href="../../../module-05-messaging-events/lab-02-sns-fanout/README.md">Lab 5.2 SNS fan-out</a>.</p>
 </section>
 
 <section id="eb-rules-patterns">
   <h2>EventBridge buses, rules, patterns, and targets</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>The <strong>default bus</strong> receives AWS service events and <code>PutEvents</code> calls. Each account and Region has one default bus.</li>
+      <li>AWS services send their events only to the default bus.</li>
+      <li>A <strong>custom bus</strong> receives the events that your applications send with <code>PutEvents</code>.</li>
+      <li>Use a custom bus for your own application events, so that they stay apart and have their own access policy.</li>
+      <li>A <strong>partner bus</strong> receives events from SaaS partners.</li>
+      <li>Every EventBridge event has the fields <code>version</code>, <code>id</code>, <code>detail-type</code>, <code>source</code>, <code>account</code>, <code>time</code>, <code>region</code>, <code>resources</code>, and <code>detail</code>.</li>
+      <li>An EventBridge rule matches events with an <strong>event pattern</strong> and sends them to targets.</li>
+      <li>An event matches a pattern when every field in the pattern matches.</li>
+      <li>An event pattern can match any field, including nested fields in <code>detail</code>.</li>
+      <li>Pattern operators include exact match, <code>prefix</code>, <code>suffix</code>, <code>anything-but</code>, <code>numeric</code>, <code>exists</code>, <code>cidr</code>, <code>wildcard</code>, and <code>equals-ignore-case</code>.</li>
+      <li>An EventBridge rule can have a maximum of 5 targets. You cannot increase this quota.</li>
+      <li>For more than 5 targets, add a rule with the same pattern or send to an SNS topic.</li>
+      <li>The exam guide covers the default bus and the rules-and-targets bus, now named Custom Event Bus - Classic.</li>
+      <li>The new Custom Event Bus (September 2026) sends events to subscribers, not to rules and targets.</li>
+      <li>The new Custom Event Bus accepts up to 100 entries in each <code>PutEvents</code> call and keeps events for 1 to 365 days.</li>
+      <li>Use an <strong>input transformer</strong> when a target needs a different JSON shape and you do not want to write code.</li>
+      <li><code>InputPathsMap</code> takes values from the event with JSON paths. <code>InputTemplate</code> builds the new target input.</li>
+      <li><code>PutEvents</code> takes up to 10 entries in one request, with a total size less than 1 MB.</li>
+      <li><code>PutEvents</code> can partly fail and still return success. Check <code>FailedEntryCount</code> and send the failed entries again.</li>
+      <li>EventBridge targets include Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS tasks, API destinations, and other event buses.</li>
+      <li>The <strong>schema registry</strong> discovers event schemas and generates code bindings (typed classes for your language).</li>
+      <li>An <strong>API destination</strong> is an HTTPS endpoint that a rule or a pipe invokes as a target, with no code.</li>
+      <li>An API destination <strong>connection</strong> holds the authorization method and credentials, stored in AWS Secrets Manager.</li>
+      <li>An API destination has an invocation rate limit with a default of 300 each second.</li>
+      <li>An API destination endpoint must respond within 5 seconds, or EventBridge times out and retries.</li>
+      <li>EventBridge retries API destination errors 401, 407, 409, 429, and 5xx. EventBridge does not retry other 4xx errors.</li>
+      <li>Without permission to call a target, the invocation fails and the rule metric <code>FailedInvocations</code> increases.</li>
+      <li>The console adds the target permission for you. The AWS CLI does not.</li>
+      <li>Lambda, SNS, and SQS targets need a resource-based policy for <code>events.amazonaws.com</code> or an IAM execution role.</li>
+      <li>A Kinesis stream target needs an IAM role. A CloudWatch Logs target needs a resource-based policy only.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"React to an AWS service event (for example, an EC2 state change)" → rule on the default bus. AWS services send their events only to the default bus.</li>
+      <li>"Route by a nested field, with ranges or prefixes" → EventBridge pattern. Patterns can match any field in <code>detail</code> and use operators such as <code>numeric</code> and <code>prefix</code>.</li>
+      <li>"Target needs a different JSON shape, no code" → input transformer.</li>
+      <li>"Rule needs 8 targets" → two rules with the same pattern. A rule can have only 5 targets, and you cannot increase this quota.</li>
+      <li>"Send events to a third-party HTTP API with OAuth, no code" → API destination with a connection. The connection holds the OAuth credentials.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Event buses</h3>
   <table>
     <tr><th>Bus</th><th>Receives</th></tr>
@@ -333,19 +601,26 @@
     <tr><td>Custom bus</td><td>Events that your applications send with <code>PutEvents</code></td></tr>
     <tr><td>Partner bus</td><td>Events from SaaS partners</td></tr>
   </table>
-  <p>Use the default bus to react to AWS service events. Use a custom bus for your own application events, so that they stay apart from AWS events and have their own access policy.</p>
+  <p>Use the default bus to react to AWS service events.</p>
+  <p>Use a custom bus for your own application events, so that they stay apart from AWS events and have their own access policy.</p>
   <h3>Event structure</h3>
   <p>Every event has the same top-level fields: <code>version</code>, <code>id</code>, <code>detail-type</code>, <code>source</code>, <code>account</code>, <code>time</code>, <code>region</code>, <code>resources</code>, and <code>detail</code> (your payload).</p>
   <h3>Key facts</h3>
   <ul>
-    <li>A rule matches events with an <strong>event pattern</strong> and sends them to targets. An event pattern is a JSON document that lists field values. An event matches when every field in the pattern matches. Example: <code>{"source": ["aws.ec2"], "detail": {"state": ["stopped"]}}</code> matches EC2 instances that stop.</li>
+    <li>A rule matches events with an <strong>event pattern</strong> and sends them to targets.</li>
+    <li>An event pattern is a JSON document that lists field values. An event matches when every field in the pattern matches.</li>
+    <li>Example: <code>{"source": ["aws.ec2"], "detail": {"state": ["stopped"]}}</code> matches EC2 instances that stop.</li>
     <li>A rule can have a maximum of <strong>5 targets</strong>. This quota cannot be increased. For more targets, add a rule with the same pattern or send to an SNS topic.</li>
     <li>Pattern operators include exact match, <code>prefix</code>, <code>suffix</code>, <code>anything-but</code>, <code>numeric</code>, <code>exists</code>, <code>cidr</code>, <code>wildcard</code>, and <code>equals-ignore-case</code>.</li>
     <li>EventBridge patterns can match any field in the event, including nested fields in <code>detail</code>.</li>
-    <li>In September 2026, AWS released a new Custom Event Bus that sends events to subscribers instead of rules and targets. It accepts up to 100 entries in each <code>PutEvents</code> call and keeps events for 1 to 365 days. The exam guide covers the default bus and the rules-and-targets bus, now named Custom Event Bus - Classic. The limits on this sheet are for those buses.</li>
-    <li><strong>Input transformer</strong>: use it when a target needs a different JSON shape than the event, and you do not want to write code. <code>InputPathsMap</code> takes values from the event with JSON paths, for example <code>"id": "$.detail.instance-id"</code>. <code>InputTemplate</code> builds the new input for the target and uses the names as placeholders, for example <code>{"instance": &lt;id&gt;}</code>.</li>
+    <li>In September 2026, AWS released a new Custom Event Bus that sends events to subscribers instead of rules and targets. It accepts up to 100 entries in each <code>PutEvents</code> call and keeps events for 1 to 365 days.</li>
+    <li>The exam guide covers the default bus and the rules-and-targets bus, now named Custom Event Bus - Classic. The limits on this sheet are for those buses.</li>
+    <li><strong>Input transformer</strong>: use it when a target needs a different JSON shape than the event, and you do not want to write code.</li>
+    <li><code>InputPathsMap</code> takes values from the event with JSON paths, for example <code>"id": "$.detail.instance-id"</code>.</li>
+    <li><code>InputTemplate</code> builds the new input for the target and uses the names as placeholders, for example <code>{"instance": &lt;id&gt;}</code>.</li>
     <li><code>PutEvents</code>: up to 10 entries in one request, total size less than 1 MB.</li>
-    <li><code>PutEvents</code> can partly fail. The call returns success even when some entries fail. Check <code>FailedEntryCount</code> and send the failed entries again. If you do not check, those events are lost.</li>
+    <li><code>PutEvents</code> can partly fail. The call returns success even when some entries fail.</li>
+    <li>Check <code>FailedEntryCount</code> and send the failed entries again. If you do not check, those events are lost.</li>
     <li>Targets include Lambda, SQS, SNS, Step Functions, Kinesis, Firehose, ECS tasks, API destinations (HTTP), and other event buses.</li>
     <li>Schema registry: EventBridge can discover event schemas and generate code bindings. Code bindings are classes for your language, so your code reads typed fields and does not parse raw JSON.</li>
   </ul>
@@ -358,30 +633,58 @@
     <li>EventBridge retries 401, 407, 409, 429, and 5xx errors. It does not retry other 4xx errors. Add a DLQ so that you do not lose events.</li>
   </ul>
   <h3>Target permissions</h3>
-  <p>EventBridge must have permission to call each target. If it does not, the invocation fails and the rule metric <code>FailedInvocations</code> increases. The console adds the permission for you; the AWS CLI does not.</p>
+  <p>EventBridge must have permission to call each target. If it does not, the invocation fails and the rule metric <code>FailedInvocations</code> increases.</p>
+  <p>The console adds the permission for you; the AWS CLI does not.</p>
   <ul>
     <li>Lambda, SNS, and SQS targets: a resource-based policy that allows <code>events.amazonaws.com</code>, or an IAM execution role on the target.</li>
     <li>Kinesis stream targets: an IAM role (identity-based policy).</li>
     <li>CloudWatch Logs targets: a resource-based policy only.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"React to an AWS service event (for example, an EC2 state change)" → rule on the default bus. AWS services send their events only to the default bus.</li>
-      <li>"Route by a nested field, with ranges or prefixes" → EventBridge pattern. Patterns can match any field in <code>detail</code> and use operators such as <code>numeric</code> and <code>prefix</code>.</li>
-      <li>"Target needs a different JSON shape, no code" → input transformer.</li>
-      <li>"Rule needs 8 targets" → two rules with the same pattern. A rule can have only 5 targets, and you cannot increase this quota.</li>
-      <li>"Send events to a third-party HTTP API with OAuth, no code" → API destination with a connection. The connection holds the OAuth credentials.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-quota.html">EventBridge quotas</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-bus.html">Event buses</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutEvents.html">PutEvents</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html">Target permissions</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-api-destinations.html">API destinations</a>. Lab: <a href="../../../module-05-messaging-events/lab-03-eventbridge-rules/README.md">Lab 5.3 EventBridge rules</a>.</p>
 </section>
 
 <section id="eb-delivery-archive">
   <h2>EventBridge retries, archive and replay, testing, and cross-account events</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>By default, EventBridge retries a target for <strong>24 hours</strong> and up to <strong>185 times</strong>, with exponential backoff and jitter.</li>
+      <li>Set a shorter retry policy (maximum event age, retry attempts) on a target when an old event has no value.</li>
+      <li>When retries end, EventBridge drops the event unless the target has a DLQ.</li>
+      <li>An EventBridge target DLQ is a standard SQS queue.</li>
+      <li>An EventBridge <strong>archive</strong> stores events from one source bus. An event pattern can select the events.</li>
+      <li>Archive retention is a number of days or indefinite (default).</li>
+      <li>A <strong>replay</strong> sends archived events back to the source bus only, not to a different bus or account.</li>
+      <li>Limit a replay to specific rules so that other targets do not get duplicates.</li>
+      <li>Replayed events have a <code>replay-name</code> field and do not go into the archive again.</li>
+      <li>A replay does not keep the exact original order of events.</li>
+      <li>Wait 10 minutes before you replay recent events, because events can arrive late in the archive.</li>
+      <li><code>TestEventPattern</code> checks whether a sample event matches a pattern and returns <code>Result</code> true or false.</li>
+      <li>Use <code>TestEventPattern</code> in unit tests and CI before you deploy a rule.</li>
+      <li>A <strong>test listener</strong> is a temporary rule that sends matched events to CloudWatch Logs or an SQS queue.</li>
+      <li>SQS standard queues, SNS, EventBridge, and Scheduler can deliver an event more than one time, so make consumers idempotent.</li>
+      <li>Use a separate bus or account for tests, so that test events do not reach production targets.</li>
+      <li>For cross-account events, the receiving bus needs a resource-based policy that allows the sender account or organization.</li>
+      <li>For cross-account events, the sender creates a rule with the receiver bus ARN as the target.</li>
+      <li>A new cross-account bus target needs an IAM role in the sender account.</li>
+      <li>On a bus that accepts events from other accounts, add an <code>account</code> field to the rule patterns.</li>
+      <li>For cross-account events, the sender account pays. The receiver account does not pay.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Do not lose events when the target is down for 2 days" → DLQ on the target (default retry is 24 hours).</li>
+      <li>"Reprocess last week's events after a bug fix" → archive and replay. The replay sends the stored events back through the rules on the bus.</li>
+      <li>"Central account collects events from member accounts" → resource policy on the central bus, rules in member accounts. The policy lets the members send, and the member rules forward the events.</li>
+      <li>"Check in the CI pipeline that a new rule pattern matches sample events" → <code>TestEventPattern</code>. It tests a pattern against an event with no deployed rule.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Retries and DLQ</h3>
   <ul>
-    <li>By default, EventBridge retries delivery to a target for <strong>24 hours</strong> and up to <strong>185 times</strong>, with exponential backoff and jitter. Exponential backoff means that the wait between attempts grows after each failure. Jitter adds a random part to each wait, so that many retries do not arrive at the same moment.</li>
+    <li>By default, EventBridge retries delivery to a target for <strong>24 hours</strong> and up to <strong>185 times</strong>, with exponential backoff and jitter.</li>
+    <li>Exponential backoff means that the wait between attempts grows after each failure. Jitter adds a random part to each wait, so that many retries do not arrive at the same moment.</li>
     <li>You can set a shorter retry policy (maximum event age and retry attempts) on each target. Use it when an old event has no value, for example a price update that is more than 1 hour old.</li>
     <li>When retries end, EventBridge drops the event, unless the target has a DLQ (a standard SQS queue).</li>
   </ul>
@@ -408,37 +711,38 @@
     <li>If a bus accepts events from other accounts, add an <code>account</code> field to your rule patterns. Without it, a rule also matches events that other accounts send, and its targets process events that you did not expect.</li>
     <li>The sender account pays for the events. The receiver account does not.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Do not lose events when the target is down for 2 days" → DLQ on the target (default retry is 24 hours).</li>
-      <li>"Reprocess last week's events after a bug fix" → archive and replay. The replay sends the stored events back through the rules on the bus.</li>
-      <li>"Central account collects events from member accounts" → resource policy on the central bus, rules in member accounts. The policy lets the members send, and the member rules forward the events.</li>
-      <li>"Check in the CI pipeline that a new rule pattern matches sample events" → <code>TestEventPattern</code>. It tests a pattern against an event with no deployed rule.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-rule-retry-policy.html">Retry policy</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-archive.html">Archive and replay</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-cross-account.html">Cross-account events</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_TestEventPattern.html">TestEventPattern</a>. Lab: <a href="../../../module-05-messaging-events/lab-03-eventbridge-rules/README.md">Lab 5.3 EventBridge rules</a>.</p>
 </section>
 
 <section id="eb-scheduler-pipes">
   <h2>EventBridge Scheduler and Pipes</h2>
-  <h3>EventBridge Scheduler</h3>
-  <ul>
-    <li>Schedule types: one-time (<code>at(yyyy-mm-ddThh:mm:ss)</code>), rate (<code>rate(5 minutes)</code>), and cron (<code>cron(min hour day-of-month month day-of-week year)</code>). Use one-time for a single future action, rate for a fixed interval, and cron for calendar times such as "every Monday at 09:00".</li>
-    <li>Cron and one-time schedules run in UTC or in an IANA time zone that you set. Scheduler adjusts for daylight saving time.</li>
-    <li>Precision is 60 seconds. A <strong>flexible time window</strong> spreads invocations over a period. Use it when many schedules run at the same time, so that the target does not get all the calls at once.</li>
-    <li>Delivery is at least once, so the target can get the same invocation two times. Make the target idempotent. You can set retries and a DLQ (a standard SQS queue; FIFO is not supported).</li>
-    <li>Scheduler uses an <strong>execution role</strong> that trusts <code>scheduler.amazonaws.com</code> and allows the target action (for example, <code>sqs:SendMessage</code>). Scheduler does not use the credentials of the person who created the schedule. Without the role permission, each invocation fails.</li>
-    <li>Templated targets: SQS, SNS, Lambda, and EventBridge. They have preset settings for common actions. Universal targets let a schedule call any of more than 6,000 API operations by service and action name.</li>
-    <li>A completed one-time schedule still counts against your quota. Delete it after it runs, or set <code>ActionAfterCompletion</code> to <code>DELETE</code> so that Scheduler deletes it for you.</li>
-    <li>AWS recommends Scheduler for schedules. Scheduled rules are a legacy feature: default bus only, UTC only.</li>
-  </ul>
-  <h3>EventBridge Pipes</h3>
-  <ul>
-    <li>A pipe connects one source to one target: source, optional filter, optional enrichment, target. The filter drops events that the target does not need. Enrichment calls a service (for example, a Lambda function) to add data to each event before the target gets it.</li>
-    <li>Sources: SQS, Kinesis Data Streams, DynamoDB Streams, Amazon MSK, Amazon MQ, and Apache Kafka.</li>
-    <li>Pipes reduce integration code between services. Without a pipe, you write and run a function that reads the source and calls the target. A pipe uses an IAM role; Pipes do not support resource-based policies. So give the pipe role permission to read the source and to call the target.</li>
-  </ul>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li><strong>EventBridge Scheduler</strong> has three schedule types: one-time (<code>at()</code>), rate (<code>rate()</code>), and cron (<code>cron()</code>).</li>
+      <li>Use a one-time schedule for a single future action, rate for a fixed interval, and cron for calendar times.</li>
+      <li>Scheduler cron and one-time schedules run in UTC or in an IANA time zone that you set.</li>
+      <li>Scheduler adjusts for daylight saving time.</li>
+      <li>Scheduler has a precision of 60 seconds.</li>
+      <li>A <strong>flexible time window</strong> spreads invocations over a period, so that a target does not get all calls at once.</li>
+      <li>Scheduler delivery is at least once, so make the target idempotent.</li>
+      <li>A Scheduler DLQ is a standard SQS queue. Scheduler does not support a FIFO DLQ.</li>
+      <li>Scheduler uses an <strong>execution role</strong> that trusts <code>scheduler.amazonaws.com</code> and allows the target action.</li>
+      <li>Scheduler does not use the credentials of the person who created the schedule.</li>
+      <li>Without the execution role permission, each Scheduler invocation fails.</li>
+      <li>Scheduler templated targets are SQS, SNS, Lambda, and EventBridge.</li>
+      <li>Scheduler universal targets can call more than 6,000 API operations by service and action name.</li>
+      <li>A completed one-time schedule still counts against your quota.</li>
+      <li>Set <code>ActionAfterCompletion</code> to <code>DELETE</code> so that Scheduler deletes a one-time schedule after it runs.</li>
+      <li>AWS recommends Scheduler for schedules. Scheduled rules are legacy: default bus only, UTC only.</li>
+      <li>An <strong>EventBridge pipe</strong> connects one source to one target: source, optional filter, optional enrichment, target.</li>
+      <li>A pipe filter drops the events that the target does not need.</li>
+      <li>Pipe enrichment calls a service, for example a Lambda function, to add data to each event.</li>
+      <li>Pipe sources are SQS, Kinesis Data Streams, DynamoDB Streams, Amazon MSK, Amazon MQ, and Apache Kafka.</li>
+      <li>A pipe uses an IAM role. Pipes do not support resource-based policies.</li>
+      <li>The pipe role needs permission to read the source and to call the target.</li>
+    </ul>
+  </div>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
@@ -447,11 +751,91 @@
       <li>"SQS to Step Functions with filtering and no custom code" → EventBridge Pipes. A pipe reads the queue, filters, and starts the target with no function code.</li>
     </ul>
   </div>
+  <h3 class="explain">Explanation</h3>
+  <h3>EventBridge Scheduler</h3>
+  <ul>
+    <li>Schedule types: one-time (<code>at(yyyy-mm-ddThh:mm:ss)</code>), rate (<code>rate(5 minutes)</code>), and cron (<code>cron(min hour day-of-month month day-of-week year)</code>).</li>
+    <li>Use one-time for a single future action, rate for a fixed interval, and cron for calendar times such as "every Monday at 09:00".</li>
+    <li>Cron and one-time schedules run in UTC or in an IANA time zone that you set. Scheduler adjusts for daylight saving time.</li>
+    <li>Precision is 60 seconds.</li>
+    <li>A <strong>flexible time window</strong> spreads invocations over a period. Use it when many schedules run at the same time, so that the target does not get all the calls at once.</li>
+    <li>Delivery is at least once, so the target can get the same invocation two times. Make the target idempotent.</li>
+    <li>You can set retries and a DLQ (a standard SQS queue; FIFO is not supported).</li>
+    <li>Scheduler uses an <strong>execution role</strong> that trusts <code>scheduler.amazonaws.com</code> and allows the target action (for example, <code>sqs:SendMessage</code>). Scheduler does not use the credentials of the person who created the schedule. Without the role permission, each invocation fails.</li>
+    <li>Templated targets: SQS, SNS, Lambda, and EventBridge. They have preset settings for common actions.</li>
+    <li>Universal targets let a schedule call any of more than 6,000 API operations by service and action name.</li>
+    <li>A completed one-time schedule still counts against your quota. Delete it after it runs, or set <code>ActionAfterCompletion</code> to <code>DELETE</code> so that Scheduler deletes it for you.</li>
+    <li>AWS recommends Scheduler for schedules. Scheduled rules are a legacy feature: default bus only, UTC only.</li>
+  </ul>
+  <h3>EventBridge Pipes</h3>
+  <ul>
+    <li>A pipe connects one source to one target: source, optional filter, optional enrichment, target. The filter drops events that the target does not need. Enrichment calls a service (for example, a Lambda function) to add data to each event before the target gets it.</li>
+    <li>Sources: SQS, Kinesis Data Streams, DynamoDB Streams, Amazon MSK, Amazon MQ, and Apache Kafka.</li>
+    <li>Pipes reduce integration code between services. Without a pipe, you write and run a function that reads the source and calls the target.</li>
+    <li>A pipe uses an IAM role; Pipes do not support resource-based policies. So give the pipe role permission to read the source and to call the target.</li>
+  </ul>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/scheduler/latest/UserGuide/schedule-types.html">Scheduler schedule types</a>, <a href="https://docs.aws.amazon.com/scheduler/latest/UserGuide/setting-up.html">Scheduler execution role</a>, <a href="https://docs.aws.amazon.com/scheduler/latest/UserGuide/managing-schedule-delete.html">Scheduler automatic deletion</a>, <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-pipes.html">EventBridge Pipes</a>. Lab: <a href="../../../module-05-messaging-events/lab-03-eventbridge-rules/README.md">Lab 5.3 EventBridge rules</a>.</p>
 </section>
 
 <section id="kinesis-streams">
   <h2>Kinesis Data Streams: shards, partition keys, and consumers</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>A Kinesis data stream is a set of <strong>shards</strong>. The stream capacity is the sum of the shard capacities.</li>
+      <li>One Kinesis shard accepts writes of 1 MB/s or 1,000 records/s.</li>
+      <li>One Kinesis shard gives 2 MB/s of reads in total for all shared-throughput consumers.</li>
+      <li>One Kinesis shard allows 5 <code>GetRecords</code> calls each second.</li>
+      <li><strong>Enhanced fan-out</strong> gives each consumer its own 2 MB/s for each shard, pushed over HTTP/2 (<code>SubscribeToShard</code>).</li>
+      <li>A Kinesis stream allows up to 20 enhanced fan-out consumers (provisioned and on-demand standard).</li>
+      <li>Kinesis retention has a default of 24 hours and a maximum of 8,760 hours (365 days).</li>
+      <li>A Kinesis record holds up to 10 MiB of data before base64 encoding. Older study material says 1 MB.</li>
+      <li><code>PutRecords</code> takes up to 500 records in one request.</li>
+      <li>A Kinesis stream can switch capacity mode two times in 24 hours.</li>
+      <li>The <strong>partition key</strong> decides the shard. Kinesis hashes the key (MD5) to a 128-bit number.</li>
+      <li>Records with the same partition key go to the same shard, in order.</li>
+      <li>Kinesis keeps order inside a shard, not across shards.</li>
+      <li>A <strong>hot shard</strong> gets more writes than its limit while other shards are almost idle.</li>
+      <li>A partition key with few distinct values, or one very busy value, causes a hot shard.</li>
+      <li>Writes to a hot shard fail with <code>ProvisionedThroughputExceededException</code>, even when the stream has spare capacity.</li>
+      <li>To fix <code>ProvisionedThroughputExceededException</code>, retry with exponential backoff, spread partition keys, or add shards.</li>
+      <li>Kinesis does not write a throttled record. The producer must retry it, or the record is lost.</li>
+      <li><code>PutRecords</code> can partly fail. Check <code>FailedRecordCount</code> and send the failed records again.</li>
+      <li>In provisioned mode, you set the shard count. Choose provisioned mode for steady, predictable traffic.</li>
+      <li>In on-demand mode, Kinesis scales shards. Choose on-demand mode when traffic is unknown or changes quickly.</li>
+      <li><strong>Resharding</strong> (provisioned mode) splits one shard into two or merges two shards into one.</li>
+      <li><code>UpdateShardCount</code> changes the shard count of the whole stream.</li>
+      <li>After resharding, the parent shard is closed for writes, but its records stay readable until retention ends.</li>
+      <li>Read the parent shard before its child shards to keep the order.</li>
+      <li>The <code>IteratorAge</code> metric shows how far a consumer is behind the newest record.</li>
+      <li>A rising <code>IteratorAge</code> means that consumers cannot keep up, and data can expire before it is read.</li>
+      <li>To lower Lambda <code>IteratorAge</code>, increase <code>ParallelizationFactor</code>, add shards, or make the function faster.</li>
+      <li><code>ParallelizationFactor</code> (1 to 10) is the number of batches that Lambda processes at the same time from each shard.</li>
+      <li>With a <code>ParallelizationFactor</code> above 1, Lambda still keeps the order for each partition key.</li>
+      <li>Kinesis keeps data until retention ends, so many consumers can read it and a consumer can replay it.</li>
+      <li>Shared-throughput latency is about 200 ms with one consumer. Enhanced fan-out latency is about 70 ms.</li>
+      <li>Choose enhanced fan-out when several consumers read the same stream or when you need low latency.</li>
+      <li>In provisioned mode, enhanced fan-out adds a charge for each consumer-shard hour and for each GB read.</li>
+      <li>The <strong>Kinesis Client Library</strong> (KCL) uses a DynamoDB table to track shard leases and checkpoints.</li>
+      <li>Kinesis server-side encryption uses AWS KMS keys.</li>
+      <li>Without <code>kms:GenerateDataKey</code>, the producer <code>PutRecord</code> calls to an encrypted stream fail.</li>
+      <li>Without <code>kms:Decrypt</code>, the consumer <code>GetRecords</code> calls to an encrypted stream fail.</li>
+      <li>In a Lambda event, the Kinesis record <code>data</code> is base64-encoded. Decode it before you parse it.</li>
+      <li>Kinesis on-failure destinations SQS and SNS get batch metadata only: stream ARN, shard ID, and sequence numbers.</li>
+      <li>A Kinesis on-failure destination in Amazon S3 also gets the records.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Several applications read the same records in order, and replay is needed" → Kinesis Data Streams. Reading does not delete records, so each application reads all records.</li>
+      <li>"Five consumers on one stream are slow and throttled" → enhanced fan-out. Each consumer gets its own 2 MB/s for each shard.</li>
+      <li>"One shard is throttled, the others are idle" → better partition key. The current key sends too many records to one shard.</li>
+      <li>"Keep records for 30 days for reprocessing" → increase retention (up to 365 days).</li>
+      <li>"IteratorAge of the Lambda consumer keeps growing" → increase <code>ParallelizationFactor</code> or add shards. Both let Lambda process more batches at the same time.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <p>A Kinesis data stream is a set of shards. A shard is an ordered sequence of records with a fixed write and read capacity. The capacity of the stream is the sum of the capacity of its shards.</p>
   <h3>Numbers to memorize</h3>
   <table>
@@ -469,36 +853,80 @@
   <ul>
     <li>The <strong>partition key</strong> decides the shard. Kinesis hashes the key (MD5) to a 128-bit number, and each shard owns a range of those numbers. Records with the same key therefore go to the same shard, in order.</li>
     <li>Order is kept inside a shard, not across shards.</li>
-    <li>A hot shard is a shard that gets more writes than its limit (1 MB/s or 1,000 records/s) while other shards are almost idle. It comes from a partition key with few distinct values, or one value with much more traffic. Writes to the hot shard fail with <code>ProvisionedThroughputExceededException</code>, even when the stream has spare capacity. Use a key with many distinct values. Example: with device type as the key, 3 types fill at most 3 shards; with device ID, writes spread across all shards.</li>
+    <li>A hot shard is a shard that gets more writes than its limit (1 MB/s or 1,000 records/s) while other shards are almost idle. It comes from a partition key with few distinct values, or one value with much more traffic.</li>
+    <li>Writes to the hot shard fail with <code>ProvisionedThroughputExceededException</code>, even when the stream has spare capacity.</li>
+    <li>Use a key with many distinct values. Example: with device type as the key, 3 types fill at most 3 shards; with device ID, writes spread across all shards.</li>
     <li><code>ProvisionedThroughputExceededException</code>: retry with exponential backoff, spread partition keys, or add shards. A throttled record is not written, so the producer must retry it or the record is lost.</li>
     <li><code>PutRecords</code> can partly fail. Check <code>FailedRecordCount</code> in the response and send the failed records again.</li>
-    <li>Provisioned mode: you set the shard count. On-demand mode: Kinesis scales shards for you. Choose provisioned mode for steady, predictable traffic. Choose on-demand mode when traffic is unknown or changes quickly.</li>
+    <li>Provisioned mode: you set the shard count. On-demand mode: Kinesis scales shards for you.</li>
+    <li>Choose provisioned mode for steady, predictable traffic. Choose on-demand mode when traffic is unknown or changes quickly.</li>
     <li><strong>Resharding</strong> (provisioned mode): split one shard into two (more capacity, more cost) or merge two shards into one. <code>UpdateShardCount</code> changes the shard count of the whole stream.</li>
-    <li>After resharding, the parent shard is closed for writes. Its records stay readable until retention ends. Read the parent shard before its child shards to keep the order. The parent holds the older records for the same keys.</li>
+    <li>After resharding, the parent shard is closed for writes. Its records stay readable until retention ends.</li>
+    <li>Read the parent shard before its child shards to keep the order. The parent holds the older records for the same keys.</li>
     <li>The <code>IteratorAge</code> metric shows how far a consumer is behind the newest record. A rising value means consumers cannot keep up, and data can expire before it is read.</li>
-    <li>To lower Lambda <code>IteratorAge</code>: increase <code>ParallelizationFactor</code>, add shards, or make the function faster. <code>ParallelizationFactor</code> (1 to 10) is the number of batches that Lambda processes at the same time from each shard. Lambda still keeps the order for each partition key.</li>
+    <li>To lower Lambda <code>IteratorAge</code>: increase <code>ParallelizationFactor</code>, add shards, or make the function faster.</li>
+    <li><code>ParallelizationFactor</code> (1 to 10) is the number of batches that Lambda processes at the same time from each shard. Lambda still keeps the order for each partition key.</li>
     <li>Data stays in the stream until retention ends. Many consumers can read it, and a consumer can read it again (replay).</li>
-    <li>Shared-throughput consumers share 2 MB/s for each shard; latency is about 200 ms with one consumer. Enhanced fan-out latency is about 70 ms. Choose enhanced fan-out when several consumers read the same stream or when you need low latency. In provisioned mode, it adds a charge for each consumer-shard hour and for each GB of data read.</li>
+    <li>Shared-throughput consumers share 2 MB/s for each shard; latency is about 200 ms with one consumer. Enhanced fan-out latency is about 70 ms.</li>
+    <li>Choose enhanced fan-out when several consumers read the same stream or when you need low latency. In provisioned mode, it adds a charge for each consumer-shard hour and for each GB of data read.</li>
     <li>Kinesis Client Library (KCL) uses an Amazon DynamoDB table to track shard leases and checkpoints. A lease records which worker reads which shard, so that workers share the shards. A checkpoint records the last processed record, so that a restarted worker continues from that point.</li>
-    <li>Server-side encryption uses AWS KMS keys. Producers and consumers need permission to use the key. Without <code>kms:GenerateDataKey</code>, the producer's <code>PutRecord</code> calls fail. Without <code>kms:Decrypt</code>, the consumer's <code>GetRecords</code> calls fail.</li>
+    <li>Server-side encryption uses AWS KMS keys. Producers and consumers need permission to use the key.</li>
+    <li>Without <code>kms:GenerateDataKey</code>, the producer's <code>PutRecord</code> calls fail. Without <code>kms:Decrypt</code>, the consumer's <code>GetRecords</code> calls fail.</li>
     <li>In a Lambda event, the record <code>data</code> is base64-encoded. Decode it before you parse the payload.</li>
-    <li>Lambda event source mapping on-failure destinations: SQS and SNS get batch metadata only: the stream ARN, shard ID, and first and last sequence numbers. Use them to read the records from the stream before retention ends. Amazon S3 also gets the records. See the Module 1 sheet for the other stream settings.</li>
+    <li>Lambda event source mapping on-failure destinations: SQS and SNS get batch metadata only: the stream ARN, shard ID, and first and last sequence numbers. Use them to read the records from the stream before retention ends.</li>
+    <li>Amazon S3 also gets the records. See the Module 1 sheet for the other stream settings.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Several applications read the same records in order, and replay is needed" → Kinesis Data Streams. Reading does not delete records, so each application reads all records.</li>
-      <li>"Five consumers on one stream are slow and throttled" → enhanced fan-out. Each consumer gets its own 2 MB/s for each shard.</li>
-      <li>"One shard is throttled, the others are idle" → better partition key. The current key sends too many records to one shard.</li>
-      <li>"Keep records for 30 days for reprocessing" → increase retention (up to 365 days).</li>
-      <li>"IteratorAge of the Lambda consumer keeps growing" → increase <code>ParallelizationFactor</code> or add shards. Both let Lambda process more batches at the same time.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/streams/latest/dev/service-sizes-and-limits.html">Kinesis quotas and limits</a>, <a href="https://docs.aws.amazon.com/streams/latest/dev/key-concepts.html">Kinesis terminology (shards, partition key hashing)</a>, <a href="https://docs.aws.amazon.com/streams/latest/dev/enhanced-consumers.html">Enhanced fan-out</a>, <a href="https://aws.amazon.com/kinesis/data-streams/pricing/">Kinesis pricing</a>, <a href="https://docs.aws.amazon.com/streams/latest/dev/permissions-user-key-KMS.html">KMS permissions for streams</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/kinesis-on-failure-destination.html">Kinesis ESM on-failure destinations</a>, <a href="https://docs.aws.amazon.com/streams/latest/dev/kinesis-using-sdk-java-resharding.html">Resharding</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html">Lambda with Kinesis</a>. Lab: <a href="../../../module-05-messaging-events/lab-05-kinesis-data-streams/README.md">Lab 5.5 Kinesis Data Streams</a>.</p>
 </section>
 
 <section id="kinesis-firehose">
   <h2>Amazon Data Firehose</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li><strong>Amazon Data Firehose</strong> delivers data to destinations with no consumer code.</li>
+      <li>Firehose does not store records, so Firehose has no replay.</li>
+      <li>Firehose scales automatically and has no shards.</li>
+      <li>Choose Firehose when you only need to load data into a store such as Amazon S3, with no code.</li>
+      <li>Choose Kinesis Data Streams when your own applications must read the records, or must read them again.</li>
+      <li>Firehose sources are Direct PUT (<code>PutRecord</code>, <code>PutRecordBatch</code>), Kinesis Data Streams, and Amazon MSK.</li>
+      <li>Firehose destinations include S3, Redshift, OpenSearch, Apache Iceberg tables, Splunk, Snowflake, HTTP endpoints, and partner services.</li>
+      <li>Firehose delivers when the buffer size <strong>or</strong> the buffer interval is reached first.</li>
+      <li>The Firehose S3 buffer size has a default of 5 MiB and a range of 1 to 128 MiB.</li>
+      <li>The Firehose S3 buffer interval has a default of 300 seconds and a range of 0 to 900 seconds.</li>
+      <li>A buffer interval of 0 (zero buffering) delivers within a few seconds. Older study material says the minimum is 60 seconds.</li>
+      <li>Zero buffering is not available with dynamic partitioning or for the S3 backup destination.</li>
+      <li>A buffer interval of less than 60 seconds to S3 uses multipart upload, which adds S3 PUT cost.</li>
+      <li>Small buffers make many small files, which slow down analytics queries and add S3 request cost.</li>
+      <li>Large buffers make fewer, larger files for analytics, but the data arrives later.</li>
+      <li>A Firehose <strong>Lambda transformation</strong> changes, masks, or drops records before delivery.</li>
+      <li>Firehose <strong>format conversion</strong> changes JSON to Apache Parquet or ORC, with the schema in an AWS Glue table.</li>
+      <li>Parquet and ORC make Amazon Athena queries faster and cheaper.</li>
+      <li>Firehose can compress data before delivery, for example with GZIP.</li>
+      <li><strong>Dynamic partitioning</strong> writes each record under an S3 prefix that comes from a key in the record.</li>
+      <li><strong>Source record backup</strong> writes the original source records to an S3 bucket.</li>
+      <li>A common pattern: Kinesis Data Streams keeps data for replay, and Firehose archives the stream to S3.</li>
+      <li>Firehose invokes the transformation function synchronously with a batch. The function can run for up to 5 minutes.</li>
+      <li>Each returned record needs <code>recordId</code> (same as input), <code>result</code>, and <code>data</code> (base64-encoded).</li>
+      <li>Firehose treats a returned <code>recordId</code> that does not match the input as a transformation failure.</li>
+      <li>The <code>result</code> value <code>Ok</code> delivers the record.</li>
+      <li>The <code>result</code> value <code>Dropped</code> removes the record on purpose, and Firehose counts it as a success.</li>
+      <li>The <code>result</code> value <code>ProcessingFailed</code> tells Firehose that the record is an error.</li>
+      <li>Firehose retries a failed transformation invocation 3 times by default.</li>
+      <li>Firehose writes failed records to the <code>processing-failed</code> folder in the S3 bucket.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Load clickstream data into S3 with the least operational overhead" → Data Firehose. It is fully managed and needs no consumer code.</li>
+      <li>"Store as Parquet for Amazon Athena" → Firehose format conversion.</li>
+      <li>"Write S3 prefixes by customer ID from the record" → dynamic partitioning.</li>
+      <li>"Remove some records and mask fields before delivery" → Lambda transformation with <code>Dropped</code> and <code>Ok</code>. <code>Dropped</code> removes a record without an error, and <code>Ok</code> delivers the changed record.</li>
+      <li>"Replay data or custom real-time consumers" → Kinesis Data Streams, not Firehose. Firehose does not store records, so nothing can read them again.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Comparison</h3>
   <table>
     <tr><th>Item</th><th>Data Firehose</th><th>Kinesis Data Streams</th></tr>
@@ -506,7 +934,8 @@
     <tr><td>Storage and replay</td><td>No storage, no replay</td><td>Retention of 24 hours to 365 days; replay is possible</td></tr>
     <tr><td>Capacity</td><td>Scales automatically; no shards</td><td>Shards (provisioned) or on-demand</td></tr>
   </table>
-  <p>Choose Firehose when you only need to load data into a store such as Amazon S3, with no code to run. Choose Kinesis Data Streams when your own applications must read the records, or when you need to read the records again.</p>
+  <p>Choose Firehose when you only need to load data into a store such as Amazon S3, with no code to run.</p>
+  <p>Choose Kinesis Data Streams when your own applications must read the records, or when you need to read the records again.</p>
   <h3>Key facts</h3>
   <ul>
     <li>Sources: Direct PUT (<code>PutRecord</code>, <code>PutRecordBatch</code>), Kinesis Data Streams, and Amazon MSK. Direct PUT means that producers call the Firehose API themselves.</li>
@@ -533,7 +962,8 @@
     <li>A buffer interval of 0 (zero buffering) delivers within a few seconds. Older study material says the minimum is 60 seconds.</li>
     <li>Zero buffering is not available with dynamic partitioning or for the S3 backup destination.</li>
     <li>An interval of less than 60 seconds to S3 uses multipart upload, which adds S3 PUT cost.</li>
-    <li>Small buffers make many small files. Many small files slow down analytics queries and add S3 request cost. Larger buffers make fewer, larger files for analytics, but the data arrives later.</li>
+    <li>Small buffers make many small files. Many small files slow down analytics queries and add S3 request cost.</li>
+    <li>Larger buffers make fewer, larger files for analytics, but the data arrives later.</li>
   </ul>
   <h3>Lambda transformation</h3>
   <ul>
@@ -542,26 +972,56 @@
     <li><code>result</code> values: <code>Ok</code> (deliver the record), <code>Dropped</code> (removed on purpose; Firehose counts it as a success and does not deliver it), <code>ProcessingFailed</code> (the function could not transform it; Firehose treats it as an error).</li>
     <li>Firehose retries a failed invocation 3 times by default. Failed records go to the <code>processing-failed</code> folder in the S3 bucket.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Load clickstream data into S3 with the least operational overhead" → Data Firehose. It is fully managed and needs no consumer code.</li>
-      <li>"Store as Parquet for Amazon Athena" → Firehose format conversion.</li>
-      <li>"Write S3 prefixes by customer ID from the record" → dynamic partitioning.</li>
-      <li>"Remove some records and mask fields before delivery" → Lambda transformation with <code>Dropped</code> and <code>Ok</code>. <code>Dropped</code> removes a record without an error, and <code>Ok</code> delivers the changed record.</li>
-      <li>"Replay data or custom real-time consumers" → Kinesis Data Streams, not Firehose. Firehose does not store records, so nothing can read them again.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/firehose/latest/dev/create-configure-backup.html">Buffering hints and backup</a>, <a href="https://docs.aws.amazon.com/firehose/latest/APIReference/API_BufferingHints.html">BufferingHints API</a>, <a href="https://docs.aws.amazon.com/firehose/latest/dev/data-transformation.html">Data transformation</a>, <a href="https://docs.aws.amazon.com/firehose/latest/dev/data-transformation-status-model.html">Transformation result values</a>, <a href="https://docs.aws.amazon.com/firehose/latest/dev/data-transformation-failure-handling.html">Transformation failure handling</a>. Lab: <a href="../../../module-05-messaging-events/lab-06-kinesis-firehose/README.md">Lab 5.6 Firehose</a>.</p>
 </section>
 
 <section id="appsync-api">
   <h2>AppSync resolvers, subscriptions, and caching</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li><strong>AWS AppSync</strong> is a managed GraphQL API.</li>
+      <li>A GraphQL client names the fields it needs in one request, and the API returns only those fields.</li>
+      <li>In GraphQL, a query reads data, a mutation changes data, and a subscription receives changes in real time.</li>
+      <li>AppSync data sources are DynamoDB, Lambda, OpenSearch Service, HTTP endpoints, EventBridge, Amazon RDS, and None.</li>
+      <li>A None data source stores nothing. Use it when the resolver can create the result itself.</li>
+      <li>A <strong>resolver</strong> connects a field to a data source.</li>
+      <li>Write AppSync resolvers in JavaScript (<code>APPSYNC_JS</code>) or VTL, the older template format.</li>
+      <li>A unit resolver uses one data source.</li>
+      <li>A <strong>pipeline resolver</strong> runs functions in order and can use several data sources for one field.</li>
+      <li>Direct DynamoDB resolvers do simple CRUD with no Lambda function to write, run, or pay for.</li>
+      <li>AppSync calls data sources with an IAM role that trusts <code>appsync.amazonaws.com</code> and allows the data source actions.</li>
+      <li>AppSync subscriptions push data to clients over WebSockets.</li>
+      <li>A <strong>mutation</strong> triggers a subscription. Use <code>@aws_subscribe(mutations: ["addPost"])</code> on the subscription field.</li>
+      <li>A change made directly in the data source, not through an AppSync mutation, does not trigger a subscription.</li>
+      <li>Subscription arguments filter which mutation results a client gets.</li>
+      <li>An AppSync cache returns a stored result without a data source call, so it lowers latency and data source load.</li>
+      <li>Full request caching caches all resolver results, with keys from <code>context.arguments</code> and <code>context.identity</code>.</li>
+      <li>Per-resolver caching caches only the resolvers that opt in, each with its own TTL and keys.</li>
+      <li>Operation level caching caches whole query responses.</li>
+      <li>Choose per-resolver caching when only some fields are read often or can be stale for a time.</li>
+      <li>The AppSync maximum cache TTL is 3,600 seconds (1 hour).</li>
+      <li>New AppSync caches are always encrypted at rest and in transit.</li>
+      <li>Flush the whole AppSync cache with the console or CLI.</li>
+      <li>Call <code>evictFromApiCache</code> in a mutation resolver to remove one cache entry for a changed item.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Mobile app needs data from DynamoDB and a REST service in one request" → AppSync with two data sources (pipeline resolver if one field needs both). One GraphQL request can read fields from several data sources.</li>
+      <li>"Clients must get updates in real time when data changes" → AppSync subscriptions linked to mutations. AppSync pushes each mutation result to the subscribed clients.</li>
+      <li>"Read-heavy GraphQL API, reduce data source load" → AppSync caching. Repeated queries get the cached result, not a data source call.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
-    <li>AWS AppSync is a managed GraphQL API. GraphQL is a query language for APIs. The client names the fields it needs in one request, and the API returns only those fields. One request can get data that a REST client gets with several requests.</li>
+    <li>AWS AppSync is a managed GraphQL API. GraphQL is a query language for APIs.</li>
+    <li>The client names the fields it needs in one request, and the API returns only those fields. One request can get data that a REST client gets with several requests.</li>
     <li>In GraphQL, a query reads data, a mutation changes data, and a subscription receives changes in real time.</li>
-    <li>Data sources: Amazon DynamoDB, AWS Lambda, OpenSearch Service, HTTP endpoints, Amazon EventBridge, relational databases (Amazon RDS), and None (local). A None data source stores nothing; use it when the resolver can create the result itself, for example to convert data.</li>
+    <li>Data sources: Amazon DynamoDB, AWS Lambda, OpenSearch Service, HTTP endpoints, Amazon EventBridge, relational databases (Amazon RDS), and None (local).</li>
+    <li>A None data source stores nothing; use it when the resolver can create the result itself, for example to convert data.</li>
     <li>A <strong>resolver</strong> connects a field to a data source. Write resolvers in JavaScript (<code>APPSYNC_JS</code>) or VTL (Velocity Template Language, the older template format).</li>
     <li>A unit resolver uses one data source. A <strong>pipeline resolver</strong> runs functions in order and can use several data sources for one field. Example: the first function checks a permission in one table, and the second function reads the item.</li>
     <li>Direct DynamoDB resolvers do simple CRUD (create, read, update, delete) with no Lambda function. There is no function to write, run, or pay for.</li>
@@ -582,25 +1042,53 @@
     <tr><td>Per-resolver caching</td><td>Only resolvers that opt in, with their own TTL and keys</td></tr>
     <tr><td>Operation level caching</td><td>Whole query responses</td></tr>
   </table>
-  <p>A cache returns a stored result without a call to the data source, so it lowers latency and data source load. The TTL (time to live) is how long an entry stays in the cache. Choose per-resolver caching when only some fields are read often or can be stale for a time. Full request caching caches every resolver.</p>
+  <p>A cache returns a stored result without a call to the data source, so it lowers latency and data source load. The TTL (time to live) is how long an entry stays in the cache.</p>
+  <p>Choose per-resolver caching when only some fields are read often or can be stale for a time. Full request caching caches every resolver.</p>
   <ul>
     <li>Maximum cache TTL: 3,600 seconds (1 hour).</li>
     <li>New caches are always encrypted at rest and in transit.</li>
     <li>Flush the whole cache with the console or CLI, or remove one entry with <code>evictFromApiCache</code> in a resolver. Call it in a mutation that changes an item, so that the next query does not return the old cached data.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Mobile app needs data from DynamoDB and a REST service in one request" → AppSync with two data sources (pipeline resolver if one field needs both). One GraphQL request can read fields from several data sources.</li>
-      <li>"Clients must get updates in real time when data changes" → AppSync subscriptions linked to mutations. AppSync pushes each mutation result to the subscribed clients.</li>
-      <li>"Read-heavy GraphQL API, reduce data source load" → AppSync caching. Repeated queries get the cached result, not a data source call.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/appsync/latest/devguide/data-source-components.html">Data sources</a>, <a href="https://docs.aws.amazon.com/appsync/latest/devguide/aws-appsync-real-time-data.html">Subscriptions</a>, <a href="https://docs.aws.amazon.com/appsync/latest/devguide/enabling-caching.html">Caching</a>. Lab: <a href="../../../module-05-messaging-events/lab-07-appsync-graphql/README.md">Lab 5.7 AppSync GraphQL</a>.</p>
 </section>
 
 <section id="appsync-auth">
   <h2>AppSync authorization modes</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Use <code>API_KEY</code> for development or for public data that is safe to expose. An API key is not user identity.</li>
+      <li>An <code>API_KEY</code> client sends the key in the <code>x-api-key</code> header.</li>
+      <li>Use <code>AWS_IAM</code> for AWS services, or for apps with Cognito identity pool credentials. The client signs requests with SigV4.</li>
+      <li>Use <code>AMAZON_COGNITO_USER_POOLS</code> for signed-in users and group-based access. The client sends a JWT in the <code>Authorization</code> header.</li>
+      <li>Use <code>OPENID_CONNECT</code> for users of a third-party OIDC provider. The client sends an OIDC token.</li>
+      <li>Use <code>AWS_LAMBDA</code> for custom authorization logic. The client sends a token in the <code>Authorization</code> header.</li>
+      <li>An AppSync API key can expire up to 365 days after you set it.</li>
+      <li>You can extend an AppSync API key up to 365 days more. After the key expires, requests with it fail.</li>
+      <li>One AppSync API can use a default mode plus <strong>additional modes</strong>.</li>
+      <li>Schema directives set the mode for a type or field: <code>@aws_api_key</code>, <code>@aws_iam</code>, <code>@aws_cognito_user_pools</code>, <code>@aws_oidc</code>, <code>@aws_lambda</code>.</li>
+      <li>A field with no directive uses the default mode.</li>
+      <li>When Cognito is the only mode, restrict to groups with <code>@aws_auth(cognito_groups: ["Admins"])</code>.</li>
+      <li>With additional modes, restrict to Cognito groups with <code>@aws_cognito_user_pools(cognito_groups: [...])</code>.</li>
+      <li>In IAM mode, allow <code>appsync:GraphQL</code> on the API, or on field ARNs to allow only some fields.</li>
+      <li>An AppSync API can have one <strong>Lambda authorizer</strong>.</li>
+      <li>A Lambda authorizer returns <code>isAuthorized</code> and can return <code>deniedFields</code> and <code>ttlOverride</code>.</li>
+      <li>AppSync returns null for each field in <code>deniedFields</code>, even when the request is allowed.</li>
+      <li><code>ttlOverride</code> sets how long AppSync caches the Lambda authorizer result.</li>
+      <li>The Lambda authorizer function needs a resource policy that allows <code>appsync.amazonaws.com</code>.</li>
+      <li>For fine-grained data access, compare <code>ctx.identity</code> with the item in the resolver.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Public read for guests, write only for signed-in users" → API key or IAM (guest) for queries plus Cognito user pools for mutations, with directives. Additional modes let each field use the mode that fits its callers.</li>
+      <li>"Only the Admins group may call deletePost" → Cognito group in a directive. AppSync reads the groups from the user token, so no resolver code is needed.</li>
+      <li>"Backend service in AWS calls the API" → <code>AWS_IAM</code>. The service signs requests with its IAM role credentials, so it needs no stored secret.</li>
+      <li>"Production API uses an API key that will expire" → move to Cognito or IAM; API keys are not user identity. Anyone who has the key can call the API, and the key stops working when it expires.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Comparison</h3>
   <table>
     <tr><th>Mode</th><th>Use</th><th>Client sends</th></tr>
@@ -618,18 +1106,11 @@
     <li>A field with no directive uses the default mode.</li>
     <li>Cognito groups: <code>@aws_auth(cognito_groups: ["Admins"])</code> when Cognito is the only mode. With additional modes, use <code>@aws_cognito_user_pools(cognito_groups: [...])</code>.</li>
     <li>IAM mode: allow <code>appsync:GraphQL</code> on the API, or on field ARNs such as <code>.../types/Query/fields/getPost</code>. Use field ARNs to let a role call only some fields.</li>
-    <li>Lambda authorizer: one for each API. It returns <code>isAuthorized</code> and can return <code>deniedFields</code> and <code>ttlOverride</code>. AppSync returns null for each field in <code>deniedFields</code>, even when the request is allowed. <code>ttlOverride</code> sets how long AppSync caches the result, so that the function is not called for every request. The function needs a resource policy that allows <code>appsync.amazonaws.com</code>.</li>
+    <li>Lambda authorizer: one for each API. It returns <code>isAuthorized</code> and can return <code>deniedFields</code> and <code>ttlOverride</code>.</li>
+    <li>AppSync returns null for each field in <code>deniedFields</code>, even when the request is allowed. <code>ttlOverride</code> sets how long AppSync caches the result, so that the function is not called for every request.</li>
+    <li>The function needs a resource policy that allows <code>appsync.amazonaws.com</code>.</li>
     <li>Fine-grained data access (for example, only the owner can edit an item): compare <code>ctx.identity</code> with the item in the resolver. <code>ctx.identity</code> holds the caller identity, for example the Cognito user name.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Public read for guests, write only for signed-in users" → API key or IAM (guest) for queries plus Cognito user pools for mutations, with directives. Additional modes let each field use the mode that fits its callers.</li>
-      <li>"Only the Admins group may call deletePost" → Cognito group in a directive. AppSync reads the groups from the user token, so no resolver code is needed.</li>
-      <li>"Backend service in AWS calls the API" → <code>AWS_IAM</code>. The service signs requests with its IAM role credentials, so it needs no stored secret.</li>
-      <li>"Production API uses an API key that will expire" → move to Cognito or IAM; API keys are not user identity. Anyone who has the key can call the API, and the key stops working when it expires.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/appsync/latest/devguide/security-authz.html">AppSync authorization and authentication</a>. Lab: <a href="../../../module-05-messaging-events/lab-07-appsync-graphql/README.md">Lab 5.7 AppSync GraphQL</a>.</p>
 </section>
 
