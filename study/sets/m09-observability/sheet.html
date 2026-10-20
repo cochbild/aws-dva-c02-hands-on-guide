@@ -58,7 +58,6 @@
       <li>To remove a retention policy (Never expire), call <code>DeleteRetentionPolicy</code>.</li>
       <li>A log event has a maximum size of 1 MB (1,024 KB). Older study material says 256 KB.</li>
       <li>A <code>PutLogEvents</code> batch has a maximum size of 1 MB.</li>
-      <li>Log events come from AWS services such as Lambda, the CloudWatch agent, and your own <code>PutLogEvents</code> calls.</li>
       <li>The Infrequent Access log class has a lower ingestion price per GB, but fewer features.</li>
       <li>Metric filters, subscription filters, EMF, and Live Tail need the <strong>Standard</strong> log class.</li>
       <li>Use Infrequent Access for logs that you keep only for occasional queries or forensics.</li>
@@ -224,7 +223,6 @@
     <ul>
       <li><strong>Logs Insights</strong> runs interactive, read-only queries on log data and does not change stored logs.</li>
       <li>Logs Insights supports Logs Insights QL (the native language), OpenSearch PPL, and OpenSearch SQL.</li>
-      <li>Logs Insights joins commands with the pipe (<code>|</code>), and each command works on the output of the previous command.</li>
       <li>The main Logs Insights commands are <code>fields</code>, <code>filter</code>, <code>stats</code>, <code>sort</code>, <code>limit</code>, <code>parse</code>, <code>display</code>, and <code>dedup</code>.</li>
       <li>To extract fields from unstructured text, use <code>parse</code> with a glob pattern (<code>*</code>) or a regular expression.</li>
       <li>The <code>stats</code> functions include <code>count()</code>, <code>sum()</code>, <code>avg()</code>, <code>min()</code>, <code>max()</code>, and <code>pct()</code>.</li>
@@ -239,7 +237,7 @@
       <li>To make a Logs Insights query cheaper and faster, use a narrow time range and only the necessary log groups.</li>
       <li>An API query is asynchronous: <code>StartQuery</code> returns a <code>queryId</code> at once.</li>
       <li>Call <code>GetQueryResults</code> with the <code>queryId</code> until the status is <code>Complete</code>.</li>
-      <li>A Logs Insights query times out after 60 minutes. Older study material (the lab README) says 60 seconds.</li>
+      <li>A Logs Insights query times out after 60 minutes. Older study material (the lab README) wrongly says 60 seconds.</li>
       <li>One Logs Insights query can search at most 50 log groups (<code>logGroupNames</code>).</li>
       <li>An account can run 100 concurrent Logs Insights QL queries, including dashboard queries. Older study material says 30.</li>
       <li>Logs Insights keeps query results for 7 days.</li>
@@ -376,7 +374,7 @@
       <li>A high-cardinality dimension makes the metric bill grow, and each metric holds only one or two data points.</li>
       <li>CloudWatch does not aggregate custom metrics across dimensions.</li>
       <li>To retrieve a custom metric, use the same dimensions that you published.</li>
-      <li>To get a per-service total, also publish the metric with only the <code>Service</code> dimension.</li>
+      <li>A metric published with <code>Service</code> and <code>Operation</code> has no per-service total until you also publish it with only <code>Service</code>.</li>
       <li>A metric exists only in the Region where you create it.</li>
       <li>You cannot delete a metric, but a metric expires after 15 months with no new data.</li>
       <li>A data point time stamp can be up to 2 weeks in the past and up to 2 hours in the future.</li>
@@ -742,7 +740,6 @@
       <li><strong>Application Signals</strong> collects metrics and traces automatically, with the CloudWatch agent and ADOT.</li>
       <li>Application Signals shows call volume, availability, latency, faults, and errors.</li>
       <li>Application Signals supports service level objectives (SLOs) and an application map.</li>
-      <li>An <strong>SLO</strong> is a target. Example: "99.9 percent of requests succeed in each 30 days".</li>
       <li>Use Application Signals for service health and SLOs without custom code or dashboards.</li>
       <li>A Synthetics <strong>canary</strong> is a script (Node.js, Python, or Java) that runs on a schedule.</li>
       <li>A canary can run as often as once each minute.</li>
@@ -753,7 +750,6 @@
       <li>Canaries can store screenshots and load times.</li>
       <li>To see a canary on the trace map and in Application Signals, turn on X-Ray active tracing for the canary.</li>
       <li><strong>Contributor Insights</strong> rules analyze log events in real time and show the top-N contributors and unique contributors.</li>
-      <li>A Contributor Insights contributor is one value of a log field, such as one client IP address.</li>
       <li>Use Contributor Insights to find the IP addresses, URLs, or hosts that cause the most errors or traffic.</li>
       <li>Contributor Insights charges for each log event that matches a rule.</li>
       <li>Contributor Insights has built-in rules for some AWS services.</li>
@@ -994,18 +990,20 @@
       <li>To keep CloudTrail events longer than 90 days, use a trail or a CloudTrail Lake event data store.</li>
       <li>Use S3 Lifecycle rules to archive or delete trail log files.</li>
       <li>CloudTrail Lake stores events in an event data store that you query with SQL, with no S3 bucket to manage.</li>
+      <li>Use a trail when you want log files in S3, and CloudTrail Lake when you want to query events in place.</li>
       <li>CloudTrail Lake is closed to new customers since May 31, 2026, so a new account uses a trail.</li>
       <li>A trail records events only from the time you create it, not past events.</li>
       <li>CloudTrail delivers log files about every 5 minutes, but the delay is not guaranteed.</li>
       <li>To react to an API call in near real time, use an EventBridge rule, not the S3 log files.</li>
       <li>One copy of ongoing management events in a trail has no CloudTrail charge, but S3 storage is charged.</li>
       <li>A <strong>multi-Region trail</strong> records events in all enabled Regions.</li>
-      <li>Trails created in the console are multi-Region by default.</li>
+      <li>Trails created in the console are always multi-Region trails.</li>
       <li>Trails created with the CLI or API are single-Region by default.</li>
       <li>AWS recommends a multi-Region trail, because a single-Region trail misses activity in other Regions.</li>
       <li>An <strong>organization trail</strong> logs events for all accounts in an AWS Organizations organization.</li>
       <li>Member accounts cannot change an organization trail.</li>
       <li>To use metric filters and alarms on API activity, send a trail to CloudWatch Logs.</li>
+      <li>A CloudTrail event includes <code>eventName</code>, <code>eventSource</code>, <code>userIdentity</code>, <code>sourceIPAddress</code>, <code>requestParameters</code>, and <code>responseElements</code>.</li>
       <li>In a CloudTrail event, <code>userIdentity</code> shows the caller (user or role ARN).</li>
       <li>In a CloudTrail event, <code>eventName</code> shows the API, for example <code>DeleteTable</code>.</li>
       <li>In a CloudTrail event, <code>requestParameters</code> shows the target, for example the table name.</li>
@@ -1070,7 +1068,6 @@
     <h3>Remember</h3>
     <ul>
       <li>With <strong>log file integrity validation</strong> turned on, CloudTrail creates a hash for every log file.</li>
-      <li>A hash is a short value from the file content, and a change of one byte changes the hash.</li>
       <li>Every hour, CloudTrail delivers a <strong>digest file</strong> with the hashes of the last hour's log files.</li>
       <li>CloudTrail signs each digest file with a private key that only CloudTrail has.</li>
       <li>A person who changes a log file cannot also change the signed digest file to match.</li>
