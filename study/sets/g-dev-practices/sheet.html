@@ -56,11 +56,13 @@
       <li><code>adaptive</code> mode adds a client-side rate limiter that also delays the first attempt of new requests after throttling.</li>
       <li>Use <code>adaptive</code> mode for a client that calls one resource and gets frequent throttling.</li>
       <li>Do not use <code>adaptive</code> mode for a client that calls many resources, because its limiter slows all requests from the client.</li>
-      <li><code>legacy</code> mode differs between languages and is the default in AWS CLI version 1, with 5 attempts in total.</li>
+      <li><code>legacy</code> mode is the older behavior of each SDK and differs between languages.</li>
+      <li><code>legacy</code> mode is the default in AWS CLI version 1, with 5 attempts in total.</li>
       <li>Set the retry mode with <code>AWS_RETRY_MODE</code> or the <code>retry_mode</code> config file key.</li>
       <li>Set max attempts with <code>AWS_MAX_ATTEMPTS</code> or the <code>max_attempts</code> config file key.</li>
       <li>Retry setting precedence: client configuration in code, then environment variable, then <code>~/.aws/config</code>, then the SDK default.</li>
-      <li>The exam uses the retry values on this sheet. Older study material also uses them, and <code>AWS_NEW_RETRIES_2026</code> opts in to the 2026 defaults.</li>
+      <li>AWS published updated retry defaults in 2026. <code>AWS_NEW_RETRIES_2026</code> opts in until they become the default.</li>
+      <li>The exam and older study material use the retry values on this sheet.</li>
       <li>To see AWS CLI retry attempts, add <code>--debug</code> and search the output for "retry".</li>
     </ul>
   </div>
@@ -127,7 +129,7 @@
       <li>On an on-demand DynamoDB table, item reads and writes can also get <code>ThrottlingException</code> at a too-high request rate.</li>
       <li>DynamoDB <code>RequestLimitExceeded</code> means throughput is above the account quota; if it continues, request a quota increase.</li>
       <li>Do not retry <code>ConditionalCheckFailedException</code> (a false condition expression); handle it in code as an expected result.</li>
-      <li><code>ResourceNotFoundException</code> also occurs when the resource is still in creation.</li>
+      <li><code>ResourceNotFoundException</code> means the resource does not exist or is still in creation; do not retry it.</li>
       <li>Retry Lambda <code>TooManyRequestsException</code> (429, no concurrency left) with backoff.</li>
       <li>A 500 on a DynamoDB <code>PutItem</code>, <code>UpdateItem</code>, or <code>DeleteItem</code> can mean that the write succeeded.</li>
       <li>After a 500 on a write, read the item or use a condition expression before you retry, or an increment can apply two times.</li>
@@ -145,7 +147,7 @@
       <li>"<code>ProvisionedThroughputExceededException</code> continues" → add capacity or use on-demand mode.</li>
       <li>"<code>ConditionalCheckFailedException</code> on a duplicate write" → expected for an idempotent write: catch it and continue. The condition failed because the first write already stored the item.</li>
       <li>"Lambda Invoke returns 429" → concurrency limit: retry with backoff, or raise the concurrency. Concurrency becomes free when running invocations end.</li>
-      <li>"S3 returns 503 Slow Down" → back off and retry.</li>
+      <li>"S3 returns 503 Slow Down" → back off and retry. If the request rate stays high, spread requests across more prefixes.</li>
       <li>"S3 needs more request throughput" → spread requests across more prefixes. S3 supports at least 3,500 PUT, COPY, POST, or DELETE requests and 5,500 GET or HEAD requests per second for each prefix.</li>
     </ul>
   </div>
@@ -352,7 +354,6 @@
       <li>A circuit breaker keeps the caller threads free and gives the failing service no extra load while it recovers.</li>
       <li>The AWS circuit breaker sample stores the circuit status in a DynamoDB table, a store that all executions share.</li>
       <li>In the AWS sample, an "open" record with an expiry time makes calls fail at once until it expires.</li>
-      <li>In the AWS sample, DynamoDB Time to Live (TTL) deletes the expired circuit records later.</li>
       <li>For one SDK call, put the retries in the SDK retry settings.</li>
       <li>For a workflow step, use the Step Functions <code>Retry</code> field: <code>IntervalSeconds</code>, <code>MaxAttempts</code>, <code>BackoffRate</code>.</li>
       <li>The Step Functions <code>Catch</code> field sends the workflow to an error-handling state when the retries end.</li>
@@ -415,9 +416,9 @@
       <li><code>--cli-input-json</code> reads all parameters from a JSON file, and <code>--generate-cli-skeleton</code> makes a template for that file.</li>
       <li>Use <code>--cli-input-json</code> for a command with many parameters that you run again and again or keep in source control.</li>
       <li>The CLI uses the first <strong>credential source</strong> that has credentials and ignores all later sources.</li>
-      <li>CLI credential order, sources 1 to 3: command line options, environment variables, assume role (then assume role with web identity).</li>
-      <li>CLI credential order, sources 4 to 6: IAM Identity Center, credentials file, custom process.</li>
-      <li>CLI credential order, sources 7 to 9: config file, container credentials (ECS task role), EC2 instance profile credentials.</li>
+      <li>CLI credential order starts with command line options, then environment variables, then assume role and assume role with web identity.</li>
+      <li>CLI credential order continues with IAM Identity Center, then the credentials file, then a custom process.</li>
+      <li>CLI credential order ends with the config file, then container credentials (ECS task role), then EC2 instance profile credentials.</li>
       <li>Old <code>AWS_ACCESS_KEY_ID</code> environment variables override the credentials file profile, so commands run with the wrong identity.</li>
       <li>An assume-role profile sets <code>role_arn</code> and <code>source_profile</code>, and the CLI gets temporary role credentials from AWS STS.</li>
       <li>The <code>credential_process</code> setting runs an external program that prints credentials.</li>
@@ -441,6 +442,7 @@
       <li>Upgrade old SDK and CLI versions before you require IMDSv2, or their requests get 401 and have no credentials.</li>
       <li>In server-side request forgery (SSRF), an attacker makes the application send a request to a URL that the attacker chooses.</li>
       <li>An SSRF request is usually a simple <code>GET</code>, which IMDSv1 answers.</li>
+      <li>Require IMDSv2 to protect instance credentials from SSRF, because the attack usually cannot send the <code>PUT</code> for a token.</li>
       <li><code>--filter</code>, <code>--filters</code>, and <code>--filter-expression</code> run on the server and reduce the data over the network.</li>
       <li><code>--query</code> (JMESPath) runs on the client, after the full response and after server-side filters.</li>
       <li>Use <code>--query</code> to select or reshape fields in the output, for example only the instance IDs.</li>
@@ -535,8 +537,7 @@
       <li>Keep business logic out of the handler: the handler parses the event and calls plain functions.</li>
       <li>A test can call plain functions directly, without a full Lambda event.</li>
       <li><strong>Inject</strong> the SDK client as a parameter, so a test can pass a fake client.</li>
-      <li>Code that creates its own SDK client makes a test patch the SDK module, which is more fragile.</li>
-      <li>Client injection is simpler and works in every language.</li>
+      <li>Code that creates its own SDK client makes a test patch the SDK module, which is more fragile than injection.</li>
       <li>A <strong>mock</strong> or stub is a fake object that returns the responses that the test sets.</li>
       <li>In Python, mock AWS calls with <code>moto</code> or the botocore <code>Stubber</code>.</li>
       <li>In the JavaScript SDK v3, mock AWS calls with <code>aws-sdk-client-mock</code>.</li>
@@ -735,7 +736,6 @@
       <li>The Free tier signs in to the IDE with an AWS Builder ID, and no AWS account is necessary.</li>
       <li>Amazon Q Developer Pro is paid and has higher limits and advanced features.</li>
       <li>An organization subscribes its IAM Identity Center users to Amazon Q Developer Pro.</li>
-      <li>Administrators manage Amazon Q Developer Pro settings in the Amazon Q Developer console.</li>
       <li>AWS plans to end support for the Amazon Q Developer IDE plugins on April 30, 2027.</li>
       <li>AWS names Kiro as the replacement for the Amazon Q Developer IDE plugins, but the exam guide still lists Amazon Q Developer.</li>
     </ul>
