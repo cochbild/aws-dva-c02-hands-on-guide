@@ -38,14 +38,54 @@
 
 <section id="lambda-lifecycle">
   <h2>Execution environment lifecycle and cold starts</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>An <strong>execution environment</strong> is the isolated place where Lambda runs function code, with its own memory and <code>/tmp</code> disk.</li>
+      <li>An execution environment has three phases: Init, Invoke, and Shutdown. SnapStart adds a Restore phase.</li>
+      <li>The Init phase starts the extensions, starts the runtime, and runs the static code outside the handler.</li>
+      <li>Code outside the handler runs one time for each execution environment, not one time for each invocation.</li>
+      <li>Create SDK clients and database connections outside the handler, so that warm invocations use them again.</li>
+      <li>One execution environment processes one request at a time. A concurrent request gets a different environment.</li>
+      <li>A <strong>warm start</strong> uses a frozen environment again, so the Init phase does not run.</li>
+      <li>A <strong>cold start</strong> creates a new environment and runs Init first, which adds latency to that request.</li>
+      <li>Global variables and <code>/tmp</code> content stay in a frozen environment, so use them only as a cache.</li>
+      <li>A cache in global variables or <code>/tmp</code> can be empty, because the next request can go to a new environment.</li>
+      <li>Lambda terminates environments every few hours for maintenance, even for functions with constant traffic.</li>
+      <li>After a crash or a timeout, Lambda resets the environment and runs Init again before the next invocation.</li>
+      <li>An environment reset does not clear <code>/tmp</code>, so files from the failed invocation can still be there.</li>
+      <li>The context object gives the remaining time: <code>getRemainingTimeInMillis()</code> or <code>get_remaining_time_in_millis()</code>.</li>
+      <li>The context object gives the request ID: <code>awsRequestId</code> or <code>aws_request_id</code>.</li>
+      <li>The on-demand Init phase has a limit of 10 seconds.</li>
+      <li>If on-demand Init does not complete in 10 seconds, Lambda tries Init again at the first invocation, with the function timeout.</li>
+      <li>With provisioned concurrency or SnapStart, Init can run for 130 seconds or the function timeout, whichever is higher.</li>
+      <li>The Shutdown phase lasts 0 ms with no extensions, 500 ms with an internal extension, and 2,000 ms with external extensions.</li>
+      <li>Lambda rounds the billed duration up to the nearest 1 ms.</li>
+      <li>The <code>REPORT</code> log line shows <code>Init Duration</code> only after a cold start.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Reuse the database connection between invocations" → open the connection outside the handler, because that code runs only one time for each environment.</li>
+      <li>"Some requests are slow, and the log has Init Duration" → cold starts. Init Duration appears only when Lambda creates a new environment.</li>
+      <li>"Reduce the latency of cold starts" → provisioned concurrency or SnapStart, or reduce the init work.</li>
+      <li>"Cache a downloaded file between invocations" → <code>/tmp</code> in the same environment. Each environment has its own <code>/tmp</code>, so check for the file and download it again when it is missing.</li>
+      <li>"Stop work safely before the timeout" → check the remaining time from the context object.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
-    <li>An <strong>execution environment</strong> is the isolated place where Lambda runs your function code, with its own memory and <code>/tmp</code> disk. It has three phases: <strong>Init</strong>, <strong>Invoke</strong>, and <strong>Shutdown</strong>. SnapStart adds a <strong>Restore</strong> phase.</li>
+    <li>An <strong>execution environment</strong> is the isolated place where Lambda runs your function code, with its own memory and <code>/tmp</code> disk.</li>
+    <li>An execution environment has three phases: <strong>Init</strong>, <strong>Invoke</strong>, and <strong>Shutdown</strong>. SnapStart adds a <strong>Restore</strong> phase.</li>
     <li>Init starts the extensions, starts the runtime, and runs the function code outside the handler. This code is called static code: imports, SDK clients, configuration, and connections at the top level of the file.</li>
     <li>Code outside the handler runs one time for each execution environment, not one time for each invocation.</li>
-    <li>Create SDK clients and database connections outside the handler. Warm invocations then use them again. If you create them inside the handler, every invocation waits for a new connection, and the database can run out of connections.</li>
+    <li>Create SDK clients and database connections outside the handler. Warm invocations then use them again.</li>
+    <li>If you create SDK clients and database connections inside the handler, every invocation waits for a new connection, and the database can run out of connections.</li>
     <li>One execution environment processes one request at a time. A second concurrent request gets a different environment.</li>
-    <li>After an invocation ends, Lambda <strong>freezes</strong> the environment (pauses its processes) and keeps it for some time. A <strong>warm start</strong> uses a frozen environment again, so Init does not run. A <strong>cold start</strong> occurs when no free environment exists: Lambda creates one and runs Init first. The caller sees the cold start as extra latency on that request.</li>
+    <li>After an invocation ends, Lambda <strong>freezes</strong> the environment (pauses its processes) and keeps it for some time. A <strong>warm start</strong> uses a frozen environment again, so Init does not run.</li>
+    <li>A <strong>cold start</strong> occurs when no free environment exists: Lambda creates one and runs Init first. The caller sees the cold start as extra latency on that request.</li>
     <li>Global variables and <code>/tmp</code> content stay in a frozen environment, so the next warm invocation can read them. Use them only as a cache. The next request can go to a different or a new environment where the cache is empty, so the code must also work without it.</li>
     <li>Lambda terminates environments every few hours for runtime updates and maintenance, even for functions with constant traffic. Do not depend on one environment to stay alive.</li>
     <li>If an invocation crashes or times out, Lambda resets the environment: it stops the runtime and runs Init again before the next invocation. The reset does not clear <code>/tmp</code>, so files from the failed invocation can still be there.</li>
@@ -67,20 +107,51 @@
   </table>
   <h3>The REPORT log line</h3>
   <p>Each invocation writes <code>START</code>, <code>END</code>, and <code>REPORT</code> lines. <code>REPORT</code> shows Duration, Billed Duration, Memory Size, and Max Memory Used. <code>Init Duration</code> shows only after a cold start.</p>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Reuse the database connection between invocations" → open the connection outside the handler, because that code runs only one time for each environment.</li>
-      <li>"Some requests are slow, and the log has Init Duration" → cold starts, because Init Duration appears only when Lambda creates a new environment. Fix with provisioned concurrency or SnapStart, or reduce init work.</li>
-      <li>"Cache a downloaded file between invocations" → <code>/tmp</code> in the same environment. Each environment has its own <code>/tmp</code>, so check for the file and download it again when it is missing.</li>
-      <li>"Stop work safely before the timeout" → check the remaining time from the context object.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html">Execution environment lifecycle</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/python-context.html">Context object (Python)</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-01-hello-sam/README.md">Lab 1.1 Hello SAM</a>.</p>
 </section>
 
 <section id="lambda-limits">
   <h2>Configuration settings and limits</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Lambda memory defaults to 128 MB. You can set 128 MB to 10,240 MB, in 1-MB steps.</li>
+      <li>Lambda CPU is proportional to memory. You cannot set CPU directly.</li>
+      <li>At 1,769 MB of memory, a function has the equivalent of one vCPU.</li>
+      <li>A CPU-bound function often runs faster with more memory.</li>
+      <li>The function timeout defaults to 3 seconds and has a maximum of 900 seconds (15 minutes).</li>
+      <li>The 15-minute timeout is a hard limit. You cannot request an increase.</li>
+      <li>At the timeout, Lambda stops the invocation and reports a "Task timed out" error.</li>
+      <li>For a job longer than 15 minutes, split the work into steps and run the steps with AWS Step Functions.</li>
+      <li>Ephemeral storage (<code>/tmp</code>) defaults to 512 MB. You can set 512 MB to 10,240 MB.</li>
+      <li>Environment variables have a limit of 4 KB total for all variables.</li>
+      <li>A function can use at most 5 layers.</li>
+      <li>A synchronous invocation allows a 6 MB request and a 6 MB response.</li>
+      <li>An asynchronous invocation allows a payload of 1 MB.</li>
+      <li>A streamed response allows 200 MB. After the first 6 MB, the response streams at up to 2 MBps.</li>
+      <li>A direct .zip upload allows 50 MB zipped. Upload a larger package through Amazon S3.</li>
+      <li>A .zip package allows 250 MB unzipped, including layers and custom runtimes.</li>
+      <li>A container image allows 10 GB uncompressed, including all image layers.</li>
+      <li>A function resource-based policy has a limit of 20 KB.</li>
+      <li>Concurrent executions default to 1,000 for each Region. This soft limit can increase on request.</li>
+      <li>The architecture defaults to <code>x86_64</code>. The other choice is <code>arm64</code>.</li>
+      <li>Each execution environment has its own <code>/tmp</code>. Lambda encrypts <code>/tmp</code> data at rest.</li>
+      <li>Use Amazon S3 or Amazon EFS for data that must persist or that functions must share, not <code>/tmp</code>.</li>
+      <li>To use <strong>Amazon EFS</strong>, the function must connect to the VPC, because the mount targets are in the VPC.</li>
+      <li>A function mounts Amazon EFS through an access point, at a local path that starts with <code>/mnt/</code>.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Job runs 25 minutes" → Lambda cannot do it in one invocation (900-second maximum).</li>
+      <li>"Function must process a 5 GB file locally" → increase ephemeral storage (up to 10,240 MB), because the default <code>/tmp</code> is only 512 MB.</li>
+      <li>"Several functions must share files that persist" → Amazon EFS, not <code>/tmp</code>.</li>
+      <li>"CPU-bound function is slow" → increase memory. CPU increases with memory.</li>
+      <li>"Deployment package is 70 MB zipped" → upload through Amazon S3, or use a container image, because a direct .zip upload allows only 50 MB.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Numbers to memorize</h3>
   <table>
     <tr><th>Setting</th><th>Default</th><th>Range or maximum</th></tr>
@@ -103,26 +174,55 @@
   <h3>Key facts</h3>
   <ul>
     <li>More memory also gives more CPU. A CPU-bound function often runs faster with more memory.</li>
-    <li>The 15-minute timeout is a hard limit: you cannot request an increase. At the timeout, Lambda stops the invocation and reports a "Task timed out" error. For longer jobs, split the work into steps that each finish in less than 15 minutes. Run the steps with AWS Step Functions.</li>
+    <li>The 15-minute timeout is a hard limit: you cannot request an increase. At the timeout, Lambda stops the invocation and reports a "Task timed out" error.</li>
+    <li>For longer jobs, split the work into steps that each finish in less than 15 minutes. Run the steps with AWS Step Functions.</li>
     <li>Use <code>/tmp</code> for temporary files. Each execution environment has its own <code>/tmp</code>. Lambda encrypts <code>/tmp</code> data at rest.</li>
     <li>Use Amazon S3 or Amazon EFS for data that must persist or that functions must share. Other environments cannot read a <code>/tmp</code> directory, and its content is lost when the environment ends.</li>
-    <li>Amazon EFS: the function must connect to the VPC, because the file system mount targets are in the VPC. The function mounts the file system through an access point (an EFS entry point that sets the directory and the user), at a local path that starts with <code>/mnt/</code>. Many functions and environments can read and write the same files.</li>
+    <li>Amazon EFS: the function must connect to the VPC, because the file system mount targets are in the VPC.</li>
+    <li>The function mounts the file system through an access point (an EFS entry point that sets the directory and the user), at a local path that starts with <code>/mnt/</code>.</li>
+    <li>With Amazon EFS, many functions and environments can read and write the same files.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Job runs 25 minutes" → Lambda cannot do it in one invocation (900-second maximum).</li>
-      <li>"Function must process a 5 GB file locally" → increase ephemeral storage (up to 10,240 MB), because the default <code>/tmp</code> is only 512 MB.</li>
-      <li>"Several functions must share files that persist" → Amazon EFS, not <code>/tmp</code>.</li>
-      <li>"CPU-bound function is slow" → increase memory. CPU increases with memory.</li>
-      <li>"Deployment package is 70 MB zipped" → upload through Amazon S3, or use a container image, because a direct .zip upload allows only 50 MB.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>, <a href="https://docs.aws.amazon.com/lambda/latest/api/API_CreateFunction.html">CreateFunction (defaults)</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-ephemeral-storage.html">Ephemeral storage</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-filesystem-efs.html">Amazon EFS access</a>. Lab: <a href="../../../module-01-lambda-fundamentals/README.md">Module 1 overview</a>.</p>
 </section>
 
 <section id="lambda-invocation">
   <h2>Invocation types and async retries</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>In a <strong>synchronous</strong> (<code>RequestResponse</code>) invocation, the caller waits for the result and gets the error.</li>
+      <li>Lambda does not retry a synchronous invocation. The caller must retry.</li>
+      <li>API Gateway, Application Load Balancer, function URLs, and the SDK and CLI (by default) invoke synchronously.</li>
+      <li>An <strong>asynchronous</strong> (<code>Event</code>) invocation puts the event in an internal queue and returns HTTP 202 at once.</li>
+      <li>The caller of an asynchronous invocation never sees the function result or error.</li>
+      <li>Amazon S3, Amazon SNS, and Amazon EventBridge invoke Lambda asynchronously.</li>
+      <li>An event source mapping polls SQS, Kinesis, or DynamoDB Streams and invokes the function synchronously.</li>
+      <li>Choose synchronous when the caller needs the result now, for example an HTTP request.</li>
+      <li>Choose asynchronous when the caller only hands off work and does not wait.</li>
+      <li>The source service decides the invocation type. You choose only when you call Lambda with the SDK or CLI.</li>
+      <li>After an async function error, Lambda retries two more times by default: after 1 minute, then after 2 minutes.</li>
+      <li>After an async throttle (429) or system error (5xx), Lambda retries for up to 6 hours by default.</li>
+      <li>For async throttle retries, the wait grows from 1 second to a maximum of 5 minutes.</li>
+      <li><code>MaximumRetryAttempts</code> accepts 0 to 2. Set 0 when a second run causes harm, for example a duplicate payment.</li>
+      <li><code>MaximumEventAgeInSeconds</code> accepts up to 21,600 seconds (6 hours). Set a low value when old events have no value.</li>
+      <li>Lambda discards an event older than the maximum age, or sends it to the DLQ or on-failure destination.</li>
+      <li>Set the async retry settings on the function, a version, or an alias.</li>
+      <li>The async queue can deliver the same event more than one time, even when no error occurs.</li>
+      <li>Make async code <strong>idempotent</strong>: two runs of the same event give the same result as one run.</li>
+      <li>AWS CLI version 2 needs <code>--cli-binary-format raw-in-base64-out</code> to send a raw JSON payload.</li>
+      <li>An unqualified function ARN (no version or alias) invokes <code>$LATEST</code>.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Caller must not wait for the result" → invoke with <code>InvocationType=Event</code>.</li>
+      <li>"Do not retry failed events, they are not safe to repeat" → set <code>MaximumRetryAttempts</code> to 0.</li>
+      <li>"Old events have no value after 10 minutes" → set <code>MaximumEventAgeInSeconds</code> to 600.</li>
+      <li>"Function processed the same S3 event twice" → make the code idempotent. Async delivery is at least once.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Comparison</h3>
   <table>
     <tr><th>Type</th><th>Who calls</th><th>Errors and retries</th></tr>
@@ -130,7 +230,8 @@
     <tr><td>Asynchronous (<code>Event</code>)</td><td>Amazon S3, Amazon SNS, Amazon EventBridge, SDK or CLI with <code>--invocation-type Event</code></td><td>Lambda puts the event in an internal queue, returns HTTP 202 at once, and runs the function later. The caller never sees the function result or error. Lambda retries function errors.</td></tr>
     <tr><td>Event source mapping (poll)</td><td>Lambda polls SQS, Kinesis, DynamoDB Streams, and others</td><td>Lambda invokes the function synchronously. Retry behavior depends on the source. See the event source mapping topic.</td></tr>
   </table>
-  <p>Choose synchronous when the caller needs the result now, for example an HTTP request. Choose asynchronous when the caller only hands off work and does not wait. The source service decides the type: you choose only when you call Lambda yourself with the SDK or CLI.</p>
+  <p>Choose synchronous when the caller needs the result now, for example an HTTP request. Choose asynchronous when the caller only hands off work and does not wait.</p>
+  <p>The source service decides the type: you choose only when you call Lambda yourself with the SDK or CLI.</p>
   <h3>Async retry rules</h3>
   <ul>
     <li>Function error: Lambda tries two more times by default. It waits 1 minute before the first retry and 2 minutes before the second.</li>
@@ -138,27 +239,52 @@
     <li><code>MaximumRetryAttempts</code>: 0 to 2. Set 0 when a second run causes harm, for example a duplicate email or payment.</li>
     <li><code>MaximumEventAgeInSeconds</code>: up to 6 hours (21,600 seconds). Lambda discards older events, or sends them to the DLQ or on-failure destination if you configured one. Set a low value when old events have no value.</li>
     <li>Set these on the function, a version, or an alias.</li>
-    <li>The async queue can deliver the same event more than one time, even when no error occurs. Make the code <strong>idempotent</strong>: two runs of the same event must give the same result as one run. Example: write with a DynamoDB condition on the event ID, so the second write does nothing.</li>
+    <li>The async queue can deliver the same event more than one time, even when no error occurs.</li>
+    <li>Make the code <strong>idempotent</strong>: two runs of the same event must give the same result as one run. Example: write with a DynamoDB condition on the event ID, so the second write does nothing.</li>
   </ul>
   <h3>Key facts</h3>
   <ul>
     <li>With AWS CLI version 2, add <code>--cli-binary-format raw-in-base64-out</code> to send a raw JSON payload. Without it, CLI version 2 reads the payload as base64, and the call fails.</li>
     <li>An unqualified function ARN (no version or alias at the end) invokes <code>$LATEST</code>, the newest unpublished code.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Caller must not wait for the result" → invoke with <code>InvocationType=Event</code>.</li>
-      <li>"Do not retry failed events, they are not safe to repeat" → set <code>MaximumRetryAttempts</code> to 0.</li>
-      <li>"Old events have no value after 10 minutes" → set <code>MaximumEventAgeInSeconds</code> to 600.</li>
-      <li>"Function processed the same S3 event twice" → async delivery is at least once. Make the code idempotent.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async.html">Asynchronous invocation</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-error-handling.html">Async error handling</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-configuring.html">Async error settings</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-02-event-sources/README.md">Lab 1.2 Event sources</a>.</p>
 </section>
 
 <section id="lambda-destinations">
   <h2>Destinations and dead-letter queues</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>An <strong>on-success destination</strong> receives records of successful async invocations. A DLQ cannot get success records.</li>
+      <li>On-failure destinations and a DLQ both receive records of failed async invocations.</li>
+      <li>Destination targets are an SQS queue, an SNS topic, a Lambda function, an EventBridge event bus, or an S3 bucket.</li>
+      <li>An S3 bucket can be a destination target only for failure records.</li>
+      <li>A DLQ target is an SQS standard queue or an SNS standard topic.</li>
+      <li>A destination record is JSON with the request, the response, the error details, and the attempt count.</li>
+      <li>A DLQ keeps only the original event and three attributes: RequestID, ErrorCode, and ErrorMessage.</li>
+      <li>Choose an on-failure destination over a DLQ when you need the error message or the attempt count.</li>
+      <li>You configure a destination on the function, a version, or an alias.</li>
+      <li>You add or remove a DLQ only at the function level.</li>
+      <li>Lambda does not support FIFO queues or FIFO topics as a destination or as a DLQ.</li>
+      <li>The execution role must allow the write: <code>sqs:SendMessage</code>, <code>sns:Publish</code>, <code>lambda:InvokeFunction</code>, or <code>events:PutEvents</code>.</li>
+      <li>A failed delivery to a destination increases the <code>DestinationDeliveryFailures</code> metric.</li>
+      <li>A failed delivery to a DLQ increases the <code>DeadLetterErrors</code> metric.</li>
+      <li>For an SQS event source, configure the DLQ as a redrive policy on the source queue, not on the function.</li>
+      <li>The async DLQ and destinations of a function never get messages from an event source mapping, because the mapping invokes synchronously.</li>
+      <li>For Kinesis, DynamoDB Streams, and Kafka, configure the on-failure destination on the event source mapping.</li>
+      <li>Reserved concurrency of 0 sends new async events to the DLQ or on-failure destination with no retries.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Send the function result to another service, with no code change" → on-success destination.</li>
+      <li>"Capture the error message and the input of failed async events" → on-failure destination.</li>
+      <li>"Failed SQS messages must go to a separate queue" → redrive policy (DLQ) on the source queue.</li>
+      <li>"Several teams must react to each failure" → SNS topic as the failure target, because SNS sends one message to many subscribers.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Comparison</h3>
   <table>
     <tr><th>Item</th><th>Destinations (async)</th><th>Dead-letter queue (async)</th></tr>
@@ -170,7 +296,8 @@
   </table>
   <h3>Key facts</h3>
   <ul>
-    <li>An on-failure destination does the same job as a DLQ. It also supports more targets and includes response details. Choose an on-failure destination when you need the error message or the attempt count. A DLQ keeps only the original event and three attributes.</li>
+    <li>An on-failure destination does the same job as a DLQ. It also supports more targets and includes response details.</li>
+    <li>Choose an on-failure destination when you need the error message or the attempt count. A DLQ keeps only the original event and three attributes.</li>
     <li>FIFO queues and FIFO topics are not supported as destinations or as a DLQ. Lambda cannot deliver to them, and the <code>DestinationDeliveryFailures</code> metric increases.</li>
     <li>Lambda writes the record with the function execution role, so the role must allow the write: <code>sqs:SendMessage</code>, <code>sns:Publish</code>, <code>lambda:InvokeFunction</code>, or <code>events:PutEvents</code>. Without the permission, delivery fails.</li>
     <li>If Lambda cannot deliver to a destination, it emits the <code>DestinationDeliveryFailures</code> metric. For a DLQ, it emits <code>DeadLetterErrors</code>.</li>
@@ -178,21 +305,75 @@
     <li>For Kinesis, DynamoDB Streams, and Kafka event sources, configure the on-failure destination on the event source mapping, for the same reason: these are not async invocations.</li>
     <li>Reserved concurrency of 0 on an async function sends new events to the DLQ or on-failure destination with no retries, because Lambda cannot run the function at all.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Send the function result to another service, with no code change" → on-success destination.</li>
-      <li>"Capture the error message and the input of failed async events" → on-failure destination.</li>
-      <li>"Failed SQS messages must go to a separate queue" → redrive policy (DLQ) on the source queue.</li>
-      <li>"Several teams must react to each failure" → SNS topic as the failure target, because SNS sends one message to many subscribers.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-retain-records.html">Capturing async records (destinations and DLQ)</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-06-destinations-dlq/README.md">Lab 1.6 Destinations and DLQ</a>.</p>
 </section>
 
 <section id="lambda-esm">
   <h2>Event source mappings: SQS and streams</h2>
-  <p>An event source mapping (ESM) is a Lambda resource that polls a source, makes batches, and invokes the function. Lambda uses it for sources that store records and do not push them to Lambda: queues and streams. The function execution role needs permission to read the source, because Lambda reads the source with that role.</p>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>An <strong>event source mapping</strong> (ESM) polls a queue or a stream, makes batches, and invokes the function.</li>
+      <li>The function execution role needs permission to read the source of an event source mapping.</li>
+      <li>An SQS standard queue allows a batch size of up to 10,000. An SQS FIFO queue allows at most 10.</li>
+      <li>For an SQS batch size over 10, set <code>MaximumBatchingWindowInSeconds</code> to at least 1 second.</li>
+      <li>SQS hides a received message for the <strong>visibility timeout</strong>. A message that Lambda does not delete becomes visible again.</li>
+      <li>Set the SQS visibility timeout to at least 6 times the function timeout, plus the batch window.</li>
+      <li>The function timeout cannot be more than the queue visibility timeout. Lambda returns an error when you create the mapping.</li>
+      <li>By default, one failed message makes the whole SQS batch visible again, so successful messages run again.</li>
+      <li>To return only failed messages, set <code>FunctionResponseTypes</code> to <code>ReportBatchItemFailures</code>.</li>
+      <li>A partial batch response returns each failed message ID as an <code>itemIdentifier</code> in <code>batchItemFailures</code>.</li>
+      <li>With partial batch response, a thrown exception still fails the whole batch.</li>
+      <li>An empty <code>batchItemFailures</code> list means that the whole batch succeeded.</li>
+      <li>Put the DLQ for an SQS source on the source queue, with a redrive policy and <code>maxReceiveCount</code>.</li>
+      <li>AWS recommends a <code>maxReceiveCount</code> of at least 5, so Lambda can retry before a message goes to the DLQ.</li>
+      <li>For an SQS standard queue, Lambda starts with 5 concurrent batches and adds up to 300 concurrent invocations each minute.</li>
+      <li>SQS standard queue scaling reaches a maximum of 1,250 concurrent invocations.</li>
+      <li>ESM <strong>maximum concurrency</strong> (2 to 1,000) caps the concurrent invocations that one queue can start.</li>
+      <li>Use ESM maximum concurrency when several queues share one function.</li>
+      <li>Keep reserved concurrency at or above the total ESM maximum concurrency, or Lambda can throttle invocations.</li>
+      <li>For an SQS FIFO queue, the number of different message group IDs limits the concurrency.</li>
+      <li>A stream batch size defaults to 100, with a maximum of 10,000.</li>
+      <li>A stream batch window can be up to 5 minutes.</li>
+      <li>Records with the same partition key go to the same shard, in order.</li>
+      <li>Lambda processes one batch at a time for each shard, in order.</li>
+      <li><code>ParallelizationFactor</code> (1 to 10) adds concurrent batches for each shard and keeps the order for each partition key.</li>
+      <li>By default, Lambda retries a failed stream batch until the records expire, and the shard is blocked.</li>
+      <li><code>BisectBatchOnFunctionError</code> splits a failed stream batch in two and retries each half, to find the bad record.</li>
+      <li><code>MaximumRetryAttempts</code> and <code>MaximumRecordAgeInSeconds</code> stop stream retries, so the shard can continue.</li>
+      <li>With <code>ReportBatchItemFailures</code> on a stream, Lambda retries from the first failed record.</li>
+      <li>Stream on-failure destinations are an SQS queue, an SNS topic, or an S3 bucket (a Kafka topic for Kafka).</li>
+      <li>SQS and SNS failure records for a stream contain only metadata. S3 failure records also contain the payload.</li>
+      <li>With an SQS or SNS failure destination, read the failed records from the stream before the retention period ends.</li>
+      <li>A <strong>tumbling window</strong> (<code>TumblingWindowInSeconds</code>, up to 900 seconds) keeps state between invocations in a fixed time period.</li>
+      <li>Tumbling window state is up to 1 MB for each shard. <code>isFinalInvokeForWindow</code> marks the last invocation.</li>
+      <li>An <code>IteratorAge</code> metric that keeps going up means that the function falls behind the stream.</li>
+      <li>Without enhanced fan-out, consumers share the shard read throughput, and Lambda polls each shard once each second.</li>
+      <li>Kinesis <strong>enhanced fan-out</strong> gives a dedicated read connection to each shard and pushes the records, at extra cost.</li>
+      <li>Use enhanced fan-out when several applications read the same stream, or when you need lower latency.</li>
+      <li>An event source mapping processes records at least once, so make the code idempotent.</li>
+      <li>ESM <strong>filter criteria</strong> stop events that the function does not need, so you pay for fewer invocations.</li>
+      <li>An ESM allows up to 5 filters by default, with EventBridge pattern syntax.</li>
+      <li>For SQS, filter on the <code>body</code> key. Lambda removes messages that do not match from the queue.</li>
+      <li>ESM filter criteria work with SQS, Kinesis, DynamoDB Streams, Amazon MQ, and Kafka.</li>
+      <li>An ESM batch can contain up to 6 MB of payload, the synchronous invocation limit.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Successful messages are processed again when one message fails" → <code>ReportBatchItemFailures</code>, because then only the reported failed messages return to the queue.</li>
+      <li>"Messages are processed twice, function timeout is near the visibility timeout" → visibility timeout of 6 times the function timeout. The messages became visible again while Lambda still processed or retried them.</li>
+      <li>"One bad record blocks the stream" → <code>BisectBatchOnFunctionError</code>, limit retries, and add an on-failure destination. Without a limit, Lambda retries the same batch until the records expire.</li>
+      <li>"IteratorAge increases" → increase <code>ParallelizationFactor</code> or add shards. The function is behind, and both changes give more concurrent batches.</li>
+      <li>"One queue must not use all the concurrency of a shared function" → ESM maximum concurrency, because it caps one queue and not the whole function.</li>
+      <li>"Do not invoke the function for messages it does not need" → ESM filter criteria.</li>
+      <li>"Aggregate stream data over fixed time periods without a database" → tumbling windows.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
+  <p>An event source mapping (ESM) is a Lambda resource that polls a source, makes batches, and invokes the function. Lambda uses it for sources that store records and do not push them to Lambda: queues and streams.</p>
+  <p>The function execution role needs permission to read the source, because Lambda reads the source with that role.</p>
   <h3>Amazon SQS</h3>
   <ul>
     <li>Batch size: up to 10,000 for a standard queue; maximum 10 for a FIFO queue.</li>
@@ -205,7 +386,8 @@
     <li>With partial batch response, a thrown exception still fails the whole batch. An empty <code>batchItemFailures</code> list means full success.</li>
     <li>Put the DLQ on the source queue with a redrive policy. SQS moves a message to the DLQ when it has been received more than <code>maxReceiveCount</code> times without being deleted. AWS recommends <code>maxReceiveCount</code> of at least 5, so Lambda has a few chances to retry before a message goes to the DLQ.</li>
     <li>Scaling (standard queue): Lambda starts with 5 concurrent batches. It adds up to 300 concurrent invocations each minute, to a maximum of 1,250. So a sudden backlog takes a few minutes to reach full concurrency, and messages wait in the queue during that time.</li>
-    <li><strong>Maximum concurrency</strong> on the ESM (2 to 1,000) caps how many concurrent invocations one queue can start. Use it when several queues share one function, so one busy queue cannot use all of the function capacity. It is separate from reserved concurrency, which caps the whole function. Keep reserved concurrency at or above the total maximum concurrency. Otherwise, Lambda can throttle the extra invocations.</li>
+    <li><strong>Maximum concurrency</strong> on the ESM (2 to 1,000) caps how many concurrent invocations one queue can start. Use it when several queues share one function, so one busy queue cannot use all of the function capacity.</li>
+    <li>ESM maximum concurrency is separate from reserved concurrency, which caps the whole function. Keep reserved concurrency at or above the total maximum concurrency. Otherwise, Lambda can throttle the extra invocations.</li>
     <li>FIFO queue: Lambda processes the messages of one message group ID one at a time, in order. So the number of different message group IDs limits the concurrency.</li>
   </ul>
   <h3>Kinesis Data Streams and DynamoDB Streams</h3>
@@ -214,41 +396,84 @@
     <li>A stream is divided into <strong>shards</strong>. The producer sets a partition key on each record, and records with the same partition key go to the same shard, in order.</li>
     <li>Lambda processes one batch at a time for each shard, in order. <code>ParallelizationFactor</code> (1 to 10) adds concurrent batches for each shard and keeps order for each partition key.</li>
     <li>By default, a failed batch is retried until the records expire. Lambda must keep the order in the shard, so it cannot skip the failed batch. No later records in that shard are processed during that time: the shard is blocked.</li>
-    <li>Error controls: <code>BisectBatchOnFunctionError</code> splits the failed batch in two and retries each half, to isolate the bad record. <code>MaximumRetryAttempts</code> and <code>MaximumRecordAgeInSeconds</code> stop the retries, so the shard can continue. An on-failure destination keeps a record of the batch that Lambda stopped retrying. <code>ReportBatchItemFailures</code> lets the function report the first failed record, so Lambda retries from that record.</li>
-    <li>Stream on-failure destinations: SQS queue, SNS topic, or S3 bucket (a Kafka topic for Kafka sources). SQS and SNS records contain only metadata (shard ID and sequence numbers). S3 records also contain the payload. With an SQS or SNS destination, you must read the failed records from the stream again with those sequence numbers, before the stream retention period ends.</li>
-    <li>A <strong>tumbling window</strong> is a fixed time period that does not overlap the next one, for example each 5 minutes. With <code>TumblingWindowInSeconds</code> (up to 900 seconds), Lambda keeps state between invocations in the same window. The function returns a <code>state</code> object (up to 1 MB for each shard), and Lambda passes it to the next invocation. <code>isFinalInvokeForWindow</code> marks the last invocation of the window, where the function writes the result. Use it to count or sum stream data with no external database.</li>
+    <li>Error controls: <code>BisectBatchOnFunctionError</code> splits the failed batch in two and retries each half, to isolate the bad record.</li>
+    <li><code>MaximumRetryAttempts</code> and <code>MaximumRecordAgeInSeconds</code> stop the retries, so the shard can continue. An on-failure destination keeps a record of the batch that Lambda stopped retrying.</li>
+    <li><code>ReportBatchItemFailures</code> lets the function report the first failed record, so Lambda retries from that record.</li>
+    <li>Stream on-failure destinations: SQS queue, SNS topic, or S3 bucket (a Kafka topic for Kafka sources).</li>
+    <li>SQS and SNS records contain only metadata (shard ID and sequence numbers). S3 records also contain the payload.</li>
+    <li>With an SQS or SNS destination, you must read the failed records from the stream again with those sequence numbers, before the stream retention period ends.</li>
+    <li>A <strong>tumbling window</strong> is a fixed time period that does not overlap the next one, for example each 5 minutes. With <code>TumblingWindowInSeconds</code> (up to 900 seconds), Lambda keeps state between invocations in the same window.</li>
+    <li>The function returns a <code>state</code> object (up to 1 MB for each shard), and Lambda passes it to the next invocation. <code>isFinalInvokeForWindow</code> marks the last invocation of the window, where the function writes the result.</li>
+    <li>Use a tumbling window to count or sum stream data with no external database.</li>
     <li>The <code>IteratorAge</code> metric is the age of the last record in a batch when Lambda sends the batch to the function. A value that keeps going up means records arrive faster than the function processes them: the function falls behind the stream.</li>
-    <li>Without enhanced fan-out, all consumers of a shard share its read throughput, and Lambda polls each shard at a base rate of once each second. Kinesis <strong>enhanced fan-out</strong> gives the function a dedicated read connection to each shard, and Kinesis pushes records to it. Use it when several applications read the same stream, or when you need lower latency. Kinesis charges extra for it.</li>
+    <li>Without enhanced fan-out, all consumers of a shard share its read throughput, and Lambda polls each shard at a base rate of once each second.</li>
+    <li>Kinesis <strong>enhanced fan-out</strong> gives the function a dedicated read connection to each shard, and Kinesis pushes records to it. Use it when several applications read the same stream, or when you need lower latency. Kinesis charges extra for it.</li>
   </ul>
   <h3>All event source mappings</h3>
   <ul>
     <li>Processing is at least once. Duplicates can occur. Make the code idempotent (two runs of the same record give the same result as one run).</li>
-    <li>Use filter criteria on the ESM to stop events that the function does not need. Lambda does not invoke the function for them, so you pay for fewer invocations. Up to 5 filters by default, with EventBridge pattern syntax. For SQS, filter on the <code>body</code> key; Lambda removes messages that do not match from the queue. Sources: SQS, Kinesis, DynamoDB Streams, Amazon MQ, and Kafka.</li>
+    <li>Use filter criteria on the ESM to stop events that the function does not need. Lambda does not invoke the function for them, so you pay for fewer invocations.</li>
+    <li>Up to 5 filters by default, with EventBridge pattern syntax. Sources: SQS, Kinesis, DynamoDB Streams, Amazon MQ, and Kafka.</li>
+    <li>For SQS, filter on the <code>body</code> key; Lambda removes messages that do not match from the queue.</li>
     <li>Batches can contain up to 6 MB of payload (the synchronous invocation limit).</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Successful messages are processed again when one message fails" → <code>ReportBatchItemFailures</code>, because then only the reported failed messages return to the queue.</li>
-      <li>"Messages are processed twice, function timeout is near the visibility timeout" → visibility timeout of 6 times the function timeout. The messages became visible again while Lambda still processed or retried them.</li>
-      <li>"One bad record blocks the stream" → <code>BisectBatchOnFunctionError</code>, limit retries, and add an on-failure destination. Without a limit, Lambda retries the same batch until the records expire.</li>
-      <li>"IteratorAge increases" → the function is behind. Increase <code>ParallelizationFactor</code> or add shards. Both give more concurrent batches.</li>
-      <li>"One queue must not use all the concurrency of a shared function" → ESM maximum concurrency, because it caps one queue and not the whole function.</li>
-      <li>"Do not invoke the function for messages it does not need" → ESM filter criteria.</li>
-      <li>"Aggregate stream data over fixed time periods without a database" → tumbling windows.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html">SQS event source settings</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-scaling.html">SQS scaling and maximum concurrency</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-errorhandling.html">SQS partial batch response</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-kinesis-parameters.html">Kinesis ESM parameters</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html">DynamoDB Streams</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/kinesis-on-failure-destination.html">Stream on-failure destinations</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventfiltering.html">Event filtering</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-kinesis-windows.html">Tumbling windows</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html">Kinesis polling and enhanced fan-out</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-kinesis-batchfailurereporting.html">Kinesis partial batch response</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/monitoring-metrics-types.html">Lambda metrics (IteratorAge)</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-02-event-sources/README.md">Lab 1.2 Event sources</a>.</p>
 </section>
 
 <section id="lambda-concurrency">
   <h2>Concurrency, scaling, and throttling</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li><strong>Concurrency</strong> is the number of requests that a function processes at the same time, each in its own environment.</li>
+      <li>Concurrency equals average requests per second × average duration in seconds. Example: 100 × 0.5 seconds = 50.</li>
+      <li>The account concurrency limit is 1,000 for each Region by default. All functions in the Region share it.</li>
+      <li>When no concurrency is free, Lambda throttles new requests with <code>TooManyRequestsException</code>.</li>
+      <li>Lambda limits requests per second to 10 times the concurrency limit (10,000 by default).</li>
+      <li>The requests-per-second limit can throttle a very short function before the concurrency limit does.</li>
+      <li>Each function can add 1,000 execution environments every 10 seconds. Older study material shows a burst limit plus 500 each minute.</li>
+      <li><strong>Reserved concurrency</strong> is both a maximum and a guaranteed minimum for one function.</li>
+      <li>Reserved concurrency has no charge. You set it on the function.</li>
+      <li>Requests over the reserved concurrency of a function are throttled.</li>
+      <li><strong>Provisioned concurrency</strong> keeps pre-initialized environments, so requests have no cold start.</li>
+      <li>Provisioned concurrency has an extra charge, also when the environments are idle.</li>
+      <li>Set provisioned concurrency on a published version or an alias, not on <code>$LATEST</code>.</li>
+      <li>Requests over the provisioned concurrency spill over to on-demand concurrency, with cold starts.</li>
+      <li>Choose reserved concurrency to cap a function or to keep capacity for it.</li>
+      <li>Choose provisioned concurrency to remove cold-start latency. One function can use reserved and provisioned concurrency together.</li>
+      <li>Lambda always keeps 100 units of unreserved concurrency. With the 1,000 limit, you can reserve up to 900.</li>
+      <li>Reserved concurrency of 0 stops all invocations of a function, like an off switch.</li>
+      <li>Provisioned concurrency cannot be more than reserved concurrency on the same function.</li>
+      <li>Application Auto Scaling changes provisioned concurrency. Scheduled scaling handles a known daily peak.</li>
+      <li>Target tracking keeps <code>LambdaProvisionedConcurrencyUtilization</code> near a target value, for example 0.7.</li>
+      <li>Reserved concurrency caps database connections, because each environment opens its own connection.</li>
+      <li>A throttled synchronous caller gets HTTP 429 <code>TooManyRequestsException</code> and must retry with backoff.</li>
+      <li>Lambda keeps a throttled asynchronous event and retries for up to 6 hours. The caller sees no error.</li>
+      <li>When an SQS event source is throttled, Lambda reduces polling, and the messages stay in the queue.</li>
+      <li>The <code>Throttles</code> metric counts rejected requests. <code>ConcurrentExecutions</code> shows how many environments are busy.</li>
+      <li><code>ProvisionedConcurrencyUtilization</code> is the share of provisioned environments in use.</li>
+      <li>A high <code>ProvisionedConcurrencySpilloverInvocations</code> value means that you need more provisioned concurrency.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Function must not use more than 50 database connections" → reserved concurrency of 50, because each environment holds its own connection.</li>
+      <li>"Critical function must always have capacity, other functions use all of it" → reserved concurrency on the critical function, because no other function can use reserved concurrency.</li>
+      <li>"Predictable spike at 9 AM, no cold starts" → provisioned concurrency with scheduled Application Auto Scaling.</li>
+      <li>"Clients get 429 errors" → the concurrency limit is reached. Check <code>Throttles</code>, and raise the quota or the reserved concurrency.</li>
+      <li>"Stop a function immediately without deleting it" → reserved concurrency 0.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
-    <li><strong>Concurrency</strong> is the number of requests that a function processes at the same time. Each one uses its own execution environment. Concurrency = average requests per second × average duration in seconds. Example: 100 requests per second × 0.5 seconds = 50.</li>
+    <li><strong>Concurrency</strong> is the number of requests that a function processes at the same time. Each one uses its own execution environment.</li>
+    <li>Concurrency = average requests per second × average duration in seconds. Example: 100 requests per second × 0.5 seconds = 50.</li>
     <li>The account limit is 1,000 concurrent executions for each Region by default. All functions in the Region share it. When no concurrency is free, Lambda throttles new requests (rejects them with <code>TooManyRequestsException</code>).</li>
     <li>Lambda also limits requests per second to 10 times the concurrency limit (10,000 by default). This limit matters for very short functions. Example: a 50 ms function at 20,000 requests per second needs only 1,000 concurrency, but Lambda throttles half of the requests.</li>
-    <li>Scaling rate: each function can add 1,000 execution environments every 10 seconds. Requests that arrive faster than this rate are throttled until Lambda catches up. Older material shows a burst limit plus 500 each minute. That rule is out of date.</li>
+    <li>Scaling rate: each function can add 1,000 execution environments every 10 seconds. Requests that arrive faster than this rate are throttled until Lambda catches up.</li>
+    <li>Older material shows a burst limit plus 500 each minute. That rule is out of date.</li>
   </ul>
   <h3>Comparison</h3>
   <table>
@@ -258,7 +483,8 @@
     <tr><td>Where set</td><td>Function</td><td>A published version or an alias. Not <code>$LATEST</code>.</td></tr>
     <tr><td>Over the limit</td><td>Throttled</td><td>Spills over to on-demand concurrency (cold starts), unless reserved concurrency stops it</td></tr>
   </table>
-  <p>Reserved concurrency is both a maximum and a guaranteed minimum. Example: with reserved concurrency of 200, the function never runs more than 200 at the same time, and other functions cannot use those 200. Choose reserved concurrency to cap a function or to keep capacity for it. Choose provisioned concurrency to remove cold-start latency. You can use both on one function.</p>
+  <p>Reserved concurrency is both a maximum and a guaranteed minimum. Example: with reserved concurrency of 200, the function never runs more than 200 at the same time, and other functions cannot use those 200.</p>
+  <p>Choose reserved concurrency to cap a function or to keep capacity for it. Choose provisioned concurrency to remove cold-start latency. You can use both on one function.</p>
   <ul>
     <li>Lambda always keeps 100 units of unreserved concurrency, so functions without reserved concurrency can always run. With the default 1,000 limit, you can reserve up to 900.</li>
     <li>Reserved concurrency of 0 stops all invocations. Use it as an off switch.</li>
@@ -271,23 +497,57 @@
     <li>Synchronous: the caller gets HTTP 429 <code>TooManyRequestsException</code>. The caller must retry with backoff.</li>
     <li>Asynchronous: Lambda keeps the event and retries for up to 6 hours. The caller sees no error.</li>
     <li>SQS event source: Lambda reduces polling, and messages stay in the queue.</li>
-    <li>CloudWatch metrics: <code>Throttles</code> counts rejected requests. <code>ConcurrentExecutions</code> shows how many environments are busy. <code>ProvisionedConcurrencyUtilization</code> is the share of provisioned environments in use. <code>ProvisionedConcurrencySpilloverInvocations</code> counts invocations that ran on standard concurrency because all provisioned environments were busy; a high value means you need more provisioned concurrency.</li>
+    <li>CloudWatch metrics: <code>Throttles</code> counts rejected requests. <code>ConcurrentExecutions</code> shows how many environments are busy.</li>
+    <li><code>ProvisionedConcurrencyUtilization</code> is the share of provisioned environments in use.</li>
+    <li><code>ProvisionedConcurrencySpilloverInvocations</code> counts invocations that ran on standard concurrency because all provisioned environments were busy; a high value means you need more provisioned concurrency.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Function must not use more than 50 database connections" → reserved concurrency of 50, because each environment holds its own connection.</li>
-      <li>"Critical function must always have capacity, other functions use all of it" → reserved concurrency on the critical function, because no other function can use reserved concurrency.</li>
-      <li>"Predictable spike at 9 AM, no cold starts" → provisioned concurrency with scheduled Application Auto Scaling.</li>
-      <li>"Clients get 429 errors" → concurrency limit reached. Check <code>Throttles</code>, raise the quota or reserved concurrency.</li>
-      <li>"Stop a function immediately without deleting it" → reserved concurrency 0.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-concurrency.html">Lambda concurrency</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/scaling-behavior.html">Scaling rate</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/provisioned-concurrency.html">Provisioned concurrency</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/monitoring-metrics-types.html">Lambda metrics</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-05-concurrency/README.md">Lab 1.5 Concurrency</a>.</p>
 </section>
 
 <section id="lambda-versions">
   <h2>Versions, aliases, and traffic shifting</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li><code>$LATEST</code> is the unpublished version. You change code and settings only on <code>$LATEST</code>.</li>
+      <li>A <strong>published version</strong> is immutable. It locks the code and most settings.</li>
+      <li>A version locks the runtime, handler, memory, timeout, environment variables, layers, execution role, VPC, tracing, logging, and DLQ settings.</li>
+      <li>Version numbers increase, and Lambda never uses a version number again.</li>
+      <li>You cannot publish a new version if <code>$LATEST</code> did not change.</li>
+      <li>A qualified ARN ends with a version or an alias, for example <code>:3</code> or <code>:prod</code>.</li>
+      <li>An unqualified ARN invokes <code>$LATEST</code>.</li>
+      <li>An <strong>alias</strong> is a named pointer to a version, and you can move it.</li>
+      <li>Callers use the alias ARN, so the callers do not change when you deploy.</li>
+      <li>A resource-based policy on an alias ARN applies to that alias only.</li>
+      <li>A <strong>weighted alias</strong> points to at most two versions, with a weight for the additional version.</li>
+      <li>Use a weighted alias for a canary release: send a small share of traffic to the new code first.</li>
+      <li>Both versions of a weighted alias must be published and must have the same execution role and DLQ configuration.</li>
+      <li>To find which version ran, check the <code>START</code> log line, the <code>ExecutedVersion</code> dimension, or <code>x-amz-executed-version</code>.</li>
+      <li><code>AutoPublishAlias</code> publishes a new version when code changes and points the alias to it.</li>
+      <li><code>DeploymentPreference</code> in AWS SAM uses CodeDeploy to shift alias traffic.</li>
+      <li>Canary types are <code>Canary10Percent5Minutes</code> and the 10, 15, and 30 minute variants.</li>
+      <li>Linear types are <code>Linear10PercentEvery1Minute</code> and the every 2, 3, and 10 minute variants.</li>
+      <li>A <strong>canary</strong> deployment shifts traffic in two steps, for example 10 percent, then all traffic after 5 minutes.</li>
+      <li>A <strong>linear</strong> deployment shifts traffic in equal steps. <code>Linear10PercentEvery1Minute</code> moves all traffic after 10 minutes.</li>
+      <li><code>AllAtOnce</code> moves all traffic in one step.</li>
+      <li>Choose canary to test new code on a small share of users for a short time.</li>
+      <li>Choose linear for a slow, steady increase. Choose <code>AllAtOnce</code> when you do not need a gradual shift.</li>
+      <li>CodeDeploy rolls back all alias traffic to the old version when a listed CloudWatch alarm goes off.</li>
+      <li><code>PreTraffic</code> and <code>PostTraffic</code> hook functions run tests and report success or failure to CodeDeploy.</li>
+      <li>Without CodeDeploy, roll back with one <code>UpdateAlias</code> call that points the alias to the old version.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Send 10% of traffic to the new version, then all after 10 minutes, roll back on errors" → SAM <code>DeploymentPreference</code> <code>Canary10Percent10Minutes</code> with alarms.</li>
+      <li>"Callers must not change the ARN on each release" → alias, because the alias ARN stays the same when you move the alias to a new version.</li>
+      <li>"Dev and prod must use different settings from the same function" → aliases point to different versions, each with its own locked environment variables.</li>
+      <li>"Run tests before traffic shifts" → <code>PreTraffic</code> hook.</li>
+      <li>"Staging must use only the version that QA approved" → an alias (for example, <code>staging</code>) that points to the approved version. Move the alias after each approval.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li><code>$LATEST</code> is the unpublished version. You change code and settings only on <code>$LATEST</code>.</li>
@@ -299,7 +559,8 @@
   </ul>
   <h3>Weighted alias (canary)</h3>
   <ul>
-    <li>An alias can point to a maximum of two versions, with a weight for the additional version. Lambda sends that share of invocations to the additional version. Use it for a canary release: send a small share to the new code, watch for errors, then move all traffic.</li>
+    <li>An alias can point to a maximum of two versions, with a weight for the additional version. Lambda sends that share of invocations to the additional version.</li>
+    <li>Use a weighted alias for a canary release: send a small share to the new code, watch for errors, then move all traffic.</li>
     <li>Both versions must be published (not <code>$LATEST</code>), must have the same execution role, and must have the same DLQ configuration.</li>
     <li>To find which version ran: the <code>START</code> log line shows the version, the <code>ExecutedVersion</code> metric dimension, or the <code>x-amz-executed-version</code> response header (synchronous).</li>
   </ul>
@@ -307,27 +568,65 @@
   <ul>
     <li><code>AutoPublishAlias</code> publishes a new version when code changes and points the alias to it.</li>
     <li><code>DeploymentPreference</code> uses CodeDeploy to shift alias traffic. Types: <code>Canary10Percent5Minutes</code> (also 10, 15, 30 minutes), <code>Linear10PercentEvery1Minute</code> (also every 2, 3, 10 minutes), <code>AllAtOnce</code>.</li>
-    <li>Canary shifts traffic in two steps. Example: <code>Canary10Percent5Minutes</code> sends 10 percent to the new version, waits 5 minutes, then sends all traffic. Linear shifts traffic in equal steps. Example: <code>Linear10PercentEvery1Minute</code> adds 10 percent each minute, so all traffic moves after 10 minutes. <code>AllAtOnce</code> moves all traffic in one step.</li>
+    <li>Canary shifts traffic in two steps. Example: <code>Canary10Percent5Minutes</code> sends 10 percent to the new version, waits 5 minutes, then sends all traffic.</li>
+    <li>Linear shifts traffic in equal steps. Example: <code>Linear10PercentEvery1Minute</code> adds 10 percent each minute, so all traffic moves after 10 minutes.</li>
+    <li><code>AllAtOnce</code> moves all traffic in one step.</li>
     <li>Choose canary to test new code on a small share of users for a short time. Choose linear for a slow, steady increase. Choose <code>AllAtOnce</code> when you do not need a gradual shift, for example in a development stack.</li>
     <li><code>Alarms</code>: CodeDeploy rolls back when a listed CloudWatch alarm goes off. Rollback moves all alias traffic back to the old version.</li>
     <li><code>Hooks</code>: <code>PreTraffic</code> and <code>PostTraffic</code> Lambda functions run tests and report success or failure to CodeDeploy.</li>
     <li>Rollback without CodeDeploy: point the alias back to the old version with one <code>UpdateAlias</code> call.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Send 10% of traffic to the new version, then all after 10 minutes, roll back on errors" → SAM <code>DeploymentPreference</code> <code>Canary10Percent10Minutes</code> with alarms.</li>
-      <li>"Callers must not change the ARN on each release" → alias, because the alias ARN stays the same when you move the alias to a new version.</li>
-      <li>"Dev and prod must use different settings from the same function" → aliases point to different versions, each with its own locked environment variables.</li>
-      <li>"Run tests before traffic shifts" → <code>PreTraffic</code> hook.</li>
-      <li>"Staging must use only the version that QA approved" → an alias (for example, <code>staging</code>) that points to the approved version. Move the alias after each approval.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-versions.html">Versions</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuring-alias-routing.html">Weighted aliases</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/automating-updates-to-serverless-apps.html">SAM gradual deployments</a>, <a href="https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-configurations.html">CodeDeploy configurations</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-03-versions-aliases/README.md">Lab 1.3 Versions and aliases</a>.</p>
 </section>
 
 <section id="lambda-packaging">
   <h2>Packaging, layers, container images, and AWS SAM</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>A <strong>layer</strong> is a .zip archive with libraries, a custom runtime, or configuration files.</li>
+      <li>Lambda extracts layers to <code>/opt</code>.</li>
+      <li>Put a library in the runtime folder of the layer, for example <code>/opt/python</code>, so the code imports it with no path change.</li>
+      <li>A function can use up to 5 layers, with 250 MB total unzipped size including the function code.</li>
+      <li>Layers work only with .zip functions. A container image function puts its dependencies in the image.</li>
+      <li>A layer version is immutable, and a function refers to an exact layer version ARN.</li>
+      <li>To use a new layer version, update each function configuration to the new layer version ARN.</li>
+      <li>Layers share dependencies between functions and keep deployment packages small.</li>
+      <li>A container image must be in an Amazon ECR repository in the same Region as the function.</li>
+      <li>The ECR repository for a container image can be in another account.</li>
+      <li>A container image allows 10 GB uncompressed, Linux only, with one architecture for each image.</li>
+      <li>The <strong>runtime interface client</strong> (RIC) gets invocation events from Lambda and passes them to the handler.</li>
+      <li>An image without the runtime interface client cannot run on Lambda. AWS base images include it.</li>
+      <li>The <strong>runtime interface emulator</strong> (RIE) lets you test the image locally with HTTP requests. AWS base images include it.</li>
+      <li>You cannot change the package type (.zip or image) of an existing function. Create a new function.</li>
+      <li>AWS SAM is a CloudFormation transform: <code>Transform: AWS::Serverless-2016-10-31</code>.</li>
+      <li>The SAM transform expands <code>AWS::Serverless::Function</code> into a function, an execution role, and other resources.</li>
+      <li>A template that creates an IAM role needs <code>CAPABILITY_IAM</code>, or CloudFormation stops with <code>InsufficientCapabilities</code>.</li>
+      <li><code>aws cloudformation create-stack</code> with a SAM template also needs <code>CAPABILITY_AUTO_EXPAND</code> for the transform.</li>
+      <li><code>sam deploy</code> and <code>aws cloudformation deploy</code> use change sets, which show the processed template for review.</li>
+      <li><code>sam build</code> builds the code and dependencies. <code>sam deploy --guided</code> deploys and saves the settings.</li>
+      <li><code>sam local invoke -e event.json</code> runs the function locally with a test event.</li>
+      <li><code>sam local start-api</code> runs a local API.</li>
+      <li><code>sam remote invoke</code> invokes a deployed function in the AWS Cloud with <code>--event</code> or <code>--event-file</code>.</li>
+      <li>The Lambda console keeps up to 10 test events for each function.</li>
+      <li>Shareable test events are available to other users in the account.</li>
+      <li><code>sam sync</code> sends code-only changes with the Lambda API and skips the CloudFormation deployment.</li>
+      <li>Use <code>sam sync</code> only for development stacks, because the stack then no longer matches the deployed code.</li>
+      <li><code>sam logs</code> gets function logs.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Five functions use the same library, update it in one place" → layer.</li>
+      <li>"Dependencies are 3 GB" → container image (10 GB maximum), not layers, because a .zip function with its layers is limited to 250 MB unzipped.</li>
+      <li>"Container image function cannot use the shared layer" → build the dependency into the image. Container image functions do not support layers.</li>
+      <li>"Test the function locally with a sample event" → <code>sam local invoke -e</code>.</li>
+      <li>"create-stack with a SAM template fails with InsufficientCapabilities" → add <code>CAPABILITY_IAM</code> and <code>CAPABILITY_AUTO_EXPAND</code>.</li>
+      <li>"Test the deployed function in the cloud from the SAM CLI" → <code>sam remote invoke</code>.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Layers</h3>
   <ul>
     <li>A layer is a .zip archive with libraries, a custom runtime, or configuration files.</li>
@@ -348,30 +647,71 @@
   <h3>AWS SAM</h3>
   <ul>
     <li>SAM is a CloudFormation transform: <code>Transform: AWS::Serverless-2016-10-31</code>. A transform is a macro that CloudFormation runs to expand short resource types into full CloudFormation resources. <code>AWS::Serverless::Function</code> becomes a function, an execution role, and other resources.</li>
-    <li>A capability is your acknowledgment that the template does something sensitive. Without it, CloudFormation stops with an <code>InsufficientCapabilities</code> error. A template that creates an IAM role needs <code>CAPABILITY_IAM</code>. If you create a stack directly from a SAM template with <code>aws cloudformation create-stack</code> (no change set), CloudFormation also needs <code>CAPABILITY_AUTO_EXPAND</code> for the transform.</li>
+    <li>A capability is your acknowledgment that the template does something sensitive. Without it, CloudFormation stops with an <code>InsufficientCapabilities</code> error.</li>
+    <li>A template that creates an IAM role needs <code>CAPABILITY_IAM</code>. If you create a stack directly from a SAM template with <code>aws cloudformation create-stack</code> (no change set), CloudFormation also needs <code>CAPABILITY_AUTO_EXPAND</code> for the transform.</li>
     <li><code>sam deploy</code> and <code>aws cloudformation deploy</code> use change sets, which show the processed template for review.</li>
     <li><code>sam build</code> builds the code and dependencies. <code>sam deploy --guided</code> deploys and saves settings.</li>
     <li><code>sam local invoke -e event.json</code> runs the function locally with a test event. <code>sam local start-api</code> runs a local API.</li>
     <li><code>sam remote invoke</code> invokes a deployed function in the AWS Cloud with <code>--event</code> or <code>--event-file</code>.</li>
     <li>Test events are JSON payloads. The Lambda console keeps up to 10 test events for each function. Shareable test events are available to other users in the account.</li>
-    <li><code>sam sync</code> sends changes quickly to a development stack. For code-only changes, it calls the Lambda API directly and skips the CloudFormation deployment. The stack then no longer matches the deployed code (drift), so AWS recommends it for development stacks only. <code>sam logs</code> gets function logs.</li>
+    <li><code>sam sync</code> sends changes quickly to a development stack. For code-only changes, it calls the Lambda API directly and skips the CloudFormation deployment. The stack then no longer matches the deployed code (drift), so AWS recommends it for development stacks only.</li>
+    <li><code>sam logs</code> gets function logs.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Five functions use the same library, update it in one place" → layer.</li>
-      <li>"Dependencies are 3 GB" → container image (10 GB maximum), not layers, because a .zip function with its layers is limited to 250 MB unzipped.</li>
-      <li>"Container image function cannot use the shared layer" → layers are not supported. Build the dependency into the image.</li>
-      <li>"Test the function locally with a sample event" → <code>sam local invoke -e</code>.</li>
-      <li>"create-stack with a SAM template fails with InsufficientCapabilities" → add <code>CAPABILITY_IAM</code> and <code>CAPABILITY_AUTO_EXPAND</code>.</li>
-      <li>"Test the deployed function in the cloud from the SAM CLI" → <code>sam remote invoke</code>.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/chapter-layers.html">Layers</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/images-create.html">Container images</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_CreateStack.html">CreateStack capabilities</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-remote-invoke.html">sam remote invoke</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/using-sam-cli-sync.html">sam sync</a>. Labs: <a href="../../../module-01-lambda-fundamentals/lab-01-hello-sam/README.md">Lab 1.1 Hello SAM</a>, <a href="../../../module-01-lambda-fundamentals/lab-04-layers/README.md">Lab 1.4 Layers</a>.</p>
 </section>
 
 <section id="lambda-security">
   <h2>Permissions, secrets, and function URLs</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>The <strong>execution role</strong> controls what the function can do with other AWS services.</li>
+      <li>The <strong>resource-based policy</strong> (function policy) controls who can invoke or manage the function.</li>
+      <li>When the function calls a service, change the execution role.</li>
+      <li>When a service or another account calls the function, change the resource-based policy.</li>
+      <li>Set the resource-based policy with <code>AddPermission</code> (one statement) or <code>PutResourcePolicy</code> (full JSON).</li>
+      <li>A resource-based policy has a maximum size of 20 KB.</li>
+      <li>You can attach the resource-based policy to the function, a version, or an alias.</li>
+      <li>A service principal statement with no condition lets any resource of that service invoke the function.</li>
+      <li>Use <code>aws:SourceArn</code> to limit a service principal to one resource, for example one topic.</li>
+      <li>For Amazon S3, also add <code>aws:SourceAccount</code>, because a bucket ARN has no account ID.</li>
+      <li><code>AWSLambdaBasicExecutionRole</code> gives permission to write CloudWatch Logs.</li>
+      <li>A function without log permission runs, but Lambda cannot write its logs to CloudWatch Logs.</li>
+      <li>An event source mapping reads the source with the execution role. Example: <code>AWSLambdaSQSQueueExecutionRole</code>.</li>
+      <li>Lambda always encrypts environment variables at rest, by default with an AWS managed key at no charge.</li>
+      <li>A customer managed KMS key controls key rotation and key access. Users need <code>kms:Decrypt</code> to see the values.</li>
+      <li>Users with <code>kms:Decrypt</code> access still see plaintext environment variable values in the console.</li>
+      <li><strong>Encryption helpers</strong> encrypt values on the client side, so the console shows only the encrypted text.</li>
+      <li>With encryption helpers, the function code calls KMS <code>Decrypt</code>, and the execution role needs <code>kms:Decrypt</code>.</li>
+      <li>Store database credentials and API keys in AWS Secrets Manager, not in environment variables.</li>
+      <li>Secrets Manager rotates a secret automatically, and the function reads the current value at run time.</li>
+      <li>An environment variable keeps the old value until you change the function configuration.</li>
+      <li>Do not put access keys in code or environment variables. The function gets temporary credentials from the execution role.</li>
+      <li>A <strong>function URL</strong> is an HTTPS endpoint for one function: <code>https://&lt;url-id&gt;.lambda-url.&lt;region&gt;.on.aws</code>.</li>
+      <li>Attach a function URL to <code>$LATEST</code> or to an alias. You cannot attach it to a numbered version.</li>
+      <li>With <code>AuthType</code> <code>AWS_IAM</code>, callers sign with SigV4 and need <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code>.</li>
+      <li>With <code>AuthType</code> <code>NONE</code>, the resource-based policy must still allow <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code> for <code>"*"</code>.</li>
+      <li>A function URL with <code>AuthType</code> <code>NONE</code> returns 403 Forbidden if the policy does not allow <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code>.</li>
+      <li>The console and AWS SAM add the function URL policy statements. With the CLI or CloudFormation, you add the statements.</li>
+      <li>Configure CORS on the function URL, so that browser code from another domain can call it.</li>
+      <li>A function URL is reachable only from the public internet. You cannot make a private function URL in a VPC.</li>
+      <li>The <code>BUFFERED</code> invoke mode is the default and allows a 6 MB response.</li>
+      <li>The <code>RESPONSE_STREAM</code> invoke mode uses <code>InvokeWithResponseStream</code> and allows up to 200 MB.</li>
+      <li>Response streaming improves the time to first byte. Node.js managed runtimes support it natively.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"S3 event does not start the function" → the function resource-based policy does not allow <code>s3.amazonaws.com</code>. Amazon S3 calls the function, so the permission belongs in the resource-based policy.</li>
+      <li>"AccessDenied when the function writes to DynamoDB" → add the permission to the execution role, because the function is the caller.</li>
+      <li>"Store a database password with rotation" → Secrets Manager, because it rotates the secret for you.</li>
+      <li>"Environment variable must not be visible as plain text in the console" → encryption helpers with a customer managed key. Encryption at rest alone still shows the plaintext to users with key access.</li>
+      <li>"Simple HTTPS endpoint for one function, no API features needed" → function URL.</li>
+      <li>"Response is larger than 6 MB, or users must see the first bytes fast" → function URL with <code>RESPONSE_STREAM</code>.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Two kinds of policy</h3>
   <table>
     <tr><th>Item</th><th>Execution role</th><th>Resource-based policy (function policy)</th></tr>
@@ -381,7 +721,9 @@
   </table>
   <p>To choose the policy, ask two questions. What does the function call? Change the execution role. Who calls the function? Change the resource-based policy.</p>
   <ul>
-    <li>Limit a service principal with <code>aws:SourceArn</code> or <code>aws:SourceAccount</code>. A statement for a service principal such as <code>sns.amazonaws.com</code> with no condition lets any resource of that service invoke the function. <code>aws:SourceArn</code> limits it to one resource, for example one topic. For Amazon S3, also add <code>aws:SourceAccount</code>: a bucket ARN has no account ID, and another account can create a bucket with the same name after you delete yours.</li>
+    <li>Limit a service principal with <code>aws:SourceArn</code> or <code>aws:SourceAccount</code>. A statement for a service principal such as <code>sns.amazonaws.com</code> with no condition lets any resource of that service invoke the function.</li>
+    <li><code>aws:SourceArn</code> limits the statement to one resource, for example one topic.</li>
+    <li>For Amazon S3, also add <code>aws:SourceAccount</code>: a bucket ARN has no account ID, and another account can create a bucket with the same name after you delete yours.</li>
     <li>You can attach the policy to the function, a version, or an alias.</li>
     <li><code>AWSLambdaBasicExecutionRole</code> gives permission to write CloudWatch Logs. Without it, the function runs but Lambda cannot write its logs to CloudWatch Logs.</li>
     <li>For an event source mapping, Lambda reads the source with the <strong>execution role</strong>, not with a resource-based policy, because Lambda reads the source for the function. Example: <code>AWSLambdaSQSQueueExecutionRole</code>.</li>
@@ -399,26 +741,52 @@
     <li>A function URL is an HTTPS endpoint for one function: <code>https://&lt;url-id&gt;.lambda-url.&lt;region&gt;.on.aws</code>.</li>
     <li>Attach it to <code>$LATEST</code> or to an alias. You cannot attach it to a numbered version.</li>
     <li><code>AuthType</code> <code>AWS_IAM</code>: callers sign requests with SigV4 (Signature Version 4: the AWS request signature made with IAM credentials, as the SDK does for every API call) and need <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code>.</li>
-    <li><code>AuthType</code> <code>NONE</code>: public access with no authentication. The resource-based policy must still allow <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code> for all principals (<code>"*"</code>). Without these statements, callers get 403 Forbidden. The console and AWS SAM add the statements for you; with the CLI or CloudFormation, you add them.</li>
-    <li>Configure CORS on the function URL, so that browser code from another domain can call it. Function URLs are reachable only from the public internet; you cannot make a private function URL inside a VPC.</li>
+    <li><code>AuthType</code> <code>NONE</code>: public access with no authentication. The resource-based policy must still allow <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code> for all principals (<code>"*"</code>). Without these statements, callers get 403 Forbidden.</li>
+    <li>The console and AWS SAM add the statements for you; with the CLI or CloudFormation, you add them.</li>
+    <li>Configure CORS on the function URL, so that browser code from another domain can call it.</li>
+    <li>Function URLs are reachable only from the public internet; you cannot make a private function URL inside a VPC.</li>
     <li>Invoke mode: <code>BUFFERED</code> (default, <code>Invoke</code> API, 6 MB response) or <code>RESPONSE_STREAM</code> (<code>InvokeWithResponseStream</code> API, up to 200 MB). Streaming sends partial responses early and improves time to first byte. Node.js managed runtimes support it natively.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"S3 event does not start the function" → the function resource-based policy does not allow <code>s3.amazonaws.com</code>. Amazon S3 calls the function, so the permission belongs in the resource-based policy.</li>
-      <li>"AccessDenied when the function writes to DynamoDB" → add the permission to the execution role, because the function is the caller.</li>
-      <li>"Store a database password with rotation" → Secrets Manager, because it rotates the secret for you.</li>
-      <li>"Environment variable must not be visible as plain text in the console" → encryption helpers with a customer managed key. Encryption at rest alone still shows the plaintext to users with key access.</li>
-      <li>"Simple HTTPS endpoint for one function, no API features needed" → function URL.</li>
-      <li>"Response is larger than 6 MB, or users must see the first bytes fast" → function URL with <code>RESPONSE_STREAM</code>.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/access-control-resource-based.html">Resource-based policies</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/permissions-function-services.html">Granting access to AWS services</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars-encryption.html">Securing environment variables</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Function URL access control</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-configuration.html">Function URLs</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/config-rs-invoke-furls.html">Response streaming with function URLs</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-03-versions-aliases/README.md">Lab 1.3 Versions and aliases</a>.</p>
 </section>
 
 <section id="lambda-vpc">
   <h2>Lambda in a VPC</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>By default, a function runs in a VPC that Lambda owns. The function reaches the internet but not your private resources.</li>
+      <li>Attach the function to private subnets and security groups to reach RDS, ElastiCache, or private EC2 resources.</li>
+      <li>A function attached to your VPC loses its default internet access.</li>
+      <li>To give a VPC function internet access, route its private subnets to a <strong>NAT gateway</strong> in a public subnet.</li>
+      <li>A public subnet does not give a function internet access or a public IP address.</li>
+      <li>Without a route to a NAT gateway, internet calls from a VPC function wait until they time out.</li>
+      <li>A <strong>VPC endpoint</strong> is a private connection from the VPC to an AWS service, with no internet.</li>
+      <li>Gateway endpoints support Amazon S3 and DynamoDB and have no extra charge.</li>
+      <li>Interface endpoints support most other services and have hourly and data charges.</li>
+      <li>A VPC function needs EC2 network interface permissions in its execution role: use <code>AWSLambdaVPCAccessExecutionRole</code>.</li>
+      <li>Lambda creates one <strong>Hyperplane ENI</strong> for each subnet and security group combination. Functions with the same combination share it.</li>
+      <li>A new VPC function is <code>Pending</code> and cannot be invoked while Lambda creates the ENI. This state can take several minutes.</li>
+      <li>After 14 days idle, Lambda removes the unused ENI, and the function becomes <code>Inactive</code>.</li>
+      <li>The next invocation of an <code>Inactive</code> function fails, and the function is <code>Pending</code> until Lambda has an ENI.</li>
+      <li>The target security group must allow inbound traffic from the function security group, or the connection times out.</li>
+      <li><strong>RDS Proxy</strong> keeps a pool of open database connections and shares them between many function environments.</li>
+      <li>Use RDS Proxy when a function opens many short connections, so the function can scale without exhausting database connections.</li>
+      <li>Use a NAT gateway for internet access, a VPC endpoint for AWS services, and RDS Proxy for connection pooling.</li>
+      <li>Choose subnets in more than one Availability Zone for high availability.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Function in a VPC times out when it calls an external API" → no NAT gateway route. Without a route to the internet, the call waits until the timeout.</li>
+      <li>"Function in a VPC must read S3 without internet access" → S3 gateway endpoint, because it keeps the traffic on the AWS network at no extra charge.</li>
+      <li>"Too many database connections from Lambda, and the function must keep scaling" → RDS Proxy.</li>
+      <li>"Too many database connections from Lambda, and a cap on scaling is acceptable" → reserved concurrency.</li>
+      <li>"Function must reach an ElastiCache cluster" → attach the function to the VPC and allow its security group.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li>By default, a function can reach the public internet but cannot reach private resources in your VPC. The function runs in a VPC that Lambda owns, not in your VPC.</li>
@@ -426,34 +794,74 @@
     <li>After you attach it, the function reaches only what the VPC can reach. It loses its default internet access.</li>
     <li>Internet access from a VPC function: route the private subnets to a <strong>NAT gateway</strong> in a public subnet. The NAT gateway sends the traffic to the internet with its own public IP address.</li>
     <li>A public subnet does not give the function internet access or a public IP address. Without a route to a NAT gateway, calls to the internet wait until they time out.</li>
-    <li>To reach AWS services without the internet, add VPC endpoints. A VPC endpoint is a private connection from the VPC to an AWS service. Gateway endpoints are for Amazon S3 and DynamoDB and have no extra charge. Interface endpoints support most other services and have hourly and data charges.</li>
+    <li>To reach AWS services without the internet, add VPC endpoints. A VPC endpoint is a private connection from the VPC to an AWS service.</li>
+    <li>Gateway endpoints are for Amazon S3 and DynamoDB and have no extra charge. Interface endpoints support most other services and have hourly and data charges.</li>
     <li>The execution role needs EC2 network interface permissions, because Lambda uses the role to create the network interfaces in your VPC. Use the <code>AWSLambdaVPCAccessExecutionRole</code> managed policy.</li>
     <li>A <strong>Hyperplane ENI</strong> is a network interface that Lambda creates and manages in your subnet. It connects the function to your VPC. Lambda creates one for each subnet and security group combination, and functions with the same combination share it.</li>
-    <li>While Lambda creates the ENI, a new function is <code>Pending</code> and cannot be invoked. This can take several minutes. After 14 days idle, Lambda removes the unused ENI and the function becomes <code>Inactive</code>. The next invocation fails, and the function is <code>Pending</code> again until Lambda has an ENI.</li>
+    <li>While Lambda creates the ENI, a new function is <code>Pending</code> and cannot be invoked. This can take several minutes.</li>
+    <li>After 14 days idle, Lambda removes the unused ENI and the function becomes <code>Inactive</code>. The next invocation fails, and the function is <code>Pending</code> again until Lambda has an ENI.</li>
     <li>The target security group must allow inbound traffic from the function security group. Otherwise, the connection to the database or cache times out.</li>
     <li><strong>RDS Proxy</strong> keeps a pool of open database connections and shares them between many function environments. AWS recommends it for functions that open many short connections, so the function can scale without exhausting database connections.</li>
     <li>Choose the tool for the problem: NAT gateway for internet access; VPC endpoint for AWS services without the internet; RDS Proxy for database connection pooling.</li>
     <li>Choose subnets in more than one Availability Zone for high availability.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Function in a VPC times out when it calls an external API" → no NAT gateway route. Without a route to the internet, the call waits until the timeout.</li>
-      <li>"Function in a VPC must read S3 without internet access" → S3 gateway endpoint, because it keeps the traffic on the AWS network at no extra charge.</li>
-      <li>"Too many database connections from Lambda" → RDS Proxy if the function must keep scaling. Reserved concurrency if a cap on scaling is acceptable.</li>
-      <li>"Function must reach an ElastiCache cluster" → attach the function to the VPC and allow its security group.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html">VPC access</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-rds.html">Lambda with Amazon RDS (RDS Proxy)</a>, <a href="https://docs.aws.amazon.com/vpc/latest/privatelink/gateway-endpoints.html">Gateway endpoints</a>, <a href="https://aws.amazon.com/privatelink/pricing/">AWS PrivateLink pricing (interface endpoints)</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-07-vpc-lambda/README.md">Lab 1.7 VPC Lambda</a>.</p>
 </section>
 
 <section id="lambda-observability">
   <h2>Logging, metrics, tracing, and extensions</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Function output to <code>stdout</code> and <code>stderr</code> goes to CloudWatch Logs.</li>
+      <li>The default log group is <code>/aws/lambda/&lt;function-name&gt;</code>.</li>
+      <li>The Lambda log format is Text by default. The other format is JSON.</li>
+      <li><strong>Log-level filtering</strong> sends only lines at or above the set level, so you store and pay for fewer logs.</li>
+      <li>Log-level filtering needs the JSON log format. With Text, Lambda sends all lines.</li>
+      <li>Application log levels are TRACE, DEBUG, INFO, WARN, ERROR, and FATAL.</li>
+      <li>System log levels, for lines such as <code>START</code> and <code>REPORT</code>, are DEBUG, INFO, and WARN.</li>
+      <li>A log level set in the function code overrides the console or API setting.</li>
+      <li>Use a custom log group when several functions must write to one log group.</li>
+      <li>Use CloudWatch Logs Insights to query logs.</li>
+      <li>Built-in metrics: <code>Invocations</code>, <code>Errors</code>, <code>Throttles</code>, <code>Duration</code>, <code>ConcurrentExecutions</code>, <code>IteratorAge</code>, <code>DeadLetterErrors</code>, <code>DestinationDeliveryFailures</code>.</li>
+      <li>For custom metrics, write logs in <strong>embedded metric format</strong> (EMF). CloudWatch extracts the metrics from the logs.</li>
+      <li>With embedded metric format, the code does not call <code>PutMetricData</code> and does not wait for an API call.</li>
+      <li>Turn on <strong>active tracing</strong> with <code>TracingConfig</code> <code>Mode: Active</code>, or <code>Tracing: Active</code> in AWS SAM.</li>
+      <li>X-Ray tracing needs <code>xray:PutTraceSegments</code> and <code>xray:PutTelemetryRecords</code> (<code>AWSXRayDaemonWriteAccess</code>) in the execution role.</li>
+      <li>X-Ray samples 1 Lambda request each second plus 5 percent of other requests.</li>
+      <li>You cannot change the X-Ray sampling rate for Lambda, so not every request has a trace.</li>
+      <li>The <code>AWS::Lambda</code> segment shows the time that Lambda uses to prepare the environment.</li>
+      <li>The <code>AWS::Lambda::Function</code> segment shows your code, with Init as a subsegment after a cold start.</li>
+      <li>To see each downstream call as a subsegment, instrument the SDK clients with the X-Ray SDK or AWS Distro for OpenTelemetry.</li>
+      <li>X-Ray <strong>annotations</strong> are indexed key-value pairs that you can use in filter expressions to search traces.</li>
+      <li>X-Ray does not index metadata, so you cannot search traces on metadata.</li>
+      <li>A published version locks the tracing mode.</li>
+      <li>An <strong>extension</strong> runs in the execution environment next to the function, with no change to the function code.</li>
+      <li>An external extension is a separate process that can run after the function returns.</li>
+      <li>Lambda installs an external extension from a layer in <code>/opt/extensions</code>.</li>
+      <li>An internal extension runs in the runtime process, as part of the function.</li>
+      <li>Extensions share memory, CPU, and permissions with the function. You pay for the time they use.</li>
+      <li>Extension size counts toward the 250 MB unzipped package limit.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Find which downstream call is slow" → X-Ray active tracing with subsegments.</li>
+      <li>"Filter traces by customer ID" → X-Ray annotation.</li>
+      <li>"Send only ERROR logs from production without code change" → JSON log format and application log level ERROR.</li>
+      <li>"Publish a custom business metric with the least latency and effort" → embedded metric format.</li>
+      <li>"Send telemetry to a third-party tool without changing code" → Lambda extension.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Logs</h3>
   <ul>
     <li>Output to <code>stdout</code> and <code>stderr</code> goes to CloudWatch Logs. The default log group is <code>/aws/lambda/&lt;function-name&gt;</code>.</li>
     <li>Log format: Text (default) or JSON.</li>
-    <li>With log-level filtering, Lambda sends only log lines at or above the level that you set, so you store and pay for fewer logs. It needs the <strong>JSON</strong> format; with Text, Lambda sends all lines. Application logs come from your code: TRACE, DEBUG, INFO, WARN, ERROR, FATAL. System logs are the lines that Lambda writes, such as <code>START</code> and <code>REPORT</code>: DEBUG, INFO, WARN.</li>
+    <li>With log-level filtering, Lambda sends only log lines at or above the level that you set, so you store and pay for fewer logs. It needs the <strong>JSON</strong> format; with Text, Lambda sends all lines.</li>
+    <li>Application logs come from your code: TRACE, DEBUG, INFO, WARN, ERROR, FATAL.</li>
+    <li>System logs are the lines that Lambda writes, such as <code>START</code> and <code>REPORT</code>: DEBUG, INFO, WARN.</li>
     <li>A log level set in the function code overrides the console or API setting.</li>
     <li>You can send logs to a custom log group. Use it when several functions must write to one log group, for example all functions of one application, so you can query and set retention in one place.</li>
     <li>Use CloudWatch Logs Insights to query logs.</li>
@@ -468,9 +876,11 @@
     <li>Turn on <strong>active tracing</strong>: <code>TracingConfig</code> <code>Mode: Active</code>, or <code>Tracing: Active</code> in SAM. Lambda then sends trace data for sampled requests to X-Ray, which builds a service map.</li>
     <li>The execution role needs <code>xray:PutTraceSegments</code> and <code>xray:PutTelemetryRecords</code> (<code>AWSXRayDaemonWriteAccess</code>).</li>
     <li>Sampling: 1 request each second plus 5 percent of other requests. You cannot change the sampling rate for Lambda. So you do not see a trace for every request.</li>
-    <li>Lambda records two segments: <code>AWS::Lambda</code> (the service) and <code>AWS::Lambda::Function</code> (your code). The service segment shows the time that Lambda uses to prepare the environment: it schedules, creates or unfreezes the environment, and downloads the code. The function segment shows your code, including Init as an Initialization subsegment after a cold start (the newer trace format names it Init).</li>
+    <li>Lambda records two segments: <code>AWS::Lambda</code> (the service) and <code>AWS::Lambda::Function</code> (your code). The service segment shows the time that Lambda uses to prepare the environment: it schedules, creates or unfreezes the environment, and downloads the code.</li>
+    <li>The function segment shows your code, including Init as an Initialization subsegment after a cold start (the newer trace format names it Init).</li>
     <li>To see each downstream call, instrument the SDK clients with the X-Ray SDK or AWS Distro for OpenTelemetry. Each call then gets a <strong>subsegment</strong> with its own latency.</li>
-    <li>Annotations are indexed key-value pairs: use them in filter expressions to search traces, for example by customer ID. Metadata stores any data with the trace, but X-Ray does not index it, so you cannot search on it.</li>
+    <li>Annotations are indexed key-value pairs: use them in filter expressions to search traces, for example by customer ID.</li>
+    <li>Metadata stores any data with the trace, but X-Ray does not index it, so you cannot search on it.</li>
     <li>Tracing mode is locked in a published version.</li>
   </ul>
   <h3>Extensions</h3>
@@ -481,24 +891,48 @@
     <li>Extensions share memory, CPU, and permissions with the function. You pay for the time they use.</li>
     <li>Extension size counts toward the 250 MB unzipped package limit.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Find which downstream call is slow" → X-Ray active tracing with subsegments.</li>
-      <li>"Filter traces by customer ID" → X-Ray annotation.</li>
-      <li>"Send only ERROR logs from production without code change" → JSON log format and application log level ERROR.</li>
-      <li>"Publish a custom business metric with the least latency and effort" → embedded metric format.</li>
-      <li>"Send telemetry to a third-party tool without changing code" → Lambda extension.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/monitoring-cloudwatchlogs-log-level.html">Log-level filtering</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-xray.html">X-Ray with Lambda</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-extensions.html">Extensions</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-01-hello-sam/README.md">Lab 1.1 Hello SAM</a>.</p>
 </section>
 
 <section id="lambda-performance">
   <h2>Performance tuning and SnapStart</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Lambda memory controls CPU. Lambda charges for memory × duration, in GB-seconds.</li>
+      <li>More memory can lower the cost when the extra CPU cuts the duration enough.</li>
+      <li>A function at 1,024 MB for 1 second costs the same as at 512 MB for 2 seconds.</li>
+      <li>To find the best memory size, test several sizes, for example with AWS Lambda Power Tuning.</li>
+      <li><strong>AWS Compute Optimizer</strong> recommends a Lambda memory size from the last 14 days of metrics.</li>
+      <li>Compare Max Memory Used with Memory Size in the <code>REPORT</code> log line to find unused memory.</li>
+      <li>Keep init work small: import only the modules you need, and load rarely used objects lazily.</li>
+      <li>Lambda bills the Init phase of all on-demand functions since August 1, 2025. Older study material says Init is free.</li>
+      <li>Create clients and connections outside the handler, so warm invocations use them again.</li>
+      <li>Provisioned concurrency gives the lowest and most constant start latency, at extra cost.</li>
+      <li><strong>SnapStart</strong> runs Init when you publish a version and starts new environments from a snapshot.</li>
+      <li>A SnapStart environment skips Init, so a slow framework startup no longer delays the cold start.</li>
+      <li>SnapStart supports Java 11 and later, Python 3.12 and later, and .NET 8 and later.</li>
+      <li>SnapStart works on published versions and aliases only, not on <code>$LATEST</code>.</li>
+      <li>SnapStart does not work with provisioned concurrency, Amazon EFS, or ephemeral storage above 512 MB.</li>
+      <li>SnapStart has no extra cost for Java. Python and .NET pay for snapshot caching and for each restore.</li>
+      <li>Content made during Init, such as unique IDs and random seeds, is the same in every restored SnapStart environment.</li>
+      <li>Use an after-restore runtime hook to create seeds, IDs, and connections again.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Java function has a slow cold start, lowest cost fix" → SnapStart, because it has no extra cost for Java.</li>
+      <li>"Strict latency for every request, cost is not a concern" → provisioned concurrency, because its environments are already initialized before requests arrive.</li>
+      <li>"Find the best memory size for cost" → test memory sizes (for example, with Lambda Power Tuning), or use AWS Compute Optimizer recommendations.</li>
+      <li>"Restored environments create the same random value" → generate the value after the restore. SnapStart restores the same Init content in every environment.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
-    <li>Memory controls CPU. Lambda charges for memory × duration (GB-seconds). So more memory can lower cost if the duration falls enough. Example: 1,024 MB for 1 second costs the same as 512 MB for 2 seconds; if the extra CPU cuts the time to 0.8 seconds, the larger size costs less.</li>
+    <li>Memory controls CPU. Lambda charges for memory × duration (GB-seconds). So more memory can lower cost if the duration falls enough.</li>
+    <li>Example: 1,024 MB for 1 second costs the same as 512 MB for 2 seconds; if the extra CPU cuts the time to 0.8 seconds, the larger size costs less.</li>
     <li>Test several memory sizes and compare duration and cost. AWS Lambda Power Tuning is an open-source tool for this test.</li>
     <li>AWS Compute Optimizer recommends a memory size for Lambda functions. It analyzes the last 14 days of metrics and marks memory as under-provisioned or over-provisioned.</li>
     <li>The <code>REPORT</code> log line shows Duration, Billed Duration, Memory Size, and Max Memory Used. Compare Max Memory Used with Memory Size to find unused memory.</li>
@@ -514,17 +948,9 @@
     <li>Works on published versions and aliases only, not on <code>$LATEST</code>.</li>
     <li>Not supported with provisioned concurrency, Amazon EFS, or ephemeral storage above 512 MB.</li>
     <li>Cost: no extra cost for Java. Python and .NET pay for snapshot caching and for each restore.</li>
-    <li>Content made during Init (unique IDs, random seeds) is the same in every restored environment. Make unique content after the restore. Runtime hooks are functions that Lambda runs just before it takes the snapshot and just after it restores one. Use an after-restore hook to create seeds, IDs, and connections again.</li>
+    <li>Content made during Init (unique IDs, random seeds) is the same in every restored environment. Make unique content after the restore.</li>
+    <li>Runtime hooks are functions that Lambda runs just before it takes the snapshot and just after it restores one. Use an after-restore hook to create seeds, IDs, and connections again.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Java function has a slow cold start, lowest cost fix" → SnapStart, because it has no extra cost for Java.</li>
-      <li>"Strict latency for every request, cost is not a concern" → provisioned concurrency, because its environments are already initialized before requests arrive.</li>
-      <li>"Find the best memory size for cost" → test memory sizes (for example, with Lambda Power Tuning), or use AWS Compute Optimizer recommendations.</li>
-      <li>"Restored environments create the same random value" → SnapStart uniqueness. Generate it after restore.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/snapstart.html">SnapStart</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html">Optimizing static initialization</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Memory and CPU</a>, <a href="https://docs.aws.amazon.com/compute-optimizer/latest/ug/view-lambda-recommendations.html">Compute Optimizer for Lambda</a>, <a href="https://aws.amazon.com/lambda/pricing/">Lambda pricing (GB-seconds)</a>, <a href="https://aws.amazon.com/blogs/compute/aws-lambda-standardizes-billing-for-init-phase/">Init phase billing</a>. Lab: <a href="../../../module-01-lambda-fundamentals/lab-05-concurrency/README.md">Lab 1.5 Concurrency</a>.</p>
 </section>
 
