@@ -101,6 +101,19 @@ section { border-top: 1px solid var(--border); margin-top: 2rem; }
   padding: 0.25rem 1rem;
   margin: 1rem 0;
 }
+.remember {
+  background: var(--notice-bg);
+  border-left: 4px solid var(--notice-border);
+  padding: 0.25rem 1rem;
+  margin: 1rem 0;
+}
+.remember li { margin: 0.25rem 0; }
+h3.explain {
+  margin-top: 1.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+}
 .refs { color: var(--muted); font-size: 0.9rem; }
 footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 
