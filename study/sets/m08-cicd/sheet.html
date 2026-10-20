@@ -50,7 +50,6 @@
       <li>Use branches for environments and Git tags for releases.</li>
       <li>A V2 pipeline can filter triggers on branches, tags, and file paths.</li>
       <li>AWS CodeCommit is a managed Git service. IAM controls access to it.</li>
-      <li>AWS closed CodeCommit to new customers in July 2024 and made it available again in November 2025.</li>
       <li>CodeCommit HTTPS Git credentials and SSH keys belong to an IAM user. A federated user or a role cannot get them.</li>
       <li>For federated access or temporary credentials with CodeCommit, use <code>git-remote-codecommit</code>. It needs no Git credentials.</li>
       <li>To stop some users from pushing to a branch, use an IAM <code>Deny</code> with the <code>codecommit:References</code> condition.</li>
@@ -62,7 +61,7 @@
       <li>A CodeArtifact repository can have up to 10 upstream repositories.</li>
       <li>An <strong>external connection</strong> links a CodeArtifact repository to a public repository, such as npmjs.com, PyPI, or Maven Central.</li>
       <li>A CodeArtifact repository can have only one external connection.</li>
-      <li>CodeArtifact stores a copy of each public package, so builds can still download it during a public repository outage.</li>
+      <li>CodeArtifact stores a copy of each public package that a build requests, so builds can still download it during an outage.</li>
       <li>Recommended CodeArtifact pattern: one repository has the external connection, and the other repositories use it as an upstream.</li>
       <li><code>aws codeartifact login</code> configures npm, pip, twine, dotnet, nuget, and swift with the endpoint and a token.</li>
       <li>For Maven and Gradle, call <code>get-authorization-token</code> and put the token in the tool settings yourself.</li>
@@ -144,8 +143,8 @@
       <li><code>secondary-artifacts</code> creates more than one output artifact. Each identifier must match the project <code>secondaryArtifacts</code> setting.</li>
       <li>A build that only pushes an image to Amazon ECR or only runs tests does not need <code>artifacts</code>.</li>
       <li>The buildspec <strong><code>reports</code></strong> section sends test or code coverage results to a report group.</li>
-      <li>CodeBuild test report formats: JUnit XML (the default), NUnit, TestNG, Cucumber JSON, and Visual Studio TRX.</li>
-      <li>CodeBuild coverage report formats: JaCoCo, Cobertura, Clover, and SimpleCov.</li>
+      <li>CodeBuild test report formats include JUnit XML (the default), NUnit, TestNG, Cucumber JSON, and Visual Studio TRX.</li>
+      <li>CodeBuild coverage report formats include JaCoCo, Cobertura, Clover, and SimpleCov.</li>
       <li>The CodeBuild build timeout default is 60 minutes. The range is 5 to 2,160 minutes (36 hours).</li>
       <li>The CodeBuild queued timeout is 5 to 480 minutes.</li>
       <li>A CodeBuild test report is available for 30 days after creation.</li>
@@ -326,6 +325,7 @@
       <li>Use all at once when speed matters more than risk, for example in a development account.</li>
       <li>The Lambda deployment hooks are <code>BeforeAllowTraffic</code> (before any traffic moves) and <code>AfterAllowTraffic</code> (after all traffic moves).</li>
       <li>Use <code>BeforeAllowTraffic</code> to test the new version before any user reaches it.</li>
+      <li>Use <code>AfterAllowTraffic</code> to check the result after the traffic shift.</li>
       <li>A Lambda hook function must call <code>PutLifecycleEventHookExecutionStatus</code> with <code>Succeeded</code> or <code>Failed</code>.</li>
       <li>If CodeDeploy gets no hook status within one hour, the deployment fails.</li>
       <li>The hook function role needs the <code>codedeploy:PutLifecycleEventHookExecutionStatus</code> permission.</li>
@@ -398,9 +398,10 @@
       <li>A <strong>blue/green</strong> deployment updates replacement instances. The load balancer moves traffic to them.</li>
       <li>Choose in-place when you cannot pay for extra instances and a slower rollback is acceptable.</li>
       <li>Choose blue/green for a fast rollback and no loss of capacity, if you can pay for a second set of instances.</li>
+      <li>A blue/green rollback sends traffic back to the original instances, if you keep them.</li>
       <li>The EC2 hook order is <code>ApplicationStop</code>, <code>BeforeInstall</code>, <code>AfterInstall</code>, <code>ApplicationStart</code>, <code>ValidateService</code>.</li>
       <li>DownloadBundle, Install, BlockTraffic, and AllowTraffic are reserved for the agent. You cannot attach scripts to them.</li>
-      <li>The six EC2 traffic hooks (<code>BeforeBlockTraffic</code> to <code>AfterAllowTraffic</code>) run only if the deployment group has a load balancer.</li>
+      <li>The six traffic hooks (the BlockTraffic group and the AllowTraffic group) run only if the deployment group has a load balancer.</li>
       <li><code>ApplicationStop</code> uses the AppSpec and scripts from the <strong>last successful</strong> revision.</li>
       <li><code>ApplicationStop</code> does not run on the first deployment to an instance.</li>
       <li>If a broken <code>ApplicationStop</code> script blocks every deployment, deploy with <code>--ignore-application-stop-failures</code>.</li>
@@ -422,7 +423,6 @@
       <li>The CodeDeploy agent log is <code>/var/log/aws/codedeploy-agent/codedeploy-agent.log</code>. Script output is in <code>scripts.log</code>.</li>
       <li>The CodeDeploy agent writes logs only to the instance disk. To see them in CloudWatch, install the CloudWatch agent.</li>
       <li>Common CodeDeploy failures: the agent is not running, the tags do not match, or the instance profile cannot read the bucket.</li>
-      <li>CloudFormation stack events show the first resource that failed.</li>
     </ul>
   </div>
   <div class="exam-signals">
@@ -519,7 +519,6 @@
       <li>ECS linear configurations move 10 percent more every 1 or 3 minutes until all traffic moves.</li>
       <li>With a Network Load Balancer, CodeDeploy supports only the predefined <code>CodeDeployDefault.ECSAllAtOnce</code> configuration.</li>
       <li>Since 2025, the ECS deployment controller also has native blue/green, linear, and canary strategies.</li>
-      <li>Exam questions usually describe the CodeDeploy pattern. Read the stem for the service that it names.</li>
     </ul>
   </div>
   <div class="exam-signals">
@@ -587,6 +586,7 @@
       <li><code>SUPERSEDED</code> is the default execution mode. A newer execution can replace an older one that waits between stages.</li>
       <li><code>QUEUED</code> mode (V2 only) runs executions one by one, in order. It skips none.</li>
       <li><code>PARALLEL</code> mode (V2 only) runs executions at the same time. It has no stage rollback.</li>
+      <li>A stage processes one execution at a time in <code>SUPERSEDED</code> and <code>QUEUED</code> modes.</li>
       <li>Choose <code>SUPERSEDED</code> when only the newest commit matters. Choose <code>QUEUED</code> when every commit must deploy, in order.</li>
       <li>Choose <code>PARALLEL</code> when executions are independent, for example to test feature branches at the same time.</li>
       <li>V2 pipeline triggers can filter on Git tags, branches, pull requests, and file paths.</li>
@@ -601,7 +601,8 @@
       <li><code>CHANGE_SET_EXECUTE</code> runs the change set and changes the stack.</li>
       <li><code>REPLACE_ON_FAILURE</code> deletes and creates again a stack in a failed state. Use it for tests only.</li>
       <li><code>REPLACE_ON_FAILURE</code> deletes the stack resources too, unless their <code>DeletionPolicy</code> is <code>Retain</code>.</li>
-      <li>A <code>DeletionPolicy</code> of <code>Snapshot</code> saves a snapshot before the delete. <code>Snapshot</code> is the default for most RDS databases.</li>
+      <li>A <code>DeletionPolicy</code> of <code>Snapshot</code> saves a snapshot before CloudFormation deletes the resource.</li>
+      <li><code>Snapshot</code> is the default <code>DeletionPolicy</code> for most RDS databases.</li>
       <li><code>DELETE_ONLY</code> deletes the stack.</li>
       <li>To review infrastructure changes first, use <code>CHANGE_SET_REPLACE</code>, then <code>CHANGE_SET_EXECUTE</code>.</li>
     </ul>
