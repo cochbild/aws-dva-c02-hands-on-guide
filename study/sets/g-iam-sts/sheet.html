@@ -56,8 +56,8 @@
       <li>An SCP affects every user and role in a member account, including the member account root user.</li>
       <li>An <strong>RCP</strong> sets the maximum permissions on resources, also for principals from outside your organization.</li>
       <li>An SCP cannot limit principals from outside your organization. Use an RCP for them.</li>
-      <li>A <strong>session policy</strong> is passed in <code>AssumeRole</code> and gives one session fewer permissions than the role.</li>
-      <li>To let developers create roles safely, allow <code>iam:CreateRole</code> only with the <code>iam:PermissionsBoundary</code> condition key.</li>
+      <li>A <strong>session policy</strong> is passed in <code>AssumeRole</code> (or a similar API) and gives one session fewer permissions than the role.</li>
+      <li>To let developers create roles safely, allow <code>iam:CreateRole</code> only when <code>iam:PermissionsBoundary</code> equals the approved boundary ARN.</li>
       <li>Without the <code>iam:PermissionsBoundary</code> condition, a developer can create an <code>AdministratorAccess</code> role and escalate privileges.</li>
     </ul>
   </div>
@@ -114,7 +114,6 @@
       <li>With an SCP and a boundary, the identity-based policy, the boundary, and the SCP must all allow the action.</li>
       <li>A same-account resource-based policy that names a <strong>role ARN</strong> is still limited by the boundary and the session policy.</li>
       <li>A same-account resource-based policy that names a user ARN or a role session ARN ignores an implicit deny in a boundary or session policy.</li>
-      <li>A request never comes from a role itself. A request always comes from a role session.</li>
       <li>SCPs do not affect users or roles in the management account. Keep workloads out of the management account.</li>
       <li>SCPs do not affect service-linked roles.</li>
       <li>An SCP does not limit a user from outside the organization. Use an RCP for that case.</li>
@@ -320,7 +319,7 @@
       <li><code>GetFederationToken</code> credentials cannot call IAM APIs with the CLI or API.</li>
       <li><code>GetCallerIdentity</code> returns the account, user ID, and ARN. It needs no permission.</li>
       <li>An explicit deny does not block <code>GetCallerIdentity</code>.</li>
-      <li>The three <code>AssumeRole*</code> APIs have a minimum of 15 minutes, a default of 1 hour, and the role maximum as maximum.</li>
+      <li>The three <code>AssumeRole*</code> APIs allow 15 minutes to the role maximum session duration. The default is 1 hour.</li>
       <li>A role <strong>maximum session duration</strong> is 1 hour by default and can be up to 12 hours.</li>
       <li><code>DurationSeconds</code> for <code>AssumeRole</code> is 900 seconds to the role maximum. The default is 3,600 seconds.</li>
       <li>For an IAM user, <code>GetSessionToken</code> and <code>GetFederationToken</code> last 15 minutes to 36 hours. The default is 12 hours.</li>
@@ -388,7 +387,7 @@
       <li>A caller that assumes a role gives up its own permissions while it uses the role.</li>
       <li>A caller that uses a resource-based policy keeps its own permissions.</li>
       <li>Use a role when the service has no resource-based policy, or when you need many services.</li>
-      <li>Use a resource-based policy when you must work in both accounts at the same time, for example to copy data.</li>
+      <li>Use a resource-based policy (S3, SQS, SNS, KMS) when you must work in both accounts at the same time, for example to copy data.</li>
       <li>Across accounts, the identity-based policy and the resource-based policy must both allow the request.</li>
       <li>The principal <code>arn:aws:iam::111122223333:root</code> means the whole account, not only the root user.</li>
       <li>A resource policy that names an account still needs identity policies in that account to give the access.</li>
@@ -446,7 +445,6 @@
     <ul>
       <li>The SDK <strong>credential provider chain</strong> checks sources in order and stops at the first source that has credentials.</li>
       <li>The SDK refreshes temporary credentials automatically when they expire.</li>
-      <li>The exact chain order differs a little between SDKs. The general order is the same in all SDKs.</li>
       <li>Credentials that you pass in code come first in the chain.</li>
       <li>Environment variables come second: <code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_SESSION_TOKEN</code>.</li>
       <li>Profile settings come after environment variables: assume role, web identity, Identity Center, credentials and config files, custom process.</li>
@@ -515,11 +513,12 @@
       <li>AWS makes new EC2 role credentials available at least 5 minutes before the old credentials expire.</li>
       <li>Lambda puts the execution role credentials in the reserved variables <code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_SESSION_TOKEN</code>.</li>
       <li>An ECS task gets task role credentials from the ECS agent at <code>169.254.170.2</code> through <code>AWS_CONTAINER_CREDENTIALS_RELATIVE_URI</code>.</li>
-      <li>An EKS pod gets Pod Identity credentials from the node agent through <code>AWS_CONTAINER_CREDENTIALS_FULL_URI</code>.</li>
+      <li>An EKS pod gets credentials from the Pod Identity agent on the node through <code>AWS_CONTAINER_CREDENTIALS_FULL_URI</code>.</li>
       <li>The Lambda <strong>execution role</strong> controls what the function can call.</li>
       <li>The Lambda function resource-based policy controls who can invoke the function, for example <code>s3.amazonaws.com</code>.</li>
       <li>The ECS <strong>task role</strong> controls what the application code can call.</li>
       <li>The ECS <strong>task execution role</strong> lets the ECS agent pull ECR images, send logs, and get secrets.</li>
+      <li>An ECS task role trusts the service principal <code>ecs-tasks.amazonaws.com</code>.</li>
       <li>IRSA needs one IAM OIDC provider and one trust policy entry for each EKS cluster.</li>
       <li>EKS Pod Identity trusts one service principal, <code>pods.eks.amazonaws.com</code>, for all clusters and needs no OIDC provider.</li>
       <li>Choose EKS Pod Identity when one role must work in many clusters.</li>
