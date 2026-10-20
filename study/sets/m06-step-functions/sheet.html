@@ -37,6 +37,43 @@
 
 <section id="sfn-orchestration">
   <h2>Orchestration, sagas, and starting executions</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>AWS Step Functions runs a <strong>state machine</strong>. You write the state machine in the Amazon States Language (ASL), a JSON format.</li>
+      <li>One run of a state machine is an <strong>execution</strong>. Each execution gets JSON input and makes JSON output.</li>
+      <li>In <strong>orchestration</strong>, one central workflow decides which step runs next. Step Functions is the orchestration service.</li>
+      <li>In <strong>choreography</strong>, services react to events through SNS, SQS, or EventBridge. No central controller exists.</li>
+      <li>Step Functions keeps the workflow state, the retries, and the error paths out of your function code.</li>
+      <li>Step Functions assumes the state machine <strong>execution role</strong> for each call to another service.</li>
+      <li>A missing permission in the execution role makes the task fail with <code>States.Permissions</code> or an access denied error.</li>
+      <li>A <strong>saga</strong> is a sequence of local transactions in different services, without one database transaction across them.</li>
+      <li>When a later saga step fails, compensating steps undo the earlier steps, usually in reverse order.</li>
+      <li>In a Step Functions saga, a <code>Catch</code> on each step sends the failure to its compensating step.</li>
+      <li>Make each saga step and each compensating step <strong>idempotent</strong>, because a retry can run a step again.</li>
+      <li>A saga gives eventual consistency, not isolation. Other requests can see the data between steps.</li>
+      <li><code>StartExecution</code> works for Standard and Express and returns only an <code>executionArn</code>, not the result.</li>
+      <li><code>StartSyncExecution</code> works for Express only. The call waits and returns the workflow result.</li>
+      <li><code>StartSyncExecution</code> on a Standard state machine fails with <code>StateMachineTypeNotSupported</code>.</li>
+      <li>To get a result after <code>StartExecution</code>, call <code>DescribeExecution</code> (Standard only) or read the place the workflow writes to.</li>
+      <li>An API Gateway HTTP API uses the subtypes <code>StepFunctions-StartExecution</code>, <code>StepFunctions-StartSyncExecution</code>, and <code>StepFunctions-StopExecution</code>.</li>
+      <li>An API Gateway REST API starts a workflow with an AWS service integration and an IAM role that allows the action.</li>
+      <li>An EventBridge rule or schedule can start a state machine. EventBridge needs a role that allows <code>states:StartExecution</code>.</li>
+      <li>A parent state machine starts a <strong>nested workflow</strong> with a Task on <code>arn:aws:states:::states:startExecution</code>.</li>
+      <li>With <code>.sync</code>, the parent waits for the child execution to complete. Without <code>.sync</code>, the parent continues at once.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Coordinate several Lambda functions with branching, retries, and a visual history" → Step Functions.</li>
+      <li>"Fan out one event to many independent subscribers" → Amazon SNS or EventBridge (choreography), not Step Functions. The subscribers do not depend on each other, so no central controller has to decide an order.</li>
+      <li>"HTTP client must get the workflow result in the same request" → API Gateway with <code>StartSyncExecution</code> on an Express workflow. <code>StartExecution</code> returns only the execution ARN, not the result.</li>
+      <li>"Start the workflow when an object lands in S3" → EventBridge rule with the state machine as the target. Turn on EventBridge notifications on the bucket so that S3 sends the "Object Created" event to EventBridge.</li>
+      <li>"Undo the flight and hotel bookings when the payment fails" → saga pattern with <code>Catch</code> and compensating steps.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li>AWS Step Functions runs a <strong>state machine</strong>. You write the state machine in the Amazon States Language (ASL), a JSON format.</li>
@@ -66,21 +103,49 @@
     <li><code>StartExecution</code> returns an <code>executionArn</code> at once. The caller does not get the workflow result. To get the result later, the caller calls <code>DescribeExecution</code> (Standard only) or reads it from a place that the workflow writes to.</li>
     <li><code>StartSyncExecution</code> on a Standard state machine fails with <code>StateMachineTypeNotSupported</code>.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Coordinate several Lambda functions with branching, retries, and a visual history" → Step Functions.</li>
-      <li>"Fan out one event to many independent subscribers" → Amazon SNS or EventBridge (choreography), not Step Functions. The subscribers do not depend on each other, so no central controller has to decide an order.</li>
-      <li>"HTTP client must get the workflow result in the same request" → API Gateway with <code>StartSyncExecution</code> on an Express workflow. <code>StartExecution</code> returns only the execution ARN, not the result.</li>
-      <li>"Start the workflow when an object lands in S3" → EventBridge rule with the state machine as the target. Turn on EventBridge notifications on the bucket so that S3 sends the "Object Created" event to EventBridge.</li>
-      <li>"Undo the flight and hotel bookings when the payment fails" → saga pattern with <code>Catch</code> and compensating steps.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html">Choosing workflow type</a>, <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/implement-the-serverless-saga-pattern-by-using-aws-step-functions.html">Serverless saga pattern with Step Functions</a>, <a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-aws-services-reference.html">API Gateway HTTP API integration subtypes</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/eventbridge-integration.html">EventBridge integration</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/EventBridge.html">S3 events with EventBridge</a>. Lab: <a href="../../../module-06-step-functions/README.md">Module 6 overview</a>.</p>
 </section>
 
 <section id="sfn-states">
   <h2>State types and Choice rules</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>A <strong>Task</strong> state does one unit of work: a Lambda function, an AWS service API, an activity, or an HTTPS API.</li>
+      <li>Task, Parallel, and Map states support <code>Retry</code> and <code>Catch</code>.</li>
+      <li>A <strong>Choice</strong> state branches on the input. A Choice state has no <code>Retry</code> or <code>Catch</code>.</li>
+      <li>A Choice state cannot end the execution, so it has no <code>End</code> field. Each rule names its own <code>Next</code>.</li>
+      <li>A <strong>Wait</strong> state pauses for <code>Seconds</code>, <code>SecondsPath</code>, <code>Timestamp</code>, or <code>TimestampPath</code>.</li>
+      <li>No compute runs during a Wait state. Use a Wait state in place of a Lambda function that sleeps.</li>
+      <li>In a Standard workflow, a Wait state costs one state transition, not function run time.</li>
+      <li>In an Express workflow, the time in a Wait state counts toward the billed duration.</li>
+      <li>A <strong>Parallel</strong> state runs fixed branches at the same time.</li>
+      <li>A <strong>Map</strong> state runs the same steps for each item in a dataset.</li>
+      <li>A <strong>Pass</strong> state passes or reshapes data and injects a fixed value with <code>Result</code>. A Pass state cannot run code.</li>
+      <li>Succeed and Fail states are terminal. A Succeed or Fail state has no <code>Next</code> field.</li>
+      <li>A <strong>Fail</strong> state ends the execution with failure and sets <code>Error</code> and <code>Cause</code>.</li>
+      <li>Step Functions examines Choice rules in the order of the <code>Choices</code> array. The <strong>first match wins</strong>.</li>
+      <li>With no matching rule and no <code>Default</code>, the execution fails with <code>States.NoChoiceMatched</code>.</li>
+      <li>Choice operators have types. <code>NumericGreaterThan</code> does not match the string <code>"500"</code>.</li>
+      <li>Add <code>Path</code> to an operator to compare with another input value. Example: <code>NumericLessThanPath</code>.</li>
+      <li><code>IsPresent</code>, <code>IsNull</code>, <code>IsNumeric</code>, and <code>IsString</code> test a field.</li>
+      <li>A Choice comparison on a missing field fails with <code>States.Runtime</code>. <code>States.ALL</code> cannot catch that error.</li>
+      <li>To protect a comparison on a field that can be missing, put <code>IsPresent</code> before it in an <code>And</code>.</li>
+      <li><code>And</code>, <code>Or</code>, and <code>Not</code> combine Choice rules. Only the top-level rule has <code>Next</code>.</li>
+      <li><code>StringMatches</code> supports only the <code>*</code> wildcard, not regular expressions.</li>
+      <li>To match a literal asterisk in <code>StringMatches</code>, write <code>\\*</code> in the JSON definition.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Execution fails when the input matches no branch" → add <code>Default</code> to the Choice state.</li>
+      <li>"Pause until a date in the input, up to 30 days" → Wait state with <code>TimestampPath</code> in a Standard workflow. <code>TimestampPath</code> reads the date from the input, and only Standard can run longer than 5 minutes.</li>
+      <li>"A Fail state with a Next field" → invalid ASL. Succeed and Fail are terminal: they end the execution, so no state can come after them.</li>
+      <li>"Large amounts go to the wrong branch" → check the rule order. The first matching rule wins.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>State types</h3>
   <table>
     <tr><th>Type</th><th>Purpose</th><th>Notes</th></tr>
@@ -99,24 +164,63 @@
     <li>Use <code>Default</code> for input that matches no rule. With no match and no <code>Default</code>, the execution fails with <code>States.NoChoiceMatched</code>.</li>
     <li>Operators have types: <code>StringEquals</code>, <code>NumericGreaterThanEquals</code>, <code>BooleanEquals</code>, <code>TimestampLessThan</code>, and more. A numeric operator does not match a string value. For example, <code>NumericGreaterThan</code> does not match the string <code>"500"</code>, so Step Functions goes to the next rule or to <code>Default</code>.</li>
     <li>Add <code>Path</code> to an operator to compare with another input value instead of a fixed value. For example, <code>"Variable": "$.total", "NumericLessThanPath": "$.limit"</code> compares two fields of the input.</li>
-    <li><code>IsPresent</code>, <code>IsNull</code>, <code>IsNumeric</code>, and <code>IsString</code> test a field. Use <code>IsPresent</code> in an <code>And</code> before a comparison on a field that can be missing. A comparison on a missing field fails with <code>States.Runtime</code>. <code>States.ALL</code> cannot catch that error, so the execution always fails.</li>
+    <li><code>IsPresent</code>, <code>IsNull</code>, <code>IsNumeric</code>, and <code>IsString</code> test a field.</li>
+    <li>Use <code>IsPresent</code> in an <code>And</code> before a comparison on a field that can be missing. A comparison on a missing field fails with <code>States.Runtime</code>. <code>States.ALL</code> cannot catch that error, so the execution always fails.</li>
     <li><code>And</code>, <code>Or</code>, and <code>Not</code> combine rules. Only the top-level rule has <code>Next</code>.</li>
     <li><code>StringMatches</code> supports the <code>*</code> wildcard only, for example <code>"log-*.txt"</code>. It does not support regular expressions. To match a literal asterisk, write <code>\\*</code> in the JSON definition.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Execution fails when the input matches no branch" → add <code>Default</code> to the Choice state.</li>
-      <li>"Pause until a date in the input, up to 30 days" → Wait state with <code>TimestampPath</code> in a Standard workflow. <code>TimestampPath</code> reads the date from the input, and only Standard can run longer than 5 minutes.</li>
-      <li>"A Fail state with a Next field" → invalid ASL. Succeed and Fail are terminal: they end the execution, so no state can come after them.</li>
-      <li>"Large amounts go to the wrong branch" → check the rule order. The first matching rule wins.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/state-choice.html">Choice state</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html">Handling errors (States.Runtime)</a>, <a href="https://aws.amazon.com/step-functions/pricing/">Step Functions pricing</a>, <a href="https://states-language.net/spec.html">Amazon States Language specification</a>. Lab: <a href="../../../module-06-step-functions/lab-01-asl-basics/README.md">Lab 6.1 ASL basics</a>.</p>
 </section>
 
 <section id="sfn-dataflow">
   <h2>Input and output processing, JSONata, and variables</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>JSONPath fields apply in this order: <code>InputPath</code>, <code>Parameters</code>, <code>ResultSelector</code>, <code>ResultPath</code>, <code>OutputPath</code>.</li>
+      <li><code>InputPath</code> selects part of the state input. The default is <code>$</code> (all input).</li>
+      <li><code>Parameters</code> builds the task input. A key that ends in <code>.$</code> takes a path or an intrinsic function.</li>
+      <li>Without <code>.$</code>, a value such as <code>"$.order.id"</code> is a literal string, not a path.</li>
+      <li><code>ResultSelector</code> builds a new object from the task result.</li>
+      <li><code>OutputPath</code> selects part of the output for the next state. The default is <code>$</code>.</li>
+      <li><code>ResultPath</code> with <code>"$"</code> or no value makes the result replace the whole input.</li>
+      <li><code>ResultPath: "$.validation"</code> keeps the input and adds the result under <code>validation</code>.</li>
+      <li><code>ResultPath: null</code> discards the result. The output is the original input.</li>
+      <li><code>$$</code> is the <strong>Context object</strong>: data about the execution, not the state input. Example: <code>$$.Task.Token</code>.</li>
+      <li>In a Map state, <code>$$.Map.Item.Value</code> is the current item and <code>$$.Map.Item.Index</code> is its position.</li>
+      <li>The optimized <code>lambda:invoke</code> integration returns invoke metadata. The function output is in <code>Payload</code>.</li>
+      <li>To pass only the Lambda function output, select <code>$.Payload</code> with <code>ResultSelector</code> or <code>OutputPath</code>.</li>
+      <li><strong>Intrinsic functions</strong> do small data operations without a Lambda function. Examples: <code>States.Format</code>, <code>States.UUID</code>, <code>States.MathAdd</code>.</li>
+      <li>Intrinsic functions work in JSONPath states only.</li>
+      <li>Step Functions has two query languages: JSONPath and JSONata. Set the language with <code>QueryLanguage</code>.</li>
+      <li>Without <code>QueryLanguage</code>, a state machine uses JSONPath.</li>
+      <li>AWS recommends <strong>JSONata</strong> for new state machines. One expression can filter, reshape, and compute values.</li>
+      <li>JSONata states use <code>Arguments</code> in place of <code>Parameters</code>. An expression is inside <code>{% %}</code>.</li>
+      <li>In JSONata, one <code>Output</code> field replaces <code>InputPath</code>, <code>ResultSelector</code>, <code>ResultPath</code>, and <code>OutputPath</code>.</li>
+      <li>In JSONata, <code>$states.input</code> is the state input and <code>$states.result</code> is the task result.</li>
+      <li>In JSONata, <code>$states.errorOutput</code> is the error in a <code>Catch</code>, and <code>$states.context</code> is the Context object.</li>
+      <li>The <code>Assign</code> field stores a <strong>variable</strong>. A later state reads the variable as <code>$name</code>.</li>
+      <li>A variable is available to all later states. State output goes only to the next state.</li>
+      <li>Variables work in JSONPath and JSONata states. In JSONPath, you cannot use a variable in <code>ResultPath</code>.</li>
+      <li>A value that a state assigns is available from the next state. The assigning state still sees the old value.</li>
+      <li>Parallel branches and Inline Map iterations can read outer variables, but a variable that a branch assigns stops existing when that state completes.</li>
+      <li>Distributed Map cannot read outer variables. Pass the value to each item with <code>ItemSelector</code>.</li>
+      <li>Variable limits: 256 KiB for one variable, 256 KiB for one <code>Assign</code> field, 10 MiB for one execution.</li>
+      <li>Input or output of a task, state, or execution has a hard limit of 256 KiB.</li>
+      <li>Data larger than 256 KiB fails with <code>States.DataLimitExceeded</code>. Store large data in S3 and pass the bucket and key.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Keep the original input and add the Lambda result" → <code>ResultPath: "$.result"</code>.</li>
+      <li>"Next state sees StatusCode and Payload, not the function output" → select <code>$.Payload</code> with <code>ResultSelector</code> or <code>OutputPath</code>.</li>
+      <li>"Data between states is larger than 256 KiB" → store it in Amazon S3 and pass the bucket and key.</li>
+      <li>"Generate a unique ID without a Lambda function" → <code>States.UUID()</code>.</li>
+      <li>"Step 5 needs a value from step 1, and steps 2 to 4 do not need it" → store it in a variable with <code>Assign</code>.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>JSONPath fields, in order</h3>
   <table>
     <tr><th>Order</th><th>Field</th><th>What it does</th><th>Default</th></tr>
@@ -136,7 +240,8 @@
   <ul>
     <li>Without <code>.$</code>, a value such as <code>"$.order.id"</code> is a literal string, not a path.</li>
     <li><code>$$</code> is the <strong>Context object</strong>: data about the execution itself, not the state input. Examples: <code>$$.Execution.Input</code> (the original execution input), <code>$$.Task.Token</code> (the token for a callback task), <code>$$.Map.Item.Value</code> and <code>$$.Map.Item.Index</code> (the current Map item and its position).</li>
-    <li>The optimized <code>lambda:invoke</code> integration returns invoke metadata (<code>StatusCode</code>, <code>ExecutedVersion</code>, and others). The function output is in <code>Payload</code>. Without a filter, the next state gets the metadata object, not the function output. Use <code>ResultSelector</code> or <code>OutputPath</code> with <code>$.Payload</code>.</li>
+    <li>The optimized <code>lambda:invoke</code> integration returns invoke metadata (<code>StatusCode</code>, <code>ExecutedVersion</code>, and others). The function output is in <code>Payload</code>.</li>
+    <li>Without a filter, the next state gets the metadata object, not the function output. Use <code>ResultSelector</code> or <code>OutputPath</code> with <code>$.Payload</code>.</li>
     <li>Intrinsic functions do small data operations in the definition, so you do not need a Lambda function for them. They work in JSONPath states only: <code>States.Format</code>, <code>States.StringToJson</code>, <code>States.JsonToString</code>, <code>States.Array</code>, <code>States.ArrayPartition</code>, <code>States.MathAdd</code>, <code>States.UUID</code>, <code>States.Hash</code>, <code>States.Base64Encode</code>, and others.</li>
   </ul>
   <h3>JSONata and variables</h3>
@@ -146,7 +251,8 @@
     <li>JSONata states use <code>Arguments</code> (in place of <code>Parameters</code>) and <code>Output</code> (in place of the path fields). One <code>Output</code> field replaces <code>InputPath</code>, <code>ResultSelector</code>, <code>ResultPath</code>, and <code>OutputPath</code>. An expression is inside <code>{% %}</code>.</li>
     <li>In JSONata, <code>$states.input</code> is the state input, <code>$states.result</code> is the task result, <code>$states.errorOutput</code> is the error in a <code>Catch</code>, and <code>$states.context</code> is the Context object.</li>
     <li><strong>Variables</strong>: the <code>Assign</code> field stores a value. A later state reads it as <code>$name</code>. State output goes only to the next state, but a variable is available to all later states.</li>
-    <li>Variables work in JSONPath and JSONata states. In JSONPath, you cannot use a variable in <code>ResultPath</code>. <code>ResultPath</code> names a location in the input, not a value.</li>
+    <li>Variables work in JSONPath and JSONata states.</li>
+    <li>In JSONPath, you cannot use a variable in <code>ResultPath</code>. <code>ResultPath</code> names a location in the input, not a value.</li>
     <li>A value that a state assigns is available from the next state. The same state still sees the old value, because Step Functions evaluates all expressions before it assigns.</li>
     <li>Parallel branches and Map iterations can read outer variables, but they have their own scope. A variable that a branch assigns stops existing when the Parallel or Map state completes. Use the state output to pass data out of the branch.</li>
     <li>Distributed Map cannot read outer variables. Pass the value to each item with <code>ItemSelector</code> instead.</li>
@@ -157,21 +263,46 @@
     <tr><th>Item</th><th>Value</th></tr>
     <tr><td>Input or output of a task, state, or execution</td><td>256 KiB (hard quota: AWS does not raise it). Larger data fails with <code>States.DataLimitExceeded</code>.</td></tr>
   </table>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Keep the original input and add the Lambda result" → <code>ResultPath: "$.result"</code>.</li>
-      <li>"Next state sees StatusCode and Payload, not the function output" → select <code>$.Payload</code> with <code>ResultSelector</code> or <code>OutputPath</code>.</li>
-      <li>"Data between states is larger than 256 KiB" → store it in Amazon S3 and pass the bucket and key.</li>
-      <li>"Generate a unique ID without a Lambda function" → <code>States.UUID()</code>.</li>
-      <li>"Step 5 needs a value from step 1, and steps 2 to 4 do not need it" → store it in a variable with <code>Assign</code>.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-input-output-filtering.html">Processing input and output</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/workflow-variables.html">Variables (limits)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/input-output-resultpath.html">ResultPath</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/intrinsic-functions.html">Intrinsic functions</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/transforming-data.html">Transforming data with JSONata</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/service-quotas.html">Quotas (256 KiB)</a>. Lab: <a href="../../../module-06-step-functions/lab-01-asl-basics/README.md">Lab 6.1 ASL basics</a>.</p>
 </section>
 
 <section id="sfn-workflow-types">
   <h2>Standard and Express workflows</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>A <strong>Standard</strong> workflow runs for at most 1 year. An Express workflow runs for at most 5 minutes.</li>
+      <li>Standard is exactly-once. A Standard step runs again only if you configure <code>Retry</code>.</li>
+      <li>Asynchronous Express is at-least-once, so a step can run more than one time.</li>
+      <li>Synchronous Express is at-most-once: a step runs one time or not at all.</li>
+      <li>Standard charges for each state transition. Express charges for executions, duration, and memory.</li>
+      <li>Express is usually less expensive at high volume because Express does not charge for each state transition.</li>
+      <li>Step Functions keeps Standard execution history for 90 days after the execution closes.</li>
+      <li><code>DescribeExecution</code> and <code>GetExecutionHistory</code> work for Standard. For Express history, enable CloudWatch Logs.</li>
+      <li>Standard supports Request Response, <code>.sync</code>, and <code>.waitForTaskToken</code>. Express supports Request Response only.</li>
+      <li>Express does not support activities, Distributed Map, or redrive. Standard supports all three.</li>
+      <li><strong>Asynchronous Express</strong> (<code>StartExecution</code>, an event, or a nested workflow) does not wait. Read the result from CloudWatch Logs.</li>
+      <li><strong>Synchronous Express</strong> (<code>StartSyncExecution</code>) makes the caller wait and returns the result.</li>
+      <li>A synchronous Express request from the console expires after 60 seconds. Use the SDK or CLI for up to 5 minutes.</li>
+      <li>You cannot change the workflow type of a state machine. Create a new state machine.</li>
+      <li>Use Standard for long, durable, or auditable work, and for non-idempotent steps such as payments.</li>
+      <li>Use Express for short, high-volume event processing where each step is idempotent.</li>
+      <li>Standard <code>StartExecution</code> with the same name and input as a running execution returns the same response, without a second execution.</li>
+      <li>Standard <code>StartExecution</code> with a used name and different input, or after the execution closed, fails with <code>ExecutionAlreadyExists</code>.</li>
+      <li>Express does not manage idempotency. The same execution name can start concurrent Express executions.</li>
+      <li>A Standard parent can call an Express child for the high-volume idempotent steps to reduce cost.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"High volume, each run takes less than a minute, idempotent, lowest cost" → Express. Express charges by executions, duration, and memory, not for each state transition.</li>
+      <li>"Human approval that can take days" or "run longer than 5 minutes" → Standard. Express stops at 5 minutes and does not support the callback pattern.</li>
+      <li>"Step must never run twice, for example charging a card" → Standard (exactly-once). Asynchronous Express is at-least-once, so it can charge two times.</li>
+      <li>"Client retries StartExecution and must not create a duplicate run" → Standard with a unique business ID as the execution name. Standard does not start a second execution with a name that is already in use.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Comparison</h3>
   <table>
     <tr><th>Item</th><th>Standard</th><th>Express</th></tr>
@@ -185,31 +316,68 @@
     <tr><td>Start API</td><td><code>StartExecution</code></td><td><code>StartExecution</code> (asynchronous) or <code>StartSyncExecution</code> (synchronous)</td></tr>
   </table>
   <p>Execution semantics tell you how many times a step can run. Exactly-once: each step runs one time. At-least-once: a step can run more than one time, so a duplicate charge or email is possible. At-most-once: a step runs one time or not at all.</p>
-  <p>Choose Standard for long, durable, or auditable work, and for steps that must not run twice. Choose Express for short, high-volume event processing where each step is idempotent. Express is usually less expensive at high volume because it does not charge for each state transition.</p>
+  <p>Choose Standard for long, durable, or auditable work, and for steps that must not run twice. Choose Express for short, high-volume event processing where each step is idempotent.</p>
+  <p>Express is usually less expensive at high volume because it does not charge for each state transition.</p>
   <h3>Key facts</h3>
   <ul>
     <li><strong>Asynchronous Express</strong> (<code>StartExecution</code>, an event, or a nested workflow): the caller gets confirmation that the workflow started. It does not wait. Read the result from CloudWatch Logs.</li>
     <li><strong>Synchronous Express</strong> (<code>StartSyncExecution</code>, from API Gateway, Lambda, or the SDK): the caller waits and gets the result. A synchronous request from the console expires after 60 seconds. Use the SDK or CLI for up to 5 minutes.</li>
     <li>You cannot change the workflow type after you create the state machine. Create a new state machine.</li>
-    <li>Standard is for non-idempotent actions, such as payments. A non-idempotent action has a new effect each time it runs: a second run charges the card again. Express is for idempotent, high-volume event processing, where a second run does no harm.</li>
+    <li>Standard is for non-idempotent actions, such as payments. A non-idempotent action has a new effect each time it runs: a second run charges the card again.</li>
+    <li>Express is for idempotent, high-volume event processing, where a second run does no harm.</li>
     <li>Standard: a <code>StartExecution</code> call with the same name and the same input as a running execution returns the same response. It does not start a second execution. A call with the same name and a different input, or after that execution closed, fails with <code>ExecutionAlreadyExists</code>.</li>
     <li>Express: Step Functions does not manage idempotency. The same name can start concurrent executions. A client that retries <code>StartExecution</code> starts a second run, so each step must be idempotent.</li>
-    <li>A Standard parent can call an Express child for the high-volume idempotent part. This can reduce cost. The parent keeps the non-idempotent steps (for example approval and payment). The child runs the many short idempotent steps (for example notifications and inventory updates) without per-transition pricing.</li>
+    <li>A Standard parent can call an Express child for the high-volume idempotent part. This can reduce cost.</li>
+    <li>The parent keeps the non-idempotent steps (for example approval and payment). The child runs the many short idempotent steps (for example notifications and inventory updates) without per-transition pricing.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"High volume, each run takes less than a minute, idempotent, lowest cost" → Express. Express charges by executions, duration, and memory, not for each state transition.</li>
-      <li>"Human approval that can take days" or "run longer than 5 minutes" → Standard. Express stops at 5 minutes and does not support the callback pattern.</li>
-      <li>"Step must never run twice, for example charging a card" → Standard (exactly-once). Asynchronous Express is at-least-once, so it can charge two times.</li>
-      <li>"Client retries StartExecution and must not create a duplicate run" → Standard with a unique business ID as the execution name. Standard does not start a second execution with a name that is already in use.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/choosing-workflow-type.html">Choosing workflow type (semantics and idempotency)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html">Best practices (cost)</a>. Lab: <a href="../../../module-06-step-functions/lab-02-standard-vs-express/README.md">Lab 6.2 Standard vs Express</a>.</p>
 </section>
 
 <section id="sfn-errors">
   <h2>Error handling with Retry and Catch</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li><code>Task</code>, <code>Parallel</code>, and <code>Map</code> states support <code>Retry</code> and <code>Catch</code>.</li>
+      <li>An unhandled error fails the whole execution.</li>
+      <li><strong>Retriers run first.</strong> A catcher runs only after the matching retrier stops, or when no retrier matches.</li>
+      <li>Step Functions uses the first retrier or catcher in array order that matches the error name.</li>
+      <li>Put specific error names first and <code>States.ALL</code> last, alone in its <code>ErrorEquals</code>.</li>
+      <li>Each retrier counts its attempts separately. After <code>MaxAttempts</code>, the next matching error goes to the catchers.</li>
+      <li>Each retry counts as a state transition. Standard workflows bill retries.</li>
+      <li>Retrier defaults: <code>IntervalSeconds</code> 1, <code>MaxAttempts</code> 3, <code>BackoffRate</code> 2.0, <code>JitterStrategy</code> <code>NONE</code>.</li>
+      <li><code>MaxAttempts</code> 0 means never retry.</li>
+      <li><code>MaxDelaySeconds</code> sets an upper limit for one wait. By default, a wait has no upper limit.</li>
+      <li><code>IntervalSeconds</code> 2 and <code>BackoffRate</code> 2 give waits of 2, 4, and 8 seconds (<strong>exponential backoff</strong>).</li>
+      <li><code>JitterStrategy: FULL</code> makes each wait random, so many failed executions do not retry at the same moment.</li>
+      <li><code>States.ALL</code> matches any error except <code>States.Runtime</code> and <code>States.DataLimitExceeded</code>.</li>
+      <li><code>States.TaskFailed</code> matches any error except <code>States.Timeout</code>, so a retrier for it also retries business errors.</li>
+      <li><code>States.Timeout</code> means a task exceeded <code>TimeoutSeconds</code> or <code>HeartbeatSeconds</code>, or an execution exceeded its limit.</li>
+      <li><code>States.HeartbeatTimeout</code> means a task sent no heartbeat within <code>HeartbeatSeconds</code>.</li>
+      <li><code>States.Permissions</code> means the execution role does not have the permission to run the task.</li>
+      <li><code>States.DataLimitExceeded</code> means a payload is larger than 256 KiB. Name it explicitly to catch it.</li>
+      <li><code>States.Runtime</code> means Step Functions could not process the data. <code>States.Runtime</code> is not retriable and always fails the execution.</li>
+      <li><code>States.ExceedToleratedFailureThreshold</code> means a Distributed Map had more failed items than the threshold.</li>
+      <li>A catcher has <code>ErrorEquals</code>, <code>Next</code>, and an optional <code>ResultPath</code>.</li>
+      <li>A catcher without <code>ResultPath</code> replaces the input with the error output (<code>Error</code> and <code>Cause</code>).</li>
+      <li>To keep the input and add the error, use <code>"ResultPath": "$.error"</code> on the catcher.</li>
+      <li>Lambda service errors have the name <code>Lambda.&lt;ErrorName&gt;</code>. Errors from your function code keep their own type.</li>
+      <li>Catch business errors from your function code by name so that the workflow does not retry them.</li>
+      <li>Add a retrier for <code>Lambda.ServiceException</code>, <code>Lambda.AWSLambdaException</code>, <code>Lambda.SdkClientException</code>, and <code>Lambda.ClientExecutionTimeoutException</code>.</li>
+      <li>The AWS example retrier for transient Lambda errors uses <code>IntervalSeconds</code> 2, <code>MaxAttempts</code> 6, and <code>BackoffRate</code> 2.</li>
+      <li>Lambda throttling shows as <code>Lambda.TooManyRequestsException</code>.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Retry with exponential backoff and jitter" → <code>Retry</code> with <code>BackoffRate</code> and <code>JitterStrategy: FULL</code>.</li>
+      <li>"Fallback state lost the original input" → add <code>ResultPath</code> to the catcher. Without it, the error output replaces the input.</li>
+      <li>"Retry everything except timeouts" → retrier for <code>States.Timeout</code> with <code>MaxAttempts: 0</code>, then <code>States.ALL</code>. The first matching retrier wins, so a timeout matches the first retrier and is never retried.</li>
+      <li>"Catch States.ALL did not catch the failure" → <code>States.Runtime</code> or <code>States.DataLimitExceeded</code>. These are the two errors that <code>States.ALL</code> does not match.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li><code>Task</code>, <code>Parallel</code>, and <code>Map</code> states support <code>Retry</code> and <code>Catch</code>.</li>
@@ -218,7 +386,8 @@
     <li>Step Functions scans retriers and catchers in array order and uses the first one that matches the error name. Put specific error names first and <code>States.ALL</code> last.</li>
     <li>Each retrier counts its attempts separately. When one retrier reaches its <code>MaxAttempts</code>, the next error that it matches goes to the catchers.</li>
     <li>Each retry counts as a state transition. Standard workflows bill retries.</li>
-    <li>Errors from the Lambda service, such as throttling or a service fault, have the name <code>Lambda.&lt;ErrorName&gt;</code>. An error that your function code throws keeps its own error type, for example <code>InvalidOrderError</code>. Catch those business errors by name so that the workflow does not retry them.</li>
+    <li>Errors from the Lambda service, such as throttling or a service fault, have the name <code>Lambda.&lt;ErrorName&gt;</code>.</li>
+    <li>An error that your function code throws keeps its own error type, for example <code>InvalidOrderError</code>. Catch those business errors by name so that the workflow does not retry them.</li>
   </ul>
   <h3>Retrier fields</h3>
   <table>
@@ -230,7 +399,8 @@
     <tr><td><code>MaxDelaySeconds</code></td><td>No limit</td><td>Upper limit for one wait</td></tr>
     <tr><td><code>JitterStrategy</code></td><td><code>NONE</code></td><td><code>FULL</code> makes each wait random between 0 and the calculated wait</td></tr>
   </table>
-  <p>Example: <code>IntervalSeconds</code> 2 and <code>BackoffRate</code> 2 give waits of 2, 4, and 8 seconds. This is exponential backoff: each wait is longer, so a busy service gets time to recover. Without jitter, many executions that failed at the same moment also retry at the same moment and overload the service again. <code>FULL</code> jitter spreads those retries over time.</p>
+  <p>Example: <code>IntervalSeconds</code> 2 and <code>BackoffRate</code> 2 give waits of 2, 4, and 8 seconds. This is exponential backoff: each wait is longer, so a busy service gets time to recover.</p>
+  <p>Without jitter, many executions that failed at the same moment also retry at the same moment and overload the service again. <code>FULL</code> jitter spreads those retries over time.</p>
   <h3>Predefined error names</h3>
   <table>
     <tr><th>Name</th><th>Meaning</th></tr>
@@ -250,26 +420,54 @@
     <li>Use <code>"ResultPath": "$.error"</code> to keep the input and add the error.</li>
   </ul>
   <h3>Transient Lambda errors</h3>
-  <p>AWS recommends a retrier for <code>Lambda.ServiceException</code>, <code>Lambda.AWSLambdaException</code>, <code>Lambda.SdkClientException</code>, and <code>Lambda.ClientExecutionTimeoutException</code>. These are temporary 500 errors in the Lambda service, not bugs in your code, so a retry usually succeeds. Without a retrier, one of these errors fails the whole execution. The documented example uses <code>IntervalSeconds</code> 2, <code>MaxAttempts</code> 6, and <code>BackoffRate</code> 2. Throttling shows as <code>Lambda.TooManyRequestsException</code>.</p>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Retry with exponential backoff and jitter" → <code>Retry</code> with <code>BackoffRate</code> and <code>JitterStrategy: FULL</code>.</li>
-      <li>"Fallback state lost the original input" → add <code>ResultPath</code> to the catcher. Without it, the error output replaces the input.</li>
-      <li>"Retry everything except timeouts" → retrier for <code>States.Timeout</code> with <code>MaxAttempts: 0</code>, then <code>States.ALL</code>. The first matching retrier wins, so a timeout matches the first retrier and is never retried.</li>
-      <li>"Catch States.ALL did not catch the failure" → <code>States.Runtime</code> or <code>States.DataLimitExceeded</code>. These are the two errors that <code>States.ALL</code> does not match.</li>
-    </ul>
-  </div>
+  <p>AWS recommends a retrier for <code>Lambda.ServiceException</code>, <code>Lambda.AWSLambdaException</code>, <code>Lambda.SdkClientException</code>, and <code>Lambda.ClientExecutionTimeoutException</code>. These are temporary 500 errors in the Lambda service, not bugs in your code, so a retry usually succeeds.</p>
+  <p>Without a retrier, one of these errors fails the whole execution.</p>
+  <p>The documented example uses <code>IntervalSeconds</code> 2, <code>MaxAttempts</code> 6, and <code>BackoffRate</code> 2.</p>
+  <p>Throttling shows as <code>Lambda.TooManyRequestsException</code>.</p>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html">Handling errors (retrier defaults, error names)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html">Best practices (Lambda service exceptions)</a>. Lab: <a href="../../../module-06-step-functions/lab-03-error-handling/README.md">Lab 6.3 Error handling</a>.</p>
 </section>
 
 <section id="sfn-timeouts">
   <h2>Timeouts, heartbeats, and quotas</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>The default Task <code>TimeoutSeconds</code> is 99,999,999 seconds, so ASL sets no useful timeout by default.</li>
+      <li>A task that never answers keeps the execution open until the execution limit.</li>
+      <li>Set <code>TimeoutSeconds</code> on each Task state. A task that runs longer fails with <code>States.Timeout</code>.</li>
+      <li>Set <code>HeartbeatSeconds</code> lower than <code>TimeoutSeconds</code>. The worker calls <code>SendTaskHeartbeat</code> regularly.</li>
+      <li>A missed heartbeat fails the task with <code>States.HeartbeatTimeout</code> or <code>States.Timeout</code>. Match both in a retrier or catcher.</li>
+      <li>Use a <strong>heartbeat</strong> for long callback tasks to detect a worker that stopped.</li>
+      <li>A 2-hour job with <code>HeartbeatSeconds</code> 600 fails within 10 minutes after the worker crashes.</li>
+      <li>A top-level <code>TimeoutSeconds</code> limits the whole execution. A longer execution fails with <code>States.Timeout</code>.</li>
+      <li>An Express execution that runs longer than 5 minutes fails with <code>States.Timeout</code>.</li>
+      <li>Maximum execution time is 1 year for Standard and 5 minutes for Express. Both are hard quotas.</li>
+      <li>A Standard execution history has a hard quota of <strong>25,000 events</strong>. The execution fails at this quota.</li>
+      <li>Step Functions keeps Standard execution history for 90 days after the execution closes.</li>
+      <li>The payload size limit is 256 KiB.</li>
+      <li>The state machine definition size limit is 1 MB.</li>
+      <li>An execution name has at most 80 characters and is unique in the account and Region.</li>
+      <li>You can redrive an execution for 14 days after the execution closes.</li>
+      <li>A loop or a large Inline Map adds history events on each pass and can reach the 25,000-event quota.</li>
+      <li>To avoid the 25,000-event quota, use a Distributed Map. Each child execution has its own history.</li>
+      <li>To avoid the 25,000-event quota, continue the work in a new execution from a Task state or a Lambda function.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Execution stuck in RUNNING because a worker crashed" → set <code>TimeoutSeconds</code> and <code>HeartbeatSeconds</code>. The default timeout is so long that the task waits for an answer that never comes.</li>
+      <li>"Long loop fails after many iterations" → 25,000-event history quota. Continue as a new execution or use a Distributed Map.</li>
+      <li>"Express executions fail after 5 minutes" → use a Standard workflow. You cannot raise the Express limit.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li>By default, ASL sets no useful timeout. The <code>TimeoutSeconds</code> default is 99,999,999 seconds. A task that never answers keeps the execution open until the execution limit.</li>
     <li>Set <code>TimeoutSeconds</code> on each Task state. A task that runs longer fails with <code>States.Timeout</code>.</li>
-    <li>Set <code>HeartbeatSeconds</code> lower than <code>TimeoutSeconds</code>. The worker calls <code>SendTaskHeartbeat</code> regularly to show that it is still alive. If no heartbeat arrives within <code>HeartbeatSeconds</code>, the task fails. AWS docs list both <code>States.HeartbeatTimeout</code> and <code>States.Timeout</code> for a missed heartbeat. Match both in a retrier or catcher.</li>
+    <li>Set <code>HeartbeatSeconds</code> lower than <code>TimeoutSeconds</code>. The worker calls <code>SendTaskHeartbeat</code> regularly to show that it is still alive.</li>
+    <li>If no heartbeat arrives within <code>HeartbeatSeconds</code>, the task fails. AWS docs list both <code>States.HeartbeatTimeout</code> and <code>States.Timeout</code> for a missed heartbeat. Match both in a retrier or catcher.</li>
     <li>Use a heartbeat for long callback tasks. A heartbeat failure tells you that the worker stopped, not that the job is slow. Example: a 2-hour job with <code>HeartbeatSeconds</code> 600 fails within 10 minutes after the worker crashes, not after 2 hours.</li>
     <li>A state machine can have a top-level <code>TimeoutSeconds</code> for the whole execution. When the execution runs longer, it fails with <code>States.Timeout</code>. Use it to stop an execution that loops or waits too long.</li>
     <li>An Express execution that runs longer than 5 minutes fails with <code>States.Timeout</code>.</li>
@@ -292,19 +490,53 @@
     <li>Start a new execution from a Task state to continue the work.</li>
     <li>Use a Lambda function that starts a new execution of the state machine.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Execution stuck in RUNNING because a worker crashed" → set <code>TimeoutSeconds</code> and <code>HeartbeatSeconds</code>. The default timeout is so long that the task waits for an answer that never comes.</li>
-      <li>"Long loop fails after many iterations" → 25,000-event history quota. Continue as a new execution or use a Distributed Map.</li>
-      <li>"Express executions fail after 5 minutes" → use a Standard workflow. You cannot raise the Express limit.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/service-quotas.html">Step Functions quotas</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/state-task.html">Task state (TimeoutSeconds and HeartbeatSeconds defaults)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html">Best practices (timeouts, history quota)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html">Handling errors (States.HeartbeatTimeout)</a>. Lab: <a href="../../../module-06-step-functions/lab-03-error-handling/README.md">Lab 6.3 Error handling</a>.</p>
 </section>
 
 <section id="sfn-parallel-map">
   <h2>Parallel, Inline Map, and Distributed Map</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Each <strong>Parallel</strong> branch gets a copy of the input. All branches run at the same time.</li>
+      <li>A Parallel state output is an array with one element for each branch, in branch order.</li>
+      <li>An unhandled error in one branch fails the Parallel state and stops the other branches.</li>
+      <li>A running Lambda function continues after its Parallel state fails. Make the branch steps idempotent.</li>
+      <li><strong>Inline Map</strong> is the default mode and runs up to 40 concurrent iterations.</li>
+      <li>Inline Map reads a JSON array from the state input (256 KiB limit) and works in Standard and Express.</li>
+      <li>Inline Map iterations add events to the parent history (25,000-event quota).</li>
+      <li><strong>Distributed Map</strong> runs up to 10,000 parallel child executions. Each child execution has its own history.</li>
+      <li>Distributed Map reads a JSON array, or an S3 source through <code>ItemReader</code>. Example: a CSV file.</li>
+      <li>Distributed Map needs a Standard parent. Child executions are Standard or Express (<code>ExecutionType</code>).</li>
+      <li>Use Inline Map for a small array in the state input with 40 or fewer concurrent iterations.</li>
+      <li>Use Distributed Map for a large S3 dataset, more than 40 concurrent iterations, or more than 25,000 history events.</li>
+      <li><code>ItemsPath</code> selects the array (default <code>$</code>).</li>
+      <li><code>ItemSelector</code> builds the input for each item and replaces the old <code>Parameters</code> field.</li>
+      <li><code>ItemProcessor</code> holds the Map steps and replaces the old <code>Iterator</code> field.</li>
+      <li><code>MaxConcurrency</code> 0 (default) sets no limit. Inline Map still runs at most 40 iterations at the same time.</li>
+      <li>In Inline Map, one failed iteration fails the Map state.</li>
+      <li>A <code>Retry</code> on an Inline Map state runs all iterations again, also the iterations that succeeded.</li>
+      <li>To retry only the failed item, put the <code>Retry</code> on the Task inside <code>ItemProcessor</code>.</li>
+      <li><code>ItemBatcher</code> sends a batch of small items to each Distributed Map child execution.</li>
+      <li><code>ResultWriter</code> writes the Distributed Map child results to files in S3.</li>
+      <li>A Distributed Map without <code>ResultWriter</code> returns all results as one array, which must fit in 256 KiB.</li>
+      <li>A <strong>Map Run</strong> is the set of child executions that one Distributed Map state starts.</li>
+      <li><code>ToleratedFailurePercentage</code> or <code>ToleratedFailureCount</code> lets some items fail. The default is 0.</li>
+      <li>A Map Run above its failure threshold fails with <code>States.ExceedToleratedFailureThreshold</code>.</li>
+      <li>A Distributed Map execution role needs <code>states:StartExecution</code> on its own state machine to start child executions.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Process millions of records in a CSV file in S3 with high concurrency" → Distributed Map with <code>ItemReader</code>.</li>
+      <li>"Need more than 40 concurrent iterations" → Distributed Map. Inline Map stops at 40.</li>
+      <li>"Some bad records must not fail the whole job" → <code>ToleratedFailurePercentage</code>. The default threshold is 0, so one failed record fails the Map Run.</li>
+      <li>"Run three independent lookups at the same time" → Parallel state. Parallel runs a fixed set of different branches.</li>
+      <li>"Run the same steps for each item" → Map state, not Parallel.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Parallel state</h3>
   <ul>
     <li>Each branch gets a copy of the input. All branches run at the same time.</li>
@@ -320,32 +552,66 @@
     <tr><td>History</td><td>In the parent execution history (25,000-event quota)</td><td>Each child execution has its own history</td></tr>
     <tr><td>Workflow type</td><td>Standard and Express</td><td>Standard parent only. Child executions are Standard or Express (<code>ExecutionType</code>).</td></tr>
   </table>
-  <p>Choose Inline for a small array that is already in the state input and needs 40 or fewer iterations at the same time. Choose Distributed for a large dataset in Amazon S3, for more than 40 concurrent iterations, or when the iterations would push the parent history past 25,000 events.</p>
+  <p>Choose Inline for a small array that is already in the state input and needs 40 or fewer iterations at the same time.</p>
+  <p>Choose Distributed for a large dataset in Amazon S3, for more than 40 concurrent iterations, or when the iterations would push the parent history past 25,000 events.</p>
   <h3>Map fields</h3>
   <ul>
-    <li><code>ItemsPath</code> selects the array (default <code>$</code>). <code>ItemSelector</code> builds the input for each item. <code>ItemSelector</code> replaces the old <code>Parameters</code> field.</li>
+    <li><code>ItemsPath</code> selects the array (default <code>$</code>).</li>
+    <li><code>ItemSelector</code> builds the input for each item. <code>ItemSelector</code> replaces the old <code>Parameters</code> field.</li>
     <li><code>ItemProcessor</code> holds the steps. It replaces the old <code>Iterator</code> field.</li>
     <li><code>MaxConcurrency</code> 0 (default) means no limit that you set. Inline mode still runs a maximum of 40 iterations at the same time.</li>
     <li>Inline mode: one failed iteration fails the Map state. A <code>Retry</code> on the Map state runs all iterations again, also the iterations that succeeded. Make the item steps idempotent, or put the <code>Retry</code> on the Task inside <code>ItemProcessor</code>.</li>
     <li>Distributed mode: <code>ItemBatcher</code> sends a batch of items to each child execution, so fewer child executions run. Use it when each item is small, for example one row of a CSV file.</li>
     <li>Distributed mode: <code>ResultWriter</code> writes the child execution results (input, output, and status) to files in Amazon S3. Without it, the Map state returns all results as one array in its output, which must fit in 256 KiB.</li>
-    <li>A <strong>Map Run</strong> is the set of child executions that one Distributed Map state starts. <code>ToleratedFailurePercentage</code> or <code>ToleratedFailureCount</code> lets some items fail. The default is 0, so one failed item fails the Map Run. Above the threshold, the Map Run fails with <code>States.ExceedToleratedFailureThreshold</code>.</li>
+    <li>A <strong>Map Run</strong> is the set of child executions that one Distributed Map state starts.</li>
+    <li><code>ToleratedFailurePercentage</code> or <code>ToleratedFailureCount</code> lets some items fail. The default is 0, so one failed item fails the Map Run. Above the threshold, the Map Run fails with <code>States.ExceedToleratedFailureThreshold</code>.</li>
     <li>The execution role needs <code>states:StartExecution</code> on the state machine to start Distributed Map child executions. The child executions run the same state machine, so the role must allow it to start itself. Without this permission, no child execution starts.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Process millions of records in a CSV file in S3 with high concurrency" → Distributed Map with <code>ItemReader</code>.</li>
-      <li>"Need more than 40 concurrent iterations" → Distributed Map. Inline Map stops at 40.</li>
-      <li>"Some bad records must not fail the whole job" → <code>ToleratedFailurePercentage</code>. The default threshold is 0, so one failed record fails the Map Run.</li>
-      <li>"Run three independent lookups at the same time" → Parallel state. Parallel runs a fixed set of different branches. Map runs the same steps for each item.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/state-parallel.html">Parallel state</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/state-map-inline.html">Inline Map (40 iterations)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/state-map-distributed.html">Distributed Map (10,000 child executions)</a>. Lab: <a href="../../../module-06-step-functions/lab-04-parallel-and-map/README.md">Lab 6.4 Parallel and Map</a>.</p>
 </section>
 
 <section id="sfn-integrations">
   <h2>Service integration patterns and activities</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li><strong>Request Response</strong> is the default pattern. Step Functions calls the API and moves on after the HTTP response.</li>
+      <li><strong>Run a Job</strong> (<code>.sync</code>) starts a job and waits until the job completes.</li>
+      <li><strong>Wait for Callback</strong> (<code>.waitForTaskToken</code>) sends a task token and pauses until the token comes back.</li>
+      <li>Use Request Response when the next state does not need the work to finish. Example: a notification.</li>
+      <li>Use <code>.sync</code> when an AWS job (Glue, Batch, ECS) must complete before the next state.</li>
+      <li>Use <code>.waitForTaskToken</code> when a person or an outside system decides when the step is done.</li>
+      <li>A <strong>task token</strong> is a unique ID for one paused task. The receiver sends the token back.</li>
+      <li><code>.sync</code> examples: Batch, ECS/Fargate, EKS, Glue, EMR, Athena, CodeBuild, SageMaker AI, and Step Functions.</li>
+      <li><code>.waitForTaskToken</code> examples: Lambda, SQS, SNS, EventBridge, API Gateway, ECS, and Step Functions.</li>
+      <li>The DynamoDB optimized integration supports Request Response only.</li>
+      <li>Lambda does not support <code>.sync</code>, because Invoke already waits for the function to return.</li>
+      <li>Express workflows support Request Response only.</li>
+      <li><strong>AWS SDK integrations</strong> (<code>aws-sdk:&lt;service&gt;:&lt;apiAction&gt;</code>) call over two hundred services without Lambda code.</li>
+      <li>AWS SDK integrations support Request Response and, in Standard, <code>.waitForTaskToken</code>. AWS SDK integrations do not support <code>.sync</code>.</li>
+      <li>AWS recommends an <strong>optimized integration</strong> when one exists. Use an AWS SDK integration for other services and actions.</li>
+      <li>The optimized Lambda <code>Invoke</code> converts the output from escaped JSON to a JSON object.</li>
+      <li>Put the token in the payload with <code>"TaskToken.$": "$$.Task.Token"</code>. Step Functions does not add the token.</li>
+      <li>Without the token in the payload, the receiver cannot resume the task, and the execution waits until it times out.</li>
+      <li>The callback receiver calls <code>SendTaskSuccess</code> or <code>SendTaskFailure</code> with the token. <code>SendTaskHeartbeat</code> shows progress.</li>
+      <li>A callback task waits up to the one-year execution limit unless you set <code>TimeoutSeconds</code> or <code>HeartbeatSeconds</code>.</li>
+      <li>With <code>lambda:invoke.waitForTaskToken</code>, the heartbeat timer starts after the function returns.</li>
+      <li>An <strong>activity</strong> is a worker that you host anywhere: EC2, ECS, on premises, or a mobile device.</li>
+      <li>An activity worker polls with <code>GetActivityTask</code>, does the work, and calls <code>SendTaskSuccess</code> or <code>SendTaskFailure</code>.</li>
+      <li>Activities work in Standard workflows only.</li>
+      <li>An activity worker needs only outbound HTTPS, so it works behind a firewall that blocks inbound traffic.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Wait until the Glue job or ECS task finishes, no polling code" → <code>.sync</code>.</li>
+      <li>"Pause for human approval or a third-party system" → <code>.waitForTaskToken</code> and <code>SendTaskSuccess</code>.</li>
+      <li>"Write to DynamoDB from the workflow without a Lambda function" → <code>dynamodb:putItem</code> integration. Step Functions calls the DynamoDB API directly from the Task state.</li>
+      <li>"Worker runs on premises and polls for work" → activity.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Three patterns</h3>
   <table>
     <tr><th>Pattern</th><th>Resource example</th><th>Behavior</th></tr>
@@ -353,7 +619,8 @@
     <tr><td>Run a Job (<code>.sync</code>)</td><td><code>arn:aws:states:::glue:startJobRun.sync</code></td><td>Step Functions starts the job and waits until the job completes.</td></tr>
     <tr><td>Wait for Callback (<code>.waitForTaskToken</code>)</td><td><code>arn:aws:states:::sqs:sendMessage.waitForTaskToken</code></td><td>Step Functions sends a task token and pauses until <code>SendTaskSuccess</code> or <code>SendTaskFailure</code> returns the token.</td></tr>
   </table>
-  <p>Choose Request Response when the next state does not need the work to finish, for example publishing a notification. Choose <code>.sync</code> when an AWS job (Glue, Batch, ECS) must complete before the next state. Choose <code>.waitForTaskToken</code> when a person or an outside system decides when the step is done. A <strong>task token</strong> is a unique ID for one paused task. The receiver sends it back to tell Step Functions which task to continue.</p>
+  <p>Choose Request Response when the next state does not need the work to finish, for example publishing a notification. Choose <code>.sync</code> when an AWS job (Glue, Batch, ECS) must complete before the next state. Choose <code>.waitForTaskToken</code> when a person or an outside system decides when the step is done.</p>
+  <p>A <strong>task token</strong> is a unique ID for one paused task. The receiver sends it back to tell Step Functions which task to continue.</p>
   <h3>Which services support which pattern (optimized integrations, examples)</h3>
   <table>
     <tr><th>Pattern</th><th>Examples</th></tr>
@@ -363,8 +630,10 @@
   </table>
   <ul>
     <li>Express workflows support Request Response only.</li>
-    <li>AWS SDK integrations (<code>arn:aws:states:::aws-sdk:&lt;service&gt;:&lt;apiAction&gt;</code>) call over two hundred services without Lambda code. They work like an API call with the AWS SDK. They support Request Response and, in Standard workflows, <code>.waitForTaskToken</code>. They do not support <code>.sync</code>.</li>
-    <li>Optimized integrations, for example <code>arn:aws:states:::dynamodb:putItem</code>, have extra handling for some services. For example, optimized Lambda <code>Invoke</code> converts the output from escaped JSON to a JSON object, and some optimized integrations support <code>.sync</code>. AWS recommends an optimized integration when one exists. Use an AWS SDK integration for other services and API actions.</li>
+    <li>AWS SDK integrations (<code>arn:aws:states:::aws-sdk:&lt;service&gt;:&lt;apiAction&gt;</code>) call over two hundred services without Lambda code. They work like an API call with the AWS SDK.</li>
+    <li>AWS SDK integrations support Request Response and, in Standard workflows, <code>.waitForTaskToken</code>. They do not support <code>.sync</code>.</li>
+    <li>Optimized integrations, for example <code>arn:aws:states:::dynamodb:putItem</code>, have extra handling for some services. For example, optimized Lambda <code>Invoke</code> converts the output from escaped JSON to a JSON object, and some optimized integrations support <code>.sync</code>.</li>
+    <li>AWS recommends an optimized integration when one exists. Use an AWS SDK integration for other services and API actions.</li>
   </ul>
   <h3>Callback details</h3>
   <ul>
@@ -377,46 +646,45 @@
   <ul>
     <li>An activity is a worker that you host anywhere: Amazon EC2, Amazon ECS, on premises, or a mobile device.</li>
     <li>The worker polls with <code>GetActivityTask</code>, does the work, and calls <code>SendTaskSuccess</code> or <code>SendTaskFailure</code>.</li>
-    <li>Activities work in Standard workflows only. The worker needs only outbound HTTPS connections, because the worker calls Step Functions to ask for work. Step Functions never connects to the worker. This works behind a firewall that blocks inbound traffic.</li>
+    <li>Activities work in Standard workflows only.</li>
+    <li>The worker needs only outbound HTTPS connections, because the worker calls Step Functions to ask for work. Step Functions never connects to the worker. This works behind a firewall that blocks inbound traffic.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Wait until the Glue job or ECS task finishes, no polling code" → <code>.sync</code>.</li>
-      <li>"Pause for human approval or a third-party system" → <code>.waitForTaskToken</code> and <code>SendTaskSuccess</code>.</li>
-      <li>"Write to DynamoDB from the workflow without a Lambda function" → <code>dynamodb:putItem</code> integration. Step Functions calls the DynamoDB API directly from the Task state.</li>
-      <li>"Worker runs on premises and polls for work" → activity.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/connect-to-resource.html">Service integration patterns (support table)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/connect-lambda.html">Lambda integration</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/integrate-services.html">Optimized and AWS SDK integrations</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-activities.html">Activities</a>. Lab: <a href="../../../module-06-step-functions/lab-05-integration-patterns/README.md">Lab 6.5 Integration patterns</a>.</p>
 </section>
 
 <section id="sfn-security">
   <h2>IAM, encryption, and logging data</h2>
-  <h3>IAM</h3>
-  <ul>
-    <li>The <strong>execution role</strong> gives the state machine its permissions. Grant only the actions and resources that the definition uses.</li>
-    <li>The <strong>caller</strong> needs its own permission, for example <code>states:StartExecution</code>. This is separate from the execution role.</li>
-    <li>For Lambda with a version or alias in <code>FunctionName</code>, the policy resource must include the qualifier or <code>:*</code>. An unqualified function ARN gives Access Denied.</li>
-    <li><code>.sync</code> and <code>.waitForTaskToken</code> integrations need additional IAM permissions. For <code>.sync</code>, Step Functions must check the job status. It polls with a <code>Describe</code> or <code>Get</code> action (for example <code>glue:GetJobRun</code>) or uses a managed EventBridge rule (<code>events:PutTargets</code>, <code>events:PutRule</code>, <code>events:DescribeRule</code>). Without these permissions, the task can get stuck or see the job completion late.</li>
-    <li>Cross-account task: set <code>Credentials</code> with a <code>RoleArn</code> in the other account. The execution role assumes that role and calls the resource with temporary credentials. The other account does not need a resource-based policy on the resource.</li>
-    <li>Task tokens work only from principals in the same AWS account. The caller of <code>SendTaskSuccess</code> needs the <code>states:SendTaskSuccess</code> IAM permission.</li>
-    <li>Executions inherit the tags of the state machine for tag-based authorization. An IAM policy with an <code>aws:ResourceTag</code> condition on the state machine then also controls access to its executions, for example <code>DescribeExecution</code>.</li>
-  </ul>
-  <h3>Encryption at rest</h3>
-  <ul>
-    <li>Step Functions always encrypts data at rest with an AWS owned key. You cannot turn this off.</li>
-    <li>You can add a <strong>symmetric customer managed KMS key</strong> on a state machine (Standard or Express) or an activity. The key encrypts the definition and execution history. Choose it when you must control, rotate, disable, or audit the key yourself. You cannot do these things with an AWS owned key.</li>
-    <li>The execution role needs <code>kms:Decrypt</code> and <code>kms:GenerateDataKey</code> for Standard and asynchronous Express. Synchronous Express needs <code>kms:Decrypt</code>.</li>
-    <li>The data key reuse period is 60 to 900 seconds. The default is 300 seconds. It is the maximum time that Step Functions reuses one data key. When the period ends, Step Functions calls <code>GenerateDataKey</code> again, so a shorter period means more KMS calls.</li>
-    <li>If you disable or delete the key, running executions fail and new executions cannot start.</li>
-  </ul>
-  <h3>Logging data</h3>
-  <ul>
-    <li>Log levels: <code>ALL</code> logs every event. <code>ERROR</code> logs only error events, such as a failed task or a failed execution. <code>FATAL</code> logs only the end of an execution that failed, timed out, or was aborted. <code>OFF</code> logs nothing.</li>
-    <li><code>includeExecutionData</code> controls whether logs contain input, output, and variables. Set it to false for sensitive data. The logs then still show which step failed, but not the data.</li>
-    <li>Do not put secrets in the execution input. Input shows in history and logs. Store the secret in AWS Secrets Manager and read it in the step that needs it.</li>
-  </ul>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>The <strong>execution role</strong> gives the state machine its permissions. Grant only the actions and resources that the definition uses.</li>
+      <li>The caller needs its own permission, for example <code>states:StartExecution</code>, separate from the execution role.</li>
+      <li>For a Lambda version or alias, the policy resource must include the qualifier or <code>:*</code>.</li>
+      <li>An unqualified Lambda function ARN in the policy gives Access Denied for a qualified <code>FunctionName</code>.</li>
+      <li><code>.sync</code> and <code>.waitForTaskToken</code> integrations need additional IAM permissions.</li>
+      <li>A <code>.sync</code> task needs a status action such as <code>glue:GetJobRun</code>, or EventBridge rule actions such as <code>events:PutRule</code>.</li>
+      <li>Without the <code>.sync</code> status permissions, the task can get stuck or see the job completion late.</li>
+      <li>For a cross-account task, set <code>Credentials</code> with a <code>RoleArn</code> in the other account.</li>
+      <li>A cross-account task with <code>Credentials</code> does not need a resource-based policy in the other account.</li>
+      <li>Task tokens work only from principals in the same AWS account.</li>
+      <li>The caller of <code>SendTaskSuccess</code> needs the <code>states:SendTaskSuccess</code> IAM permission.</li>
+      <li>Executions inherit the state machine tags, so an <code>aws:ResourceTag</code> condition also controls access to executions.</li>
+      <li>Step Functions always encrypts data at rest with an AWS owned key. You cannot turn this encryption off.</li>
+      <li>A <strong>symmetric customer managed KMS key</strong> on a state machine or activity encrypts the definition and execution history.</li>
+      <li>Use a customer managed key when you must control, rotate, disable, or audit the key yourself.</li>
+      <li>Standard and asynchronous Express need <code>kms:Decrypt</code> and <code>kms:GenerateDataKey</code> in the execution role.</li>
+      <li>Synchronous Express needs <code>kms:Decrypt</code> in the execution role.</li>
+      <li>The data key reuse period is 60 to 900 seconds. The default is 300 seconds.</li>
+      <li>A shorter data key reuse period means more KMS calls.</li>
+      <li>A disabled or deleted key makes running executions fail and stops new executions from starting.</li>
+      <li>Log level <code>ALL</code> logs every event. <code>OFF</code> logs nothing.</li>
+      <li>Log level <code>ERROR</code> logs only error events, such as a failed task or a failed execution.</li>
+      <li>Log level <code>FATAL</code> logs only the end of an execution that failed, timed out, or was aborted.</li>
+      <li><code>includeExecutionData</code> controls whether logs contain input, output, and variables. Set it to false for sensitive data.</li>
+      <li>Do not put secrets in the execution input, because input shows in history and logs.</li>
+      <li>Store a secret in AWS Secrets Manager and read it in the step that needs it.</li>
+    </ul>
+  </div>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
@@ -426,29 +694,69 @@
       <li>"Call a resource in another account" → <code>Credentials</code> field with a cross-account role.</li>
     </ul>
   </div>
+  <h3 class="explain">Explanation</h3>
+  <h3>IAM</h3>
+  <ul>
+    <li>The <strong>execution role</strong> gives the state machine its permissions. Grant only the actions and resources that the definition uses.</li>
+    <li>The <strong>caller</strong> needs its own permission, for example <code>states:StartExecution</code>. This is separate from the execution role.</li>
+    <li>For Lambda with a version or alias in <code>FunctionName</code>, the policy resource must include the qualifier or <code>:*</code>. An unqualified function ARN gives Access Denied.</li>
+    <li><code>.sync</code> and <code>.waitForTaskToken</code> integrations need additional IAM permissions.</li>
+    <li>For <code>.sync</code>, Step Functions must check the job status. It polls with a <code>Describe</code> or <code>Get</code> action (for example <code>glue:GetJobRun</code>) or uses a managed EventBridge rule (<code>events:PutTargets</code>, <code>events:PutRule</code>, <code>events:DescribeRule</code>). Without these permissions, the task can get stuck or see the job completion late.</li>
+    <li>Cross-account task: set <code>Credentials</code> with a <code>RoleArn</code> in the other account. The execution role assumes that role and calls the resource with temporary credentials. The other account does not need a resource-based policy on the resource.</li>
+    <li>Task tokens work only from principals in the same AWS account. The caller of <code>SendTaskSuccess</code> needs the <code>states:SendTaskSuccess</code> IAM permission.</li>
+    <li>Executions inherit the tags of the state machine for tag-based authorization. An IAM policy with an <code>aws:ResourceTag</code> condition on the state machine then also controls access to its executions, for example <code>DescribeExecution</code>.</li>
+  </ul>
+  <h3>Encryption at rest</h3>
+  <ul>
+    <li>Step Functions always encrypts data at rest with an AWS owned key. You cannot turn this off.</li>
+    <li>You can add a <strong>symmetric customer managed KMS key</strong> on a state machine (Standard or Express) or an activity. The key encrypts the definition and execution history.</li>
+    <li>Choose a customer managed key when you must control, rotate, disable, or audit the key yourself. You cannot do these things with an AWS owned key.</li>
+    <li>The execution role needs <code>kms:Decrypt</code> and <code>kms:GenerateDataKey</code> for Standard and asynchronous Express. Synchronous Express needs <code>kms:Decrypt</code>.</li>
+    <li>The data key reuse period is 60 to 900 seconds. The default is 300 seconds. It is the maximum time that Step Functions reuses one data key.</li>
+    <li>When the period ends, Step Functions calls <code>GenerateDataKey</code> again, so a shorter period means more KMS calls.</li>
+    <li>If you disable or delete the key, running executions fail and new executions cannot start.</li>
+  </ul>
+  <h3>Logging data</h3>
+  <ul>
+    <li>Log levels: <code>ALL</code> logs every event.</li>
+    <li><code>ERROR</code> logs only error events, such as a failed task or a failed execution.</li>
+    <li><code>FATAL</code> logs only the end of an execution that failed, timed out, or was aborted.</li>
+    <li><code>OFF</code> logs nothing.</li>
+    <li><code>includeExecutionData</code> controls whether logs contain input, output, and variables. Set it to false for sensitive data. The logs then still show which step failed, but not the data.</li>
+    <li>Do not put secrets in the execution input. Input shows in history and logs. Store the secret in AWS Secrets Manager and read it in the step that needs it.</li>
+  </ul>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/encryption-at-rest.html">Encryption at rest</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/state-task.html">Task state (Credentials)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/connect-lambda.html">Lambda integration (qualified ARNs)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/service-integration-iam-templates.html">IAM for integrated services (.sync permissions)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html">Best practices (tag-based authorization)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/cw-logs.html">CloudWatch Logs</a>. Lab: <a href="../../../module-06-step-functions/lab-05-integration-patterns/README.md">Lab 6.5 Integration patterns</a>.</p>
 </section>
 
 <section id="sfn-observability">
   <h2>Logs, tracing, events, and redrive</h2>
-  <h3>Key facts</h3>
-  <ul>
-    <li>Standard: the console graph view and <code>GetExecutionHistory</code> show every event for 90 days.</li>
-    <li>Express: no history in Step Functions. Configure CloudWatch Logs. The console turns on logging for a new Express workflow. The API, CLI, and CloudFormation do not.</li>
-    <li>CloudWatch Logs delivery is best effort: AWS does not guarantee that every log entry arrives, or when. For a guaranteed record, write to a data store such as DynamoDB from a workflow step, or use Standard.</li>
-    <li>Use a log group name that starts with <code>/aws/vendedlogs/states</code>. When you turn on logging, Step Functions adds the log group to the CloudWatch Logs resource policy. That policy has a 5,120-character limit, and many log groups can fill it. Then the state machine cannot send logs to a new log group. When the policy comes near the limit, CloudWatch Logs automatically allows logging to log groups whose names start with <code>/aws/vendedlogs/</code>.</li>
-    <li>X-Ray: turn on tracing on the state machine. The execution role needs <code>xray:PutTraceSegments</code>, <code>xray:PutTelemetryRecords</code>, <code>xray:GetSamplingRules</code>, and <code>xray:GetSamplingTargets</code>.</li>
-    <li>X-Ray does not trace Distributed Map child executions. Steps inside the items do not appear in the trace. Use the Map Run details or CloudWatch Logs to find a slow item.</li>
-    <li>Only Standard workflows send <strong>Execution Status Change</strong> events to the EventBridge default bus. The source is <code>aws.states</code>. Statuses include <code>FAILED</code>, <code>TIMED_OUT</code>, and <code>ABORTED</code>. Use an EventBridge rule on these events to send alerts without a change to the definition.</li>
-    <li>The <code>ExecutionThrottled</code> CloudWatch metric counts state entries and retries that Step Functions throttled because the account reached its state transition quota. Throttled steps start later, so executions run slower.</li>
-  </ul>
-  <h3>Redrive</h3>
-  <ul>
-    <li><code>RedriveExecution</code> restarts a failed, aborted, or timed-out Standard execution from the failed step. Successful steps do not run again.</li>
-    <li>You can redrive for 14 days after the execution closes.</li>
-    <li>Redrive uses the same definition and input. If you change the definition, start a new execution.</li>
-    <li>Redrive resets retry counts to 0, so each retrier can again make all its <code>MaxAttempts</code>. Redrives count as state transitions.</li>
-  </ul>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>For Standard, the console graph view and <code>GetExecutionHistory</code> show every event for 90 days.</li>
+      <li>Express keeps no history in Step Functions. Configure CloudWatch Logs to see Express executions.</li>
+      <li>The console turns on logging for a new Express workflow. The API, CLI, and CloudFormation do not.</li>
+      <li>CloudWatch Logs delivery is <strong>best effort</strong>. AWS does not guarantee that every log entry arrives, or when.</li>
+      <li>For a guaranteed record, write to a data store such as DynamoDB from a workflow step, or use Standard.</li>
+      <li>Use a log group name that starts with <code>/aws/vendedlogs/states</code>.</li>
+      <li>The CloudWatch Logs resource policy has a 5,120-character limit. Many log groups can fill the policy.</li>
+      <li>When the CloudWatch Logs resource policy is near its size limit, CloudWatch Logs automatically allows log groups whose names start with <code>/aws/vendedlogs/</code>.</li>
+      <li>A full CloudWatch Logs resource policy blocks logging to a new log group whose name does not start with <code>/aws/vendedlogs/</code>.</li>
+      <li>To use X-Ray, turn on tracing on the state machine.</li>
+      <li>X-Ray tracing needs <code>xray:PutTraceSegments</code>, <code>xray:PutTelemetryRecords</code>, <code>xray:GetSamplingRules</code>, and <code>xray:GetSamplingTargets</code> in the execution role.</li>
+      <li>X-Ray does not trace Distributed Map child executions. Use the Map Run details or CloudWatch Logs.</li>
+      <li>Only Standard workflows send <strong>Execution Status Change</strong> events to the EventBridge default bus.</li>
+      <li>Execution Status Change events have the source <code>aws.states</code>. Statuses include <code>FAILED</code>, <code>TIMED_OUT</code>, and <code>ABORTED</code>.</li>
+      <li>To alert on failed executions without a definition change, use an EventBridge rule on Execution Status Change events.</li>
+      <li>The <code>ExecutionThrottled</code> metric counts state entries and retries throttled at the account state transition quota.</li>
+      <li><code>RedriveExecution</code> restarts a failed, aborted, or timed-out Standard execution from the failed step.</li>
+      <li>A redrive does not run the successful steps again.</li>
+      <li>You can redrive for 14 days after the execution closes.</li>
+      <li>Redrive uses the same definition and input. To use a changed definition, start a new execution.</li>
+      <li>Redrive resets retry counts to 0, so each retrier can again make all its <code>MaxAttempts</code>.</li>
+      <li>Redrives count as state transitions.</li>
+    </ul>
+  </div>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
@@ -458,16 +766,83 @@
       <li>"Find which step adds latency" → X-Ray tracing. X-Ray shows the time of each step and each downstream call.</li>
     </ul>
   </div>
+  <h3 class="explain">Explanation</h3>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Standard: the console graph view and <code>GetExecutionHistory</code> show every event for 90 days.</li>
+    <li>Express: no history in Step Functions. Configure CloudWatch Logs.</li>
+    <li>The console turns on logging for a new Express workflow. The API, CLI, and CloudFormation do not.</li>
+    <li>CloudWatch Logs delivery is best effort: AWS does not guarantee that every log entry arrives, or when. For a guaranteed record, write to a data store such as DynamoDB from a workflow step, or use Standard.</li>
+    <li>Use a log group name that starts with <code>/aws/vendedlogs/states</code>.</li>
+    <li>When you turn on logging, Step Functions adds the log group to the CloudWatch Logs resource policy. That policy has a 5,120-character limit, and many log groups can fill it. Then the state machine cannot send logs to a new log group.</li>
+    <li>When the policy comes near the limit, CloudWatch Logs automatically allows logging to log groups whose names start with <code>/aws/vendedlogs/</code>.</li>
+    <li>X-Ray: turn on tracing on the state machine. The execution role needs <code>xray:PutTraceSegments</code>, <code>xray:PutTelemetryRecords</code>, <code>xray:GetSamplingRules</code>, and <code>xray:GetSamplingTargets</code>.</li>
+    <li>X-Ray does not trace Distributed Map child executions. Steps inside the items do not appear in the trace. Use the Map Run details or CloudWatch Logs to find a slow item.</li>
+    <li>Only Standard workflows send <strong>Execution Status Change</strong> events to the EventBridge default bus. The source is <code>aws.states</code>. Statuses include <code>FAILED</code>, <code>TIMED_OUT</code>, and <code>ABORTED</code>.</li>
+    <li>Use an EventBridge rule on these events to send alerts without a change to the definition.</li>
+    <li>The <code>ExecutionThrottled</code> CloudWatch metric counts state entries and retries that Step Functions throttled because the account reached its state transition quota. Throttled steps start later, so executions run slower.</li>
+  </ul>
+  <h3>Redrive</h3>
+  <ul>
+    <li><code>RedriveExecution</code> restarts a failed, aborted, or timed-out Standard execution from the failed step. Successful steps do not run again.</li>
+    <li>You can redrive for 14 days after the execution closes.</li>
+    <li>Redrive uses the same definition and input. If you change the definition, start a new execution.</li>
+    <li>Redrive resets retry counts to 0, so each retrier can again make all its <code>MaxAttempts</code>.</li>
+    <li>Redrives count as state transitions.</li>
+  </ul>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/cw-logs.html">CloudWatch Logs</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/sfn-best-practices.html">Best practices (resource policy size limit)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/procedure-cw-metrics.html">CloudWatch metrics (ExecutionThrottled)</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-xray-tracing.html">X-Ray tracing</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/eventbridge-integration.html">EventBridge events</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/redrive-executions.html">Redrive (14 days)</a>. Lab: <a href="../../../module-06-step-functions/lab-02-standard-vs-express/README.md">Lab 6.2 Standard vs Express</a>.</p>
 </section>
 
 <section id="sfn-deploy">
   <h2>Versions, aliases, testing, and AWS SAM deployment</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>A <strong>version</strong> is a numbered, immutable snapshot of a state machine. A version ARN ends with <code>:&lt;number&gt;</code>.</li>
+      <li>Publish a version with <code>PublishStateMachineVersion</code>, or with <code>publish</code> true on create or update.</li>
+      <li>An <strong>alias</strong> points to one or two versions. With two versions, the alias splits traffic by weight.</li>
+      <li>Alias weights total 100 percent. Example: 90 percent to version 3 and 10 percent to version 4.</li>
+      <li>An unqualified state machine ARN runs the most recent revision, also when you did not publish it as a version.</li>
+      <li>Use the alias ARN in callers so that a release or a rollback does not need a code change.</li>
+      <li><code>CANARY</code> shifts a small percentage first and shifts the rest after the interval if no alarm goes into the <code>ALARM</code> state.</li>
+      <li><code>LINEAR</code> shifts equal increments with equal minutes between them.</li>
+      <li><code>ALL_AT_ONCE</code> shifts 100 percent at once and monitors the alarms.</li>
+      <li>CloudFormation rolls back a gradual deployment if a listed CloudWatch alarm goes into the <code>ALARM</code> state.</li>
+      <li>In AWS SAM, use <code>Definition</code> for an inline definition or <code>DefinitionUri</code> for a file.</li>
+      <li><code>DefinitionSubstitutions</code> replaces <code>${Name}</code> placeholders in the ASL file. Example: <code>!GetAtt MyFunction.Arn</code>.</li>
+      <li>CloudFormation does not process <code>!GetAtt</code> or <code>!Ref</code> inside a separate ASL file.</li>
+      <li>The SAM <code>Type</code> is <code>STANDARD</code> (default) or <code>EXPRESS</code>.</li>
+      <li>SAM <code>Policies</code> adds policies to the generated execution role.</li>
+      <li>SAM <code>Role</code> uses your own role, and SAM then ignores <code>Policies</code>.</li>
+      <li>SAM <code>Events</code> starts the state machine from sources such as an API or a schedule.</li>
+      <li>SAM <code>AutoPublishAlias</code> publishes a version and updates the alias. <code>DeploymentPreference</code> sets a gradual deployment.</li>
+      <li><code>TestState</code> runs one state definition without a create or update of a state machine.</li>
+      <li>Inspection level <code>INFO</code> (default) shows the output or the error.</li>
+      <li>Inspection level <code>DEBUG</code> also shows each data processing step, such as <code>afterInputPath</code> and <code>afterResultPath</code>.</li>
+      <li>Inspection level <code>TRACE</code> shows the raw HTTP request and response, for HTTP Tasks only.</li>
+      <li><code>TestState</code> status <code>RETRIABLE</code> means that the error matches a retrier.</li>
+      <li><code>TestState</code> status <code>CAUGHT_ERROR</code> means that a catcher handles the error. <code>nextState</code> names the fallback state.</li>
+      <li>The <code>TestState</code> caller needs <code>states:TestState</code>. Without a mock, the caller also needs <code>iam:PassRole</code>.</li>
+      <li>With the AWS CLI or SDK, <code>TestState</code> can mock a service result or an error. With a mock, the role is optional.</li>
+      <li>Map, Parallel, activity, <code>.sync</code>, and <code>.waitForTaskToken</code> states need a mock in <code>TestState</code>.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Send 10 percent of executions to the new workflow, roll back on an alarm" → alias with <code>DeploymentPreference</code> type <code>CANARY</code> and <code>Alarms</code>.</li>
+      <li>"ASL file needs ARNs of resources in the same template" → <code>DefinitionSubstitutions</code>. Intrinsic functions do not work inside the ASL file, so SAM fills the placeholders at deployment time.</li>
+      <li>"Callers must not change the ARN when we release" → alias ARN.</li>
+      <li>"Test one Task state and see how InputPath and ResultPath change the data, without deploying" → <code>TestState</code> with <code>DEBUG</code>.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Versions and aliases</h3>
   <ul>
     <li>A <strong>version</strong> is a numbered, immutable snapshot of the state machine. Its ARN ends with <code>:&lt;number&gt;</code>.</li>
     <li>Publish with <code>PublishStateMachineVersion</code>, or set <code>publish</code> to true on <code>CreateStateMachine</code> or <code>UpdateStateMachine</code>.</li>
-    <li>An <strong>alias</strong> points to one or two versions. With two versions, it splits traffic by weight. The weights total 100 percent. Example: 90 percent to version 3 and 10 percent to version 4 tests version 4 on a small part of the traffic.</li>
+    <li>An <strong>alias</strong> points to one or two versions. With two versions, it splits traffic by weight.</li>
+    <li>The weights total 100 percent. Example: 90 percent to version 3 and 10 percent to version 4 tests version 4 on a small part of the traffic.</li>
     <li>An execution started with the unqualified state machine ARN (no <code>:&lt;number&gt;</code> or alias name) uses the most recent revision. A revision is the state machine as it is after the last update (definition, role, logging, and tracing), also when you did not publish it as a version.</li>
     <li>Callers that use the alias ARN do not change when you point the alias to a new version. Use the alias ARN in callers so that a release or a rollback does not need a code change.</li>
   </ul>
@@ -478,14 +853,16 @@
     <tr><td><code>LINEAR</code></td><td>Shifts equal increments with equal minutes between them.</td></tr>
     <tr><td><code>ALL_AT_ONCE</code></td><td>Shifts 100 percent at once and monitors the alarms.</td></tr>
   </table>
-  <p>CloudFormation rolls back if a listed CloudWatch alarm goes into the <code>ALARM</code> state. Choose <code>CANARY</code> to test the new version on a small share first and then move all traffic in one step. Choose <code>LINEAR</code> to move traffic in equal steps over a longer time. Choose <code>ALL_AT_ONCE</code> when you accept the risk of moving all traffic at once.</p>
+  <p>CloudFormation rolls back if a listed CloudWatch alarm goes into the <code>ALARM</code> state.</p>
+  <p>Choose <code>CANARY</code> to test the new version on a small share first and then move all traffic in one step. Choose <code>LINEAR</code> to move traffic in equal steps over a longer time. Choose <code>ALL_AT_ONCE</code> when you accept the risk of moving all traffic at once.</p>
   <h3>AWS SAM (<code>AWS::Serverless::StateMachine</code>)</h3>
   <ul>
     <li><code>Definition</code> (inline) or <code>DefinitionUri</code> (a file, for example <code>statemachine/order.asl.json</code>).</li>
     <li><code>DefinitionSubstitutions</code> replaces <code>${Name}</code> placeholders in the definition with values such as <code>!GetAtt MyFunction.Arn</code>. You need it because CloudFormation does not process <code>!GetAtt</code> or <code>!Ref</code> inside a separate ASL file.</li>
     <li><code>Type</code>: <code>STANDARD</code> (default) or <code>EXPRESS</code>.</li>
     <li><code>Policies</code> adds SAM policy templates or IAM policies to the generated execution role. <code>Role</code> uses your own role, and SAM then ignores <code>Policies</code>.</li>
-    <li><code>Events</code> starts the state machine from sources such as an API or a schedule. <code>Logging</code> and <code>Tracing</code> configure CloudWatch Logs and X-Ray.</li>
+    <li><code>Events</code> starts the state machine from sources such as an API or a schedule.</li>
+    <li><code>Logging</code> and <code>Tracing</code> configure CloudWatch Logs and X-Ray.</li>
     <li><code>AutoPublishAlias</code> publishes a version and updates the alias. <code>DeploymentPreference</code> sets a gradual deployment for that alias.</li>
   </ul>
   <h3>Test one state with the TestState API</h3>
@@ -493,19 +870,11 @@
     <li><code>TestState</code> runs one state definition. You do not create or update a state machine.</li>
     <li>You can also send a full definition and name the state to test with <code>stateName</code>.</li>
     <li>Inspection levels: <code>INFO</code> (default) shows the output or the error. <code>DEBUG</code> also shows each data processing step (<code>afterInputPath</code>, <code>afterParameters</code>, <code>afterResultSelector</code>, <code>afterResultPath</code>). <code>TRACE</code> shows the raw HTTP request and response, for HTTP Tasks only.</li>
-    <li>The response gives <code>status</code> and <code>nextState</code>. <code>SUCCEEDED</code> and <code>FAILED</code> are clear. <code>RETRIABLE</code> means that the error matches a retrier. <code>CAUGHT_ERROR</code> means that a catcher handles the error, and <code>nextState</code> names the fallback state.</li>
+    <li>The response gives <code>status</code> and <code>nextState</code>. <code>SUCCEEDED</code> and <code>FAILED</code> are clear.</li>
+    <li><code>RETRIABLE</code> means that the error matches a retrier. <code>CAUGHT_ERROR</code> means that a catcher handles the error, and <code>nextState</code> names the fallback state.</li>
     <li>The caller needs <code>states:TestState</code>. Without a mock, the caller also needs <code>iam:PassRole</code> for the execution role, and the role needs the permissions that the state uses.</li>
     <li>With the AWS CLI or SDK, you can mock a service result or an error. Then the role is optional. Map, Parallel, activity, <code>.sync</code>, and <code>.waitForTaskToken</code> states need a mock.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Send 10 percent of executions to the new workflow, roll back on an alarm" → alias with <code>DeploymentPreference</code> type <code>CANARY</code> and <code>Alarms</code>.</li>
-      <li>"ASL file needs ARNs of resources in the same template" → <code>DefinitionSubstitutions</code>. Intrinsic functions do not work inside the ASL file, so SAM fills the placeholders at deployment time.</li>
-      <li>"Callers must not change the ARN when we release" → alias ARN.</li>
-      <li>"Test one Task state and see how InputPath and ResultPath change the data, without deploying" → <code>TestState</code> with <code>DEBUG</code>.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/step-functions/latest/dg/test-state-isolation.html">TestState API</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-state-machine-version.html">Versions</a>, <a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-state-machine-alias.html">Aliases</a>, <a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-stepfunctions-statemachinealias-deploymentpreference.html">DeploymentPreference</a>, <a href="https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html">AWS::Serverless::StateMachine</a>. Lab: <a href="../../../module-06-step-functions/lab-01-asl-basics/README.md">Lab 6.1 ASL basics</a>.</p>
 </section>
 
