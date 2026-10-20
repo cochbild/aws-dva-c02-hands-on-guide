@@ -52,7 +52,7 @@
       <li>IMDSv2 blocks most SSRF attacks, because most SSRF flaws can send only a <code>GET</code>, not a <code>PUT</code>.</li>
       <li>IMDS rejects a token <code>PUT</code> that has an <code>X-Forwarded-For</code> header, so an open reverse proxy cannot get a token.</li>
       <li>An IMDSv2 token works only on the instance that created it.</li>
-      <li>An IMDSv2 token time to live is 1 second to 6 hours (21,600 seconds).</li>
+      <li>The IMDSv2 token time to live is 1 second to 6 hours (21,600 seconds).</li>
       <li>The <code>MetadataNoToken</code> CloudWatch metric counts IMDSv1 calls. Check it before you require IMDSv2.</li>
       <li>The default PUT response hop limit is 1. It is 2 for AMIs with <code>ImdsSupport: v2.0</code>, for example Amazon Linux 2023.</li>
       <li>A container on EC2 adds one network hop. Set the hop limit to 2 so the container gets an IMDSv2 token.</li>
@@ -62,7 +62,7 @@
       <li>Session Manager can log session data to S3 or CloudWatch Logs. CloudTrail records the Session Manager API calls.</li>
       <li>Session Manager needs SSM Agent and an instance profile with <code>AmazonSSMManagedInstanceCore</code>.</li>
       <li>Session Manager needs outbound HTTPS (port 443) to the <code>ssm</code>, <code>ssmmessages</code>, and <code>ec2messages</code> endpoints.</li>
-      <li>For Session Manager in a private subnet with no internet access, create interface VPC endpoints for these three services.</li>
+      <li>For Session Manager in a private subnet with no internet access, create interface VPC endpoints for <code>ssm</code>, <code>ssmmessages</code>, and <code>ec2messages</code>.</li>
     </ul>
   </div>
   <div class="exam-signals">
@@ -142,8 +142,10 @@
       <li>To put static IP addresses in front of an ALB, use an NLB with target type <code>alb</code>.</li>
       <li>An ALB needs subnets in at least two Availability Zones.</li>
       <li>A <code>lambda</code> target group holds one Lambda function. Use one target group for each function.</li>
+      <li><strong>Cross-zone load balancing</strong> lets each load balancer node send traffic to targets in all enabled Availability Zones.</li>
       <li>ALB cross-zone load balancing is always on at the load balancer level. You can turn it off for a target group.</li>
       <li>The <strong>deregistration delay</strong> default is 300 seconds (range 0 to 3,600). Set it longer than your longest request.</li>
+      <li>A deregistering target is in the <code>draining</code> state. The ALB sends it no new requests, and in-flight requests can complete.</li>
       <li>A request still in progress when the deregistration delay ends fails with 502.</li>
       <li><strong>Slow start</strong> increases traffic to a new target linearly over 30 to 900 seconds. The default is 0 (off).</li>
       <li>Slow start does not work with least outstanding requests or weighted random.</li>
@@ -274,11 +276,11 @@
       <li>Failed checks during <code>startPeriod</code> do not count toward <code>retries</code>.</li>
       <li>ECS ignores a <code>HEALTHCHECK</code> in the image. ECS uses only the health check in the task definition.</li>
       <li>In a service, ECS stops an unhealthy task and starts a replacement.</li>
-      <li>ECS <code>healthCheckGracePeriodSeconds</code> ignores failed ELB, VPC Lattice, and container health checks after a task starts. The default is 0.</li>
+      <li>For <code>healthCheckGracePeriodSeconds</code> after a task starts, ECS ignores failed ELB, VPC Lattice, and container health checks. The default is 0.</li>
       <li>ECS <code>startPeriod</code> does not stop ELB health checks from failing a task.</li>
       <li>A Kubernetes <strong>liveness</strong> probe failure makes the kubelet restart the container.</li>
       <li>A Kubernetes <strong>readiness</strong> probe failure removes the Pod from Service endpoints, with no restart.</li>
-      <li>A Kubernetes <strong>startup</strong> probe gives a slow application time to start. Liveness and readiness probes wait for it.</li>
+      <li>A Kubernetes <strong>startup</strong> probe failure restarts the container. Liveness and readiness probes wait until the startup probe succeeds.</li>
       <li>A Kubernetes <code>httpGet</code> probe passes on a 200 to 399 status.</li>
       <li>A Kubernetes <code>tcpSocket</code> probe passes on a connection, <code>exec</code> on exit code 0, and <code>grpc</code> on <code>SERVING</code>.</li>
       <li>Do not check external dependencies in a liveness probe. Put dependency checks in the readiness probe.</li>
@@ -567,7 +569,7 @@
       <li>Compute Optimizer covers EC2, Auto Scaling groups, EBS volumes, Lambda functions, ECS services on Fargate, and more.</li>
       <li>Compute Optimizer analyzes the last 14 days of metrics by default.</li>
       <li>Compute Optimizer enhanced infrastructure metrics (paid) extends the lookback period to 93 days.</li>
-      <li>Compute Optimizer rightsizing preferences allow a free 32-day lookback, which includes a monthly peak.</li>
+      <li>Compute Optimizer rightsizing preferences allow a free 32-day lookback, which covers a full monthly cycle.</li>
       <li>For Compute Optimizer EC2 memory recommendations, install the CloudWatch agent on the instances.</li>
       <li>Scale on the metric that limits the application.</li>
       <li>For a web tier behind an ALB, <code>ALBRequestCountPerTarget</code> can be a better scaling signal than CPU.</li>
