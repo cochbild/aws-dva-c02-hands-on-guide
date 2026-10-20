@@ -158,7 +158,7 @@
       <li>A <strong>dynamic reference</strong> (<code>{{resolve:...}}</code>) reads a value from Parameter Store or Secrets Manager at create or update.</li>
       <li><code>{{resolve:ssm:...}}</code> reads a Parameter Store <code>String</code> or <code>StringList</code>. Without a version, it reads the latest version.</li>
       <li><code>{{resolve:ssm-secure:...}}</code> works only for a short list of properties, for example RDS <code>MasterUserPassword</code>.</li>
-      <li><code>{{resolve:secretsmanager:...}}</code> works in all resource properties. The default version is <code>AWSCURRENT</code>.</li>
+      <li><code>{{resolve:secretsmanager:...}}</code> works in any resource property that accepts a dynamic reference. The default version is <code>AWSCURRENT</code>.</li>
       <li>For a secret in another account, use the full ARN in the Secrets Manager dynamic reference.</li>
       <li>CloudFormation does not store a resolved secure value. CloudFormation stores only the reference text.</li>
       <li>A changed secret value does not update the resource. CloudFormation reads the value only when it creates or updates that resource.</li>
@@ -235,7 +235,7 @@
       <li>An export name must be unique in each account and Region.</li>
       <li>You cannot delete an exporting stack while another stack imports its value.</li>
       <li>You cannot change or remove an output while another stack imports it. Remove all imports first.</li>
-      <li>An export name cannot use <code>Ref</code> or <code>GetAtt</code> to a resource. Example: <code>!Sub '${AWS::StackName}-VpcId'</code>.</li>
+      <li>An export <code>Name</code> and <code>Fn::ImportValue</code> cannot use <code>Ref</code> or <code>GetAtt</code> to a resource. Example: <code>!Sub '${AWS::StackName}-VpcId'</code>.</li>
       <li><code>aws cloudformation list-imports</code> shows the stacks that use an export.</li>
       <li>Start nested stack updates from the root stack, not from a nested stack.</li>
       <li>Termination protection is set on the root stack only. Nested stacks inherit termination protection from the root stack.</li>
@@ -243,7 +243,7 @@
       <li>StackSets <strong>service-managed permissions</strong> use AWS Organizations, and StackSets creates the roles.</li>
       <li>Only service-managed permissions can deploy automatically to accounts that join an OU later.</li>
       <li>StackSets self-managed roles are <code>AWSCloudFormationStackSetAdministrationRole</code> and <code>AWSCloudFormationStackSetExecutionRole</code>.</li>
-      <li>StackSets failure tolerance is the number of stack failures allowed in each Region. One more failure stops the operation.</li>
+      <li>StackSets failure tolerance is the number or percentage of stack failures allowed in each Region. One more failure stops the operation.</li>
       <li>StackSets Region concurrency is sequential by default. Parallel sends the operation to all Regions at the same time.</li>
       <li>A StackSet template update goes to all stack instances. You cannot update only some stacks.</li>
     </ul>
@@ -308,7 +308,6 @@
       <li>An update with <strong>some interruption</strong> keeps the physical ID, but the resource can stop for a short time.</li>
       <li>A <strong>replacement</strong> creates a new resource with a new physical ID, then deletes the old resource.</li>
       <li>A replaced database or table is a new, empty resource unless you restore the data.</li>
-      <li>Each resource property page in the template reference shows its update behavior.</li>
       <li>A replacement of a resource with a custom name (for example <code>TableName</code>) fails. Change the name to replace the resource.</li>
       <li>A <strong>change set</strong> shows the adds, modifications, removals, and replacements before you apply them.</li>
       <li>Creating a change set does not change the stack.</li>
@@ -406,7 +405,7 @@
       <li><code>DeletionPolicy</code> applies when the stack is deleted or the resource is removed from the template.</li>
       <li><code>UpdateReplacePolicy</code> applies to the old resource when an update <strong>replaces</strong> the resource.</li>
       <li><code>DeletionPolicy</code> does not apply to a replacement.</li>
-      <li>Both policies accept <code>Delete</code> (default), <code>Retain</code>, and <code>Snapshot</code>.</li>
+      <li><code>DeletionPolicy</code> and <code>UpdateReplacePolicy</code> accept <code>Delete</code> (default), <code>Retain</code>, and <code>Snapshot</code>.</li>
       <li><code>Retain</code> keeps the resource and its data, but the stack no longer manages the resource.</li>
       <li><code>Snapshot</code> takes a backup snapshot and then deletes the resource.</li>
       <li>Use <code>Retain</code> to keep using the resource. Use <code>Snapshot</code> when a backup is enough.</li>
@@ -642,7 +641,7 @@
       <li><code>Linear10PercentEvery1Minute</code> adds 10% each minute, so all traffic moves in 10 steps.</li>
       <li>An alarm in <code>Alarms</code> that enters <code>ALARM</code> state makes CodeDeploy send all traffic back to the old version.</li>
       <li>A <code>PreTraffic</code> hook runs before traffic shifts. A <code>PostTraffic</code> hook runs after all traffic shifts.</li>
-      <li>Both hooks are optional. A hook that reports failure makes CodeDeploy roll back.</li>
+      <li><code>PreTraffic</code> and <code>PostTraffic</code> hooks are optional. A hook that reports failure makes CodeDeploy roll back.</li>
       <li>A hook function must call <code>PutLifecycleEventHookExecutionStatus</code> with <code>Succeeded</code> or <code>Failed</code>.</li>
       <li>A hook function role needs permission for <code>PutLifecycleEventHookExecutionStatus</code>.</li>
       <li>A hook with no status report makes the deployment fail after 1 hour.</li>
@@ -771,7 +770,7 @@
       <li>CodePipeline <code>CHANGE_SET_REPLACE</code> creates or replaces the change set and does not change the stack.</li>
       <li>CodePipeline <code>CHANGE_SET_EXECUTE</code> runs the change set.</li>
       <li>CodePipeline <code>CREATE_UPDATE</code> creates or updates the stack at once, with no review step.</li>
-      <li>CodePipeline <code>REPLACE_ON_FAILURE</code> deletes and recreates a failed stack. Use it for testing only.</li>
+      <li>CodePipeline <code>REPLACE_ON_FAILURE</code> creates or updates the stack, but deletes and recreates a stack in a failed state. Testing only.</li>
       <li>CodePipeline <code>DELETE_ONLY</code> deletes the stack.</li>
       <li>For a production review, use <code>CHANGE_SET_REPLACE</code>, then manual approval, then <code>CHANGE_SET_EXECUTE</code>.</li>
       <li>Use <code>CREATE_UPDATE</code> for fast deployments with no review, for example to a test stage.</li>
@@ -846,12 +845,9 @@
       <li><code>resolve_s3 = true</code> makes SAM create a managed S3 bucket.</li>
       <li>A container image function uses <code>PackageType: Image</code> and an <code>ImageUri</code> in ECR.</li>
       <li><code>sam build</code> builds a function image from the <code>Dockerfile</code> in the function <code>Metadata</code>.</li>
-      <li>Put <code>template.yaml</code> and <code>samconfig.toml</code> at the project root.</li>
       <li>Give each function its own folder and its own dependency file, so that each package stays small.</li>
       <li>Put shared code in a <strong>layer</strong> (<code>AWS::Serverless::LayerVersion</code>). Functions list the layer in <code>Layers</code>.</li>
       <li>Lambda extracts a layer into the <code>/opt</code> folder of each function that uses the layer.</li>
-      <li>Put test events in <code>events/</code> and tests in <code>tests/</code>.</li>
-      <li>Do not edit files in <code>.aws-sam/build</code>, because <code>sam build</code> overwrites them.</li>
     </ul>
   </div>
   <div class="exam-signals">
