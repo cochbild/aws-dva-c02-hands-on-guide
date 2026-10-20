@@ -60,7 +60,7 @@
       <li>A FIFO queue allows 300 transactions each second for each API action, for the whole queue, not for each group.</li>
       <li>A FIFO queue with batches of 10 messages handles 3,000 messages each second.</li>
       <li>Batch API calls (<code>SendMessageBatch</code>, <code>DeleteMessageBatch</code>) take a maximum of 10 messages.</li>
-      <li>FIFO <strong>high throughput mode</strong> is a queue setting. Its limit depends on the Region, for example 70,000 transactions each second in US East (N. Virginia).</li>
+      <li>FIFO <strong>high throughput mode</strong> is a queue setting. Its limit depends on the Region, for example 70,000 transactions each second without batching in us-east-1.</li>
       <li>A FIFO queue does not support a per-message delay (message timer). Use a queue-level delay.</li>
       <li>A FIFO queue does not deliver a second message with the same deduplication ID in the 5-minute deduplication interval.</li>
       <li>A FIFO queue needs a <code>MessageDeduplicationId</code> or content-based deduplication. Without either, <code>SendMessage</code> fails.</li>
@@ -71,7 +71,8 @@
       <li>One slow message in a FIFO queue blocks all later messages of its group.</li>
       <li>The number of active <code>MessageGroupId</code> values limits how many FIFO consumers can work at the same time.</li>
       <li>On a standard queue, a <code>MessageGroupId</code> turns on <strong>fair queues</strong> and identifies a tenant.</li>
-      <li>Fair queues deliver the messages of other tenants first when one tenant makes a backlog. Fair queues do not give order.</li>
+      <li>Fair queues deliver the messages of other tenants first when one tenant makes a backlog.</li>
+      <li>Fair queues do not give order on a standard queue.</li>
     </ul>
   </div>
   <div class="exam-signals">
@@ -252,7 +253,8 @@
       <li>Set the DLQ retention longer than the source queue retention.</li>
       <li>A message moved from a FIFO queue gets a new enqueue timestamp in the DLQ.</li>
       <li>A DLQ can break the exact order of a FIFO queue. Do not use a DLQ if the order of every message is critical.</li>
-      <li>SQS does not notify you when a message arrives in a DLQ. Alarm on <code>ApproximateNumberOfMessagesVisible</code> of the DLQ.</li>
+      <li>SQS does not notify you when a message arrives in a DLQ.</li>
+      <li>Alarm on the DLQ metric <code>ApproximateNumberOfMessagesVisible</code>.</li>
       <li>The <code>NumberOfMessagesSent</code> metric does not count messages that SQS moves to a DLQ.</li>
       <li>The <strong>redrive allow policy</strong> is on the DLQ and sets <code>redrivePermission</code>.</li>
       <li><code>redrivePermission</code> <code>allowAll</code> is the default and lets any source queue use the DLQ.</li>
@@ -338,7 +340,7 @@
       <li>For EventBridge to deliver to a queue, allow <code>events.amazonaws.com</code> with an <code>aws:SourceArn</code> of the rule.</li>
       <li>Cross-account access needs the other account as a principal in the resource policy and IAM permissions in that account.</li>
       <li>Use IAM identity policies for your own users and roles. Example: <code>sqs:ReceiveMessage</code> and <code>sqs:DeleteMessage</code> for a consumer.</li>
-      <li>SQS encryption at rest uses <strong>SSE-SQS</strong> (keys that SQS manages) or <strong>SSE-KMS</strong> (an AWS KMS key).</li>
+      <li>SQS encryption at rest uses <strong>SSE-SQS</strong> (keys that SQS manages) or SSE-KMS (an AWS KMS key).</li>
       <li>Choose SSE-SQS when you need only encryption at rest, with no key to manage.</li>
       <li>Choose SSE-KMS with a customer managed key to control the key policy or to see each key use in CloudTrail.</li>
       <li>SQS SSE encrypts only the message body, not queue metadata, message metadata, or message attributes.</li>
@@ -350,7 +352,8 @@
       <li>With SSE-KMS, a producer needs <code>kms:GenerateDataKey</code> and <code>kms:Decrypt</code>.</li>
       <li>With SSE-KMS, a consumer needs <code>kms:Decrypt</code>. A Lambda function that reads an encrypted queue also needs <code>kms:Decrypt</code>.</li>
       <li>Missing KMS permissions make the SQS call fail with <code>KmsAccessDenied</code>.</li>
-      <li>SNS topics support SSE with AWS KMS keys. SNS data in transit uses TLS.</li>
+      <li>SNS topics support SSE with AWS KMS keys.</li>
+      <li>SNS data in transit uses TLS.</li>
       <li>For SNS to send to an encrypted queue, use a <strong>customer managed</strong> KMS key on the queue.</li>
       <li>The queue key policy must allow <code>sns.amazonaws.com</code> to use <code>kms:GenerateDataKey*</code> and <code>kms:Decrypt</code>.</li>
       <li>SNS cannot send to a queue encrypted with <code>aws/sqs</code>, because you cannot edit the key policy of that AWS managed key.</li>
@@ -484,7 +487,7 @@
       <li>SNS retries email (SMTP), SMS, and mobile push endpoints with 50 attempts over 6 hours.</li>
       <li>Only HTTP/S endpoints accept a custom <strong>delivery policy</strong>, at the topic or subscription level.</li>
       <li>An HTTP/S delivery policy allows a maximum total retry time of 3,600 seconds.</li>
-      <li>SNS retries server-side errors. For HTTP/S, SNS retries 5xx and 429 responses.</li>
+      <li>SNS retries server-side errors, for HTTP/S the 5xx and 429 responses.</li>
       <li>SNS does not retry client-side errors, for example a deleted endpoint or a policy that blocks delivery.</li>
       <li>When retries end, or after a client-side error, SNS discards the message unless the subscription has a DLQ.</li>
       <li>Attach an SNS DLQ to the <strong>subscription</strong> with a redrive policy (<code>deadLetterTargetArn</code>), not to the topic.</li>
@@ -496,7 +499,7 @@
       <li>An SNS FIFO topic delivers only to SQS queues, FIFO or standard.</li>
       <li>An SNS FIFO topic cannot deliver to Lambda, HTTP/S, email, SMS, or mobile push.</li>
       <li>To reach Lambda from an SNS FIFO topic, subscribe a queue and use the queue as the function trigger.</li>
-      <li>With <code>FifoThroughputScope</code> = <code>MessageGroup</code>, each message group receives 300 messages each second.</li>
+      <li>With <code>FifoThroughputScope</code> = <code>MessageGroup</code>, each message group can receive up to 300 messages each second.</li>
       <li>With <code>FifoThroughputScope</code> = <code>Topic</code>, the topic shares one limit: 3,000 messages or 20 MB each second by default.</li>
       <li>Choose <code>FifoThroughputScope</code> = <code>MessageGroup</code> when you have many message groups and need more total throughput.</li>
       <li>SNS FIFO topics support message archiving and replay. SNS standard topics do not.</li>
@@ -563,9 +566,7 @@
       <li>Pattern operators include exact match, <code>prefix</code>, <code>suffix</code>, <code>anything-but</code>, <code>numeric</code>, <code>exists</code>, <code>cidr</code>, <code>wildcard</code>, and <code>equals-ignore-case</code>.</li>
       <li>An EventBridge rule can have a maximum of 5 targets. You cannot increase this quota.</li>
       <li>For more than 5 targets, add a rule with the same pattern or send to an SNS topic.</li>
-      <li>The exam guide covers the default bus and the rules-and-targets bus, now named Custom Event Bus - Classic.</li>
-      <li>The new Custom Event Bus (September 2026) sends events to subscribers, not to rules and targets.</li>
-      <li>The new Custom Event Bus accepts up to 100 entries in each <code>PutEvents</code> call and keeps events for 1 to 365 days.</li>
+      <li>The exam guide covers the default bus and Custom Event Bus - Classic. The limits on this sheet are for those buses, not the new Custom Event Bus (September 2026).</li>
       <li>Use an <strong>input transformer</strong> when a target needs a different JSON shape and you do not want to write code.</li>
       <li><code>InputPathsMap</code> takes values from the event with JSON paths. <code>InputTemplate</code> builds the new target input.</li>
       <li><code>PutEvents</code> takes up to 10 entries in one request, with a total size less than 1 MB.</li>
@@ -648,7 +649,7 @@
   <div class="remember">
     <h3>Remember</h3>
     <ul>
-      <li>By default, EventBridge retries a target for <strong>24 hours</strong> and up to <strong>185 times</strong>, with exponential backoff and jitter.</li>
+      <li>By default, EventBridge retries a target for <strong>24 hours</strong> and up to 185 times, with exponential backoff and jitter.</li>
       <li>Set a shorter retry policy (maximum event age, retry attempts) on a target when an old event has no value.</li>
       <li>When retries end, EventBridge drops the event unless the target has a DLQ.</li>
       <li>An EventBridge target DLQ is a standard SQS queue.</li>
@@ -797,6 +798,7 @@
       <li>Kinesis keeps order inside a shard, not across shards.</li>
       <li>A <strong>hot shard</strong> gets more writes than its limit while other shards are almost idle.</li>
       <li>A partition key with few distinct values, or one very busy value, causes a hot shard.</li>
+      <li>A good partition key has many distinct values. Example: device ID, not device type.</li>
       <li>Writes to a hot shard fail with <code>ProvisionedThroughputExceededException</code>, even when the stream has spare capacity.</li>
       <li>To fix <code>ProvisionedThroughputExceededException</code>, retry with exponential backoff, spread partition keys, or add shards.</li>
       <li>Kinesis does not write a throttled record. The producer must retry it, or the record is lost.</li>
@@ -813,7 +815,8 @@
       <li><code>ParallelizationFactor</code> (1 to 10) is the number of batches that Lambda processes at the same time from each shard.</li>
       <li>With a <code>ParallelizationFactor</code> above 1, Lambda still keeps the order for each partition key.</li>
       <li>Kinesis keeps data until retention ends, so many consumers can read it and a consumer can replay it.</li>
-      <li>Shared-throughput latency is about 200 ms with one consumer. Enhanced fan-out latency is about 70 ms.</li>
+      <li>A shared-throughput consumer has a latency of about 200 ms.</li>
+      <li>An enhanced fan-out consumer has a latency of about 70 ms.</li>
       <li>Choose enhanced fan-out when several consumers read the same stream or when you need low latency.</li>
       <li>In provisioned mode, enhanced fan-out adds a charge for each consumer-shard hour and for each GB read.</li>
       <li>The <strong>Kinesis Client Library</strong> (KCL) uses a DynamoDB table to track shard leases and checkpoints.</li>
@@ -821,8 +824,8 @@
       <li>Without <code>kms:GenerateDataKey</code>, the producer <code>PutRecord</code> calls to an encrypted stream fail.</li>
       <li>Without <code>kms:Decrypt</code>, the consumer <code>GetRecords</code> calls to an encrypted stream fail.</li>
       <li>In a Lambda event, the Kinesis record <code>data</code> is base64-encoded. Decode it before you parse it.</li>
-      <li>Kinesis on-failure destinations SQS and SNS get batch metadata only: stream ARN, shard ID, and sequence numbers.</li>
-      <li>A Kinesis on-failure destination in Amazon S3 also gets the records.</li>
+      <li>For a Kinesis event source mapping, Lambda on-failure destinations SQS and SNS get batch metadata only: stream ARN, shard ID, and sequence numbers.</li>
+      <li>For a Kinesis event source mapping, a Lambda on-failure destination in Amazon S3 also gets the records.</li>
     </ul>
   </div>
   <div class="exam-signals">
@@ -906,7 +909,8 @@
       <li><strong>Dynamic partitioning</strong> writes each record under an S3 prefix that comes from a key in the record.</li>
       <li><strong>Source record backup</strong> writes the original source records to an S3 bucket.</li>
       <li>A common pattern: Kinesis Data Streams keeps data for replay, and Firehose archives the stream to S3.</li>
-      <li>Firehose invokes the transformation function synchronously with a batch. The function can run for up to 5 minutes.</li>
+      <li>Firehose invokes the transformation function synchronously with a batch.</li>
+      <li>A Firehose transformation function can run for up to 5 minutes.</li>
       <li>Each returned record needs <code>recordId</code> (same as input), <code>result</code>, and <code>data</code> (base64-encoded).</li>
       <li>Firehose treats a returned <code>recordId</code> that does not match the input as a transformation failure.</li>
       <li>The <code>result</code> value <code>Ok</code> delivers the record.</li>
