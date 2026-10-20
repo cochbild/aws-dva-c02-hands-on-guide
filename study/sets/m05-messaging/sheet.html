@@ -72,7 +72,7 @@
       <li>The number of active <code>MessageGroupId</code> values limits how many FIFO consumers can work at the same time.</li>
       <li>On a standard queue, a <code>MessageGroupId</code> turns on <strong>fair queues</strong> and identifies a tenant.</li>
       <li>Fair queues deliver the messages of other tenants first when one tenant makes a backlog.</li>
-      <li>Fair queues do not give order on a standard queue.</li>
+      <li>Fair queues are a feature of standard queues and do not give message order.</li>
     </ul>
   </div>
   <div class="exam-signals">
@@ -566,7 +566,8 @@
       <li>Pattern operators include exact match, <code>prefix</code>, <code>suffix</code>, <code>anything-but</code>, <code>numeric</code>, <code>exists</code>, <code>cidr</code>, <code>wildcard</code>, and <code>equals-ignore-case</code>.</li>
       <li>An EventBridge rule can have a maximum of 5 targets. You cannot increase this quota.</li>
       <li>For more than 5 targets, add a rule with the same pattern or send to an SNS topic.</li>
-      <li>The exam guide covers the default bus and Custom Event Bus - Classic. The limits on this sheet are for those buses, not the new Custom Event Bus (September 2026).</li>
+      <li>The exam guide covers the default bus and Custom Event Bus - Classic.</li>
+      <li>The EventBridge limits on this sheet are for those two buses, not for the new Custom Event Bus (September 2026).</li>
       <li>Use an <strong>input transformer</strong> when a target needs a different JSON shape and you do not want to write code.</li>
       <li><code>InputPathsMap</code> takes values from the event with JSON paths. <code>InputTemplate</code> builds the new target input.</li>
       <li><code>PutEvents</code> takes up to 10 entries in one request, with a total size less than 1 MB.</li>
