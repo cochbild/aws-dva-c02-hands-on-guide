@@ -43,7 +43,7 @@
       <li><strong>Fanout</strong> sends a copy of one event to many consumers at the same time.</li>
       <li>In fanout, a slow or failed consumer does not delay the other consumers.</li>
       <li>For SNS fanout, publish one time to a topic and subscribe one SQS queue for each consumer.</li>
-      <li>SNS pushes each message to its subscribers and does not keep the message for later reads.</li>
+      <li>An SNS standard topic pushes each message to its subscribers and does not keep the message for later reads.</li>
       <li>When an SNS endpoint stays down, SNS retries, then discards the message unless the subscription has a dead-letter queue.</li>
       <li>An SQS queue stores its copy until the consumer reads and deletes it, so a slow consumer loses no messages.</li>
       <li>One EventBridge rule sends a matching event to up to 5 targets. You cannot raise this quota.</li>
@@ -69,12 +69,12 @@
       <li>Kinesis Data Streams keeps records for 24 hours by default, and up to 365 days.</li>
       <li>EventBridge can archive events and replay them to the rules later. Example: reprocess events after a defect fix.</li>
       <li>For SNS to SQS fanout, the queue policy must allow <code>sns.amazonaws.com</code> to do <code>sqs:SendMessage</code>.</li>
-      <li>Without the SNS statement in the queue policy, the publish to the topic succeeds, but the queue stays empty.</li>
+      <li>Without an <code>sqs:SendMessage</code> allow for <code>sns.amazonaws.com</code> in the queue policy, the publish succeeds, but the queue stays empty.</li>
       <li>Add an <code>aws:SourceArn</code> condition with the topic ARN to the queue policy. Without it, any SNS topic can send to the queue.</li>
       <li>The <strong>confused deputy</strong> problem: a trusted service does an action for a party that has no permission of its own.</li>
       <li>For cross-account EventBridge, the receiver event bus needs a resource-based policy that allows the sender accounts or the organization ID.</li>
       <li>For cross-account EventBridge, each sender account creates a rule with the receiver bus ARN as the target.</li>
-      <li>Since March 2, 2023, a rule target on an event bus in another account needs an IAM role.</li>
+      <li>Since March 2, 2023, a new rule target on an event bus in another account needs an IAM role.</li>
       <li>The EventBridge console creates the cross-account IAM role for you. With the CLI, you create it yourself.</li>
     </ul>
   </div>
@@ -156,9 +156,6 @@
       <li>AWS X-Ray (distributed tracing) records the time that each service spends on one request.</li>
       <li>A <strong>correlation ID</strong> is a unique ID that the first service creates and every service writes in its logs.</li>
       <li>A transaction across services cannot use one database transaction. Use a saga.</li>
-      <li>In a typical AWS microservice design, API Gateway or an Application Load Balancer is in front.</li>
-      <li>Typical microservice compute is Lambda or containers, with DynamoDB or RDS for each service.</li>
-      <li>Typical links between microservices are SQS, SNS, or EventBridge.</li>
     </ul>
   </div>
   <div class="exam-signals">
@@ -295,7 +292,7 @@
     <ul>
       <li>With <strong>tight coupling</strong>, the caller calls the callee directly and waits. A slow or failed callee makes the caller slow or fail.</li>
       <li>With <strong>loose coupling</strong>, a queue, topic, or event bus sits between the components. Each side can fail, scale, or change on its own.</li>
-      <li>A <strong>synchronous</strong> caller waits for the result. Examples: API Gateway to Lambda, Lambda <code>RequestResponse</code>, <code>StartSyncExecution</code>.</li>
+      <li>A <strong>synchronous</strong> caller waits for the result. Examples: API Gateway to Lambda, Lambda <code>RequestResponse</code>, Step Functions <code>StartSyncExecution</code>.</li>
       <li>An <strong>asynchronous</strong> caller gets an acknowledgment and continues. Examples: Lambda <code>Event</code> invocation, SQS, SNS, EventBridge.</li>
       <li>Use synchronous calls only when the caller needs the answer now. Example: a price check before checkout.</li>
       <li>Each synchronous call adds the latency of the callee to the caller, and the caller fails when the callee fails.</li>
@@ -437,8 +434,6 @@
       <li><strong>ElastiCache</strong> (Valkey, Redis OSS, Memcached) caches any data that your code puts there, for all application instances.</li>
       <li><strong>DAX</strong> caches DynamoDB items and query results with no change to the data access logic.</li>
       <li>A Lambda cache in global variables or <code>/tmp</code> serves only that one execution environment.</li>
-      <li>Choose the cache layer by who reads the data and how often the data changes.</li>
-      <li>Cache close to the user for data that many users read.</li>
       <li>Set a TTL (time to live) on every cached item.</li>
       <li>A short TTL gives fresher data, but more cache misses and more backend calls.</li>
       <li>A long TTL gives more cache hits, but users can see old data for longer.</li>
