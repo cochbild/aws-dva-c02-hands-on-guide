@@ -48,11 +48,11 @@
       <li><strong>Data minimization</strong>: collect and keep only the data that the application needs.</li>
       <li>Data that you do not store cannot leak.</li>
       <li>A classification tag on a resource lets an IAM policy compare it with a tag on the user (ABAC).</li>
-      <li>A classification tag lets auditors find all confidential resources.</li>
       <li>Encrypt sensitive data at rest.</li>
       <li>Use a customer managed KMS key when you must control the key policy or audit key use.</li>
       <li>You cannot change the key policy of an AWS managed KMS key.</li>
       <li>Use TLS on every connection for sensitive data, also inside the VPC.</li>
+      <li>Give least-privilege access to sensitive data: separate it from other data, or restrict access by attribute.</li>
       <li>Do not log sensitive values, because a value in a log is a leak.</li>
       <li>If sensitive values can still appear in logs, mask them with a CloudWatch Logs data protection policy.</li>
       <li>Delete sensitive data when it is no longer needed: S3 Lifecycle, DynamoDB TTL, log group retention.</li>
@@ -215,6 +215,7 @@
       <li>Without the <code>aud</code> or <code>client_id</code> check, the app accepts tokens issued to other app clients.</li>
       <li>Without the <code>token_use</code> check, the app accepts an ID token where it expects an access token.</li>
       <li>A local signature and <code>exp</code> check cannot detect a revoked token.</li>
+      <li>Sign-out or a <code>RevokeToken</code> call revokes a token before it expires.</li>
       <li>To honor sign-out before expiry, keep access token lifetimes short or check the token with Cognito.</li>
       <li>To detect revocation, call a Cognito API with the token, for example <code>GetUser</code>, and Cognito rejects a revoked token.</li>
       <li>The <strong>ID token</strong> tells who the user is and holds user attributes and <code>aud</code>.</li>
@@ -225,7 +226,7 @@
       <li>An HTTP API <strong>JWT authorizer</strong> validates <code>kid</code>, <code>iss</code>, <code>aud</code> or <code>client_id</code>, <code>exp</code>, <code>nbf</code>, <code>iat</code>, and route scopes.</li>
       <li>An HTTP API JWT authorizer checks <code>client_id</code> only when <code>aud</code> is not present.</li>
       <li>An HTTP API JWT authorizer caches public keys for up to 2 hours.</li>
-      <li>After a key rotation, a token signed with the new key can fail on a JWT authorizer until the cache refreshes.</li>
+      <li>After a key rotation, keep the old signing key valid for a grace period, because a JWT authorizer caches public keys.</li>
       <li>A Lambda authorizer validates the token in your code, for an unsupported issuer or for extra rules.</li>
       <li>An ALB with Cognito authentication sends signed claims to targets in the <code>x-amzn-oidc-data</code> header.</li>
       <li>An ALB target verifies the <code>x-amzn-oidc-data</code> signature to know that the load balancer created the claims.</li>
@@ -285,7 +286,7 @@
   <ul>
     <li><strong>REST API Cognito authorizer</strong> (<code>COGNITO_USER_POOLS</code>): API Gateway validates the token. No code.</li>
     <li><strong>HTTP API JWT authorizer</strong>: validates <code>kid</code>, <code>iss</code>, <code>aud</code> or <code>client_id</code>, <code>exp</code>, <code>nbf</code> (not before), <code>iat</code> (issued at), and route scopes. It checks <code>client_id</code> only when <code>aud</code> is not present.</li>
-    <li>The HTTP API JWT authorizer caches public keys for up to 2 hours. After a key rotation, a token signed with the new key can fail until the cache refreshes.</li>
+    <li>The HTTP API JWT authorizer caches public keys for up to 2 hours. When you rotate signing keys, keep the old key valid for a grace period.</li>
     <li><strong>Lambda authorizer</strong>: your code validates the token. Use it for an issuer that the built-in authorizers do not support, or for extra rules.</li>
     <li><strong>Application Load Balancer</strong> with Cognito authentication: the ALB sends signed claims to targets in the <code>x-amzn-oidc-data</code> header. The target verifies the signature, so that it knows the load balancer created the claims.</li>
   </ul>
@@ -297,7 +298,7 @@
   <div class="remember">
     <h3>Remember</h3>
     <ul>
-      <li>A REST API Cognito authorizer with no scopes on the method treats the token as an <strong>ID token</strong>.</li>
+      <li>A REST API Cognito authorizer with no scopes on the method treats the token as an <strong>ID token</strong> and verifies the identity, not scopes.</li>
       <li>A REST API Cognito authorizer with authorization scopes on the method treats the token as an <strong>access token</strong>.</li>
       <li>A scoped method allows the call if any method scope matches a scope in the token.</li>
       <li>A scoped method returns <code>401 Unauthorized</code> when no method scope matches a token scope.</li>
@@ -420,7 +421,6 @@
       <li>A cross-account caller needs an allow in its identity policy and in the resource policy.</li>
       <li>A cross-account call gets 403 if the identity policy or the resource policy does not allow it.</li>
       <li>In <strong>mutual TLS</strong>, the client also shows an X.509 certificate, so the server knows which client connects.</li>
-      <li>Mutual TLS is common for IoT and business-to-business clients.</li>
       <li>REST API mutual TLS needs a Regional custom domain name with the <code>TLS_1_2</code> security policy.</li>
       <li>REST API mutual TLS needs an ACM certificate for the domain.</li>
       <li>REST API mutual TLS needs a <strong>truststore</strong>, a <code>.pem</code> file of CA certificates in Amazon S3.</li>
@@ -431,7 +431,6 @@
       <li>An untrusted or expired client certificate fails the handshake, and the client gets 403.</li>
       <li>Mutual TLS is not supported for private APIs.</li>
       <li>A <strong>private API</strong> is a REST API that clients call only from a VPC, through an interface VPC endpoint for <code>execute-api</code>.</li>
-      <li>Private API traffic does not leave the Amazon network.</li>
       <li>Only REST APIs can be private, and HTTP APIs cannot.</li>
       <li>Use <code>aws:SourceVpc</code> in the private API resource policy to allow every endpoint in a VPC.</li>
       <li>Use <code>aws:SourceVpce</code> in the private API resource policy to allow only named endpoints.</li>
@@ -500,12 +499,11 @@
       <li>Use pool when you have many small tenants and lower cost matters most.</li>
       <li>For DynamoDB fine-grained access control, make the tenant ID or user ID the partition key.</li>
       <li>The <code>dynamodb:LeadingKeys</code> condition can check only the partition key value in the request.</li>
+      <li>Use <code>dynamodb:LeadingKeys</code> with a policy variable, so a caller reads only items whose partition key equals the caller ID.</li>
       <li>The <code>dynamodb:LeadingKeys</code> condition must use the <code>ForAllValues</code> modifier, for example <code>ForAllValues:StringEquals</code>.</li>
-      <li>A <strong>policy variable</strong> is a placeholder that IAM replaces with a value from the request at evaluation time.</li>
       <li>Do not allow DynamoDB <code>Scan</code>, because <code>LeadingKeys</code> cannot limit it and a scan returns items of all tenants.</li>
       <li>The <code>dynamodb:Attributes</code> condition checks only the attribute names in the request, not the response.</li>
-      <li>A DynamoDB read with no projection returns all attributes.</li>
-      <li>To stop reads of all attributes, also require <code>dynamodb:Select</code> = <code>SPECIFIC_ATTRIBUTES</code>.</li>
+      <li>With <code>dynamodb:Attributes</code>, also require <code>dynamodb:Select</code> = <code>SPECIFIC_ATTRIBUTES</code>, or a read with no projection returns all attributes.</li>
       <li>For DynamoDB writes, limit <code>dynamodb:ReturnValues</code> to <code>NONE</code>, <code>UPDATED_OLD</code>, or <code>UPDATED_NEW</code>.</li>
       <li>The <code>ReturnValues</code> settings <code>ALL_OLD</code> and <code>ALL_NEW</code> return the whole item.</li>
       <li>Policy variables need <code>"Version": "2012-10-17"</code> in the policy.</li>
@@ -521,7 +519,6 @@
       <li>Without the <code>s3:prefix</code> condition, a user can list the object keys of all users.</li>
       <li>Take the tenant ID from the verified token or the authorizer context.</li>
       <li>Never take the tenant ID from the request body, a query string, or a header that the client controls.</li>
-      <li>A user cannot change a signed token without breaking the signature.</li>
       <li>Add the tenant key to every query in the code, because IAM policies are only a second layer.</li>
     </ul>
   </div>
@@ -587,6 +584,7 @@
       <li>The <code>aws:SecureTransport</code> key is <code>false</code> when a request does not use TLS.</li>
       <li>An explicit deny on <code>aws:SecureTransport</code> wins over every allow, so S3 returns 403 Access Denied for every principal.</li>
       <li>Requests to SQS queues and SNS topics with SSE turned on must use HTTPS and Signature Version 4.</li>
+      <li>SQS and SNS reject a plain HTTP request to a queue or topic with SSE turned on.</li>
       <li>Private REST APIs support only TLS 1.2.</li>
       <li>A CloudFront distribution uses ACM certificates only from <code>us-east-1</code>, whatever Region the origin is in.</li>
       <li>An API Gateway edge-optimized custom domain needs its ACM certificate in <code>us-east-1</code>.</li>
@@ -609,7 +607,6 @@
       <li>Amazon DynamoDB always encrypts data at rest.</li>
       <li>SSE-SQS is the default for new queues created through the HTTPS endpoint without encryption attributes.</li>
       <li>Amazon SNS does not encrypt at rest by default, so set a KMS key (<code>KmsMasterKeyId</code>) on the topic.</li>
-      <li>Sensitive data needs both encryption at rest and encryption in transit.</li>
     </ul>
   </div>
   <div class="exam-signals">
@@ -681,11 +678,10 @@
       <li>Private key file formats are <code>.pem</code> (OpenSSH) and <code>.ppk</code> (PuTTY).</li>
       <li>On Linux and macOS, run <code>chmod 400</code> on the private key file.</li>
       <li>The SSH client refuses a private key file that other users can read.</li>
-      <li>To use your own key, create it with <code>ssh-keygen</code> and import only the <strong>public</strong> key with <code>aws ec2 import-key-pair</code>.</li>
+      <li>To use your own key, create it with <code>ssh-keygen</code> and import only the <strong>public</strong> key, so the private key never leaves your machine.</li>
       <li>On Windows instances, the private key decrypts the administrator password, and you sign in with that password.</li>
       <li>EC2 has a quota of 5,000 key pairs for each Region, and you can request more.</li>
       <li><strong>Session Manager</strong> connects with no SSH key and no open inbound port.</li>
-      <li>The SSM Agent on the instance opens the Session Manager channel to Systems Manager.</li>
       <li>IAM policies control who can start a Session Manager session.</li>
       <li>Session Manager can log session activity.</li>
       <li>Use a <strong>self-signed certificate</strong>, for example from OpenSSL, for local development or a test endpoint only.</li>
@@ -699,7 +695,6 @@
       <li>A private certificate whose private key you cannot access is free, for example on ELB, CloudFront, or API Gateway.</li>
       <li>Private CAs are Regional, and you cannot copy a CA to another Region.</li>
       <li>You can import a third-party or self-signed certificate into ACM, but ACM does not renew imported certificates.</li>
-      <li>Never commit private keys to source control.</li>
       <li>Store private keys in Secrets Manager or Parameter Store <code>SecureString</code>.</li>
     </ul>
   </div>
