@@ -39,15 +39,57 @@
 
 <section id="secrets-basics">
   <h2>Secrets Manager: secrets, versions, and staging labels</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>A secret stores its value in <code>SecretString</code> (usually JSON) or <code>SecretBinary</code>.</li>
+      <li>Secrets Manager always encrypts the secret value with AWS KMS.</li>
+      <li>Secrets Manager uses the AWS managed key <code>aws/secretsmanager</code> by default, or a customer managed key that you choose.</li>
+      <li>Each value change with <code>PutSecretValue</code> or <code>UpdateSecret</code> creates a new secret version.</li>
+      <li>A <strong>staging label</strong> is a name attached to one version of a secret. Example: <code>AWSCURRENT</code>.</li>
+      <li>Applications request a staging label, not a version ID, so a label move needs no code change.</li>
+      <li><code>GetSecretValue</code> with no version returns the version that has <code>AWSCURRENT</code>.</li>
+      <li><code>AWSPENDING</code> marks the new value during a rotation, before the rotation completes.</li>
+      <li><code>AWSPREVIOUS</code> marks the last known good value, on the old version after <code>AWSCURRENT</code> moves.</li>
+      <li>A secret can have a maximum of 20 staging labels across all its versions.</li>
+      <li>You cannot delete one secret version directly.</li>
+      <li>To remove a secret version, remove all its labels with <code>UpdateSecretVersionStage</code>.</li>
+      <li>Above 100 versions, Secrets Manager removes unlabeled versions of a secret, but not versions less than 24 hours old.</li>
+      <li><code>DeleteSecret</code> schedules deletion after a recovery window of 7 to 30 days (default 30 days).</li>
+      <li>During the recovery window, <code>GetSecretValue</code> fails with <code>InvalidRequestException</code>.</li>
+      <li><code>RestoreSecret</code> cancels a scheduled deletion and keeps the same ARN.</li>
+      <li><code>ForceDeleteWithoutRecovery</code> deletes a secret with no recovery window, and you cannot recover the secret.</li>
+      <li><code>ReplicateSecretToRegions</code> copies a secret to other Regions and keeps the replicas in sync with the primary.</li>
+      <li>A replica secret gives low latency in its own Region and keeps working if the primary Region fails.</li>
+      <li>The maximum secret value size is 65,536 bytes (64 KB).</li>
+      <li><code>GetSecretValue</code> has a fixed (not adjustable) limit of 10,000 requests per second for each Region.</li>
+      <li>A secret costs $0.40 each month, plus $0.05 for each 10,000 API calls.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Read the value that was active before the last rotation" → <code>GetSecretValue</code> with <code>VersionStage=AWSPREVIOUS</code>.</li>
+      <li>"A secret was deleted by mistake yesterday" → <code>RestoreSecret</code> during the recovery window.</li>
+      <li>"Application in a second Region must read the same secret with low latency" → replicate the secret to that Region.</li>
+      <li>"Store a 100 KB certificate bundle as one secret" → too large. The limit is 64 KB.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li>A secret holds a value in <code>SecretString</code> (usually JSON) or <code>SecretBinary</code>. Most secrets use <code>SecretString</code>.</li>
     <li>Secrets Manager always encrypts the secret value with AWS KMS. The default key is the AWS managed key <code>aws/secretsmanager</code>. You can choose a customer managed key.</li>
     <li>Each change to the value (<code>PutSecretValue</code> or <code>UpdateSecret</code>) creates a new version.</li>
-    <li>A staging label is a name that is attached to one version, for example <code>AWSCURRENT</code>. Applications ask for a label, not a version ID. When a label moves to a new version, the application gets the new value with no code change. <code>GetSecretValue</code> with no version returns the version with <code>AWSCURRENT</code>.</li>
+    <li>A staging label is a name that is attached to one version, for example <code>AWSCURRENT</code>. Applications ask for a label, not a version ID.</li>
+    <li>When a label moves to a new version, the application gets the new value with no code change.</li>
+    <li><code>GetSecretValue</code> with no version returns the version with <code>AWSCURRENT</code>.</li>
     <li>You cannot delete one version directly. Remove all its labels with <code>UpdateSecretVersionStage</code>. Secrets Manager then removes it in the background.</li>
-    <li><code>DeleteSecret</code> does not delete the secret at once. It schedules deletion after a recovery window, so you can undo a mistake. During the window, <code>GetSecretValue</code> fails with <code>InvalidRequestException</code>, so applications that use the secret stop working. <code>RestoreSecret</code> cancels the deletion and keeps the same ARN.</li>
-    <li><code>ForceDeleteWithoutRecovery</code> is a <code>DeleteSecret</code> option that deletes the secret with no recovery window. You cannot recover it. Use it with caution, for example for test secrets. Deletion is still a background task, so a new secret with the same name may need a retry.</li>
+    <li><code>DeleteSecret</code> does not delete the secret at once. It schedules deletion after a recovery window, so you can undo a mistake.</li>
+    <li>During the window, <code>GetSecretValue</code> fails with <code>InvalidRequestException</code>, so applications that use the secret stop working.</li>
+    <li><code>RestoreSecret</code> cancels the deletion and keeps the same ARN.</li>
+    <li><code>ForceDeleteWithoutRecovery</code> is a <code>DeleteSecret</code> option that deletes the secret with no recovery window. You cannot recover it. Use it with caution, for example for test secrets.</li>
+    <li>Deletion is still a background task, so a new secret with the same name may need a retry.</li>
     <li>You can replicate a secret to other Regions with <code>ReplicateSecretToRegions</code>. Secrets Manager keeps the replicas in sync with the primary secret. An application then reads the replica in its own Region, which gives low latency and keeps working if the primary Region fails.</li>
   </ul>
   <h3>Staging labels</h3>
@@ -67,26 +109,66 @@
     <tr><td><code>GetSecretValue</code> rate</td><td>10,000 requests per second for each Region (not adjustable)</td></tr>
     <tr><td>Price</td><td>$0.40 for each secret each month, plus $0.05 for each 10,000 API calls</td></tr>
   </table>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Read the value that was active before the last rotation" → <code>GetSecretValue</code> with <code>VersionStage=AWSPREVIOUS</code>.</li>
-      <li>"A secret was deleted by mistake yesterday" → <code>RestoreSecret</code> during the recovery window.</li>
-      <li>"Application in a second Region must read the same secret with low latency" → replicate the secret to that Region.</li>
-      <li>"Store a 100 KB certificate bundle as one secret" → too large. The limit is 64 KB.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/reference_limits.html">Secrets Manager quotas</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_DeleteSecret.html">DeleteSecret (recovery window, ForceDeleteWithoutRecovery)</a>, <a href="https://aws.amazon.com/secrets-manager/pricing/">Secrets Manager pricing</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html">GetSecretValue (InvalidRequestException)</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/create-manage-multi-region-secrets.html">Replicate secrets to other Regions</a>. Lab: <a href="../../../module-07-secrets-config/lab-01-secrets-manager-basics/README.md">Lab 7.1 Secrets Manager basics</a>.</p>
 </section>
 
 <section id="secrets-rotation">
   <h2>Secrets Manager rotation</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Rotation changes the secret value and the credential in the database or service at the same time.</li>
+      <li>In <strong>managed rotation</strong>, the service that owns the secret (for example, Amazon RDS) rotates it with no Lambda function.</li>
+      <li>In rotation by Lambda function, a Lambda function rotates the secret.</li>
+      <li>Use managed rotation when the service offers it, because you have no function to write or maintain.</li>
+      <li>Secrets Manager gives rotation function templates for Amazon RDS, Aurora, Redshift, and DocumentDB.</li>
+      <li>For other secrets, use the generic rotation function template.</li>
+      <li>A rotation function has four steps in this order: <code>createSecret</code>, <code>setSecret</code>, <code>testSecret</code>, <code>finishSecret</code>.</li>
+      <li><code>createSecret</code> stores the new value as a new version with <code>AWSPENDING</code>.</li>
+      <li><code>setSecret</code> changes the credential in the database or service.</li>
+      <li><code>testSecret</code> connects with the <code>AWSPENDING</code> value.</li>
+      <li>A failed <code>testSecret</code> stops the rotation before <code>AWSCURRENT</code> moves.</li>
+      <li><code>finishSecret</code> moves <code>AWSCURRENT</code> to the new version, and Secrets Manager adds <code>AWSPREVIOUS</code> to the old version.</li>
+      <li>A rotation function in a VPC needs a Secrets Manager VPC endpoint or a NAT gateway to reach the public Secrets Manager API.</li>
+      <li>Without a Secrets Manager VPC endpoint or NAT gateway, a VPC rotation function waits until the timeout, and the rotation fails.</li>
+      <li>Do not move a rotation function out of the VPC, because the function also needs a network path to the database.</li>
+      <li>The single user strategy changes the password of one user, and open connections stay open.</li>
+      <li>With single user rotation, logins can fail briefly between <code>setSecret</code> and <code>finishSecret</code>, so add retries.</li>
+      <li>The alternating users strategy changes the password of the user that <code>AWSCURRENT</code> does not use, then moves <code>AWSCURRENT</code> to that user.</li>
+      <li>After an alternating users rotation, both database users stay valid.</li>
+      <li>The alternating users strategy needs a separate secret with superuser credentials to clone the user.</li>
+      <li>Choose single user when a few failed logins with retries are acceptable.</li>
+      <li>Choose <strong>alternating users</strong> for high availability, when you can store a superuser secret.</li>
+      <li>Amazon RDS Proxy does not support the alternating users strategy.</li>
+      <li>Secrets Manager can rotate a secret at most every 4 hours.</li>
+      <li>The rotation window is the period in which Secrets Manager can start the rotation.</li>
+      <li>The smallest rotation window is 1 hour.</li>
+      <li>A rotation schedule uses <code>rate()</code> or <code>cron()</code> expressions, in UTC.</li>
+      <li>"Rotate immediately when the secret is stored" starts a rotation when you save the configuration.</li>
+      <li>If you clear "Rotate immediately when the secret is stored", the first rotation follows the schedule.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Rotate RDS credentials automatically with the least effort" → Secrets Manager with the RDS rotation template or managed rotation.</li>
+      <li>"Rotation fails with a timeout; the function is in a private subnet" → add a Secrets Manager VPC endpoint or a NAT gateway.</li>
+      <li>"Users must not see failed logins during rotation" → alternating users strategy. The credentials that applications read stay valid while the other user's password changes.</li>
+      <li>"Which step changes the database password" → <code>setSecret</code>.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
-    <li>Rotation changes the secret value and the credential in the database or service at the same time. Two forms of rotation exist. <strong>Managed rotation</strong>: the service that owns the secret (for example, Amazon RDS) rotates it with no Lambda function. <strong>Rotation by Lambda function</strong>: a Lambda function rotates the secret. Use managed rotation when the service offers it, because you have no function to write or maintain.</li>
+    <li>Rotation changes the secret value and the credential in the database or service at the same time. Two forms of rotation exist.</li>
+    <li><strong>Managed rotation</strong>: the service that owns the secret (for example, Amazon RDS) rotates it with no Lambda function.</li>
+    <li><strong>Rotation by Lambda function</strong>: a Lambda function rotates the secret.</li>
+    <li>Use managed rotation when the service offers it, because you have no function to write or maintain.</li>
     <li>Secrets Manager gives rotation function templates for Amazon RDS, Amazon Aurora, Amazon Redshift, and Amazon DocumentDB. Use the generic template for other secrets.</li>
     <li>The console can create the rotation function and its execution role for you.</li>
-    <li>The rotation function must reach both Secrets Manager and the database. A Lambda function in a VPC can reach only resources in that VPC, unless the VPC gives it internet access. The Secrets Manager API is a public endpoint. Without a Secrets Manager VPC endpoint or a NAT gateway, the function waits for the API until the timeout, and the rotation fails. It also needs a network path to the database, so you cannot simply move it out of the VPC.</li>
+    <li>The rotation function must reach both Secrets Manager and the database. A Lambda function in a VPC can reach only resources in that VPC, unless the VPC gives it internet access.</li>
+    <li>The Secrets Manager API is a public endpoint. Without a Secrets Manager VPC endpoint or a NAT gateway, the function waits for the API until the timeout, and the rotation fails.</li>
+    <li>The function also needs a network path to the database, so you cannot simply move it out of the VPC.</li>
     <li>"Rotate immediately when the secret is stored" starts a rotation when you save the configuration. If you clear it, the first rotation follows the schedule.</li>
   </ul>
   <h3>The four steps of a rotation function</h3>
@@ -110,27 +192,62 @@
     <tr><td>Smallest rotation window</td><td>1 hour. The rotation window is the period in which Secrets Manager can start the rotation, for example 2 hours at night.</td></tr>
     <tr><td>Schedule format</td><td><code>rate()</code> or <code>cron()</code> expressions, in UTC</td></tr>
   </table>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Rotate RDS credentials automatically with the least effort" → Secrets Manager with the RDS rotation template or managed rotation.</li>
-      <li>"Rotation fails with a timeout; the function is in a private subnet" → add a Secrets Manager VPC endpoint or a NAT gateway.</li>
-      <li>"Users must not see failed logins during rotation" → alternating users strategy, because the credentials that applications read stay valid while the other user's password changes.</li>
-      <li>"Which step changes the database password" → <code>setSecret</code>.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/rotate-secrets_lambda-functions.html">Lambda rotation functions</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/rotation-strategy.html">Rotation strategies</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/rotate-secrets_schedule.html">Rotation schedules</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/rotate-secrets_turn-on-for-db.html">Turn on rotation for database secrets</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc-internet.html">Internet access for Lambda functions in a VPC</a>. Lab: <a href="../../../module-07-secrets-config/lab-01-secrets-manager-basics/README.md">Lab 7.1 Secrets Manager basics</a>.</p>
 </section>
 
 <section id="secrets-access">
   <h2>Reading secrets: caching, Lambda, and cross-account access</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>To read a secret, a principal needs <code>secretsmanager:GetSecretValue</code>.</li>
+      <li>If a customer managed key encrypts a secret, the reader also needs <code>kms:Decrypt</code> on that key.</li>
+      <li>Cache secrets in the application, because each <code>GetSecretValue</code> call costs money and counts toward the request rate.</li>
+      <li>Use the Secrets Manager caching components outside Lambda, or in Lambda without the extension.</li>
+      <li>The <strong>AWS Parameters and Secrets Lambda Extension</strong> is a Lambda layer that runs a local HTTP server with a cache.</li>
+      <li>Function code sends an HTTP GET to <code>localhost:2773</code> to read a value from the Parameters and Secrets Lambda Extension.</li>
+      <li>The Parameters and Secrets Lambda Extension works with every runtime and needs no SDK code for the call.</li>
+      <li>The Parameters and Secrets Lambda Extension secret path is <code>/secretsmanager/get?secretId=...</code>.</li>
+      <li>Each Parameters and Secrets Lambda Extension request needs the <code>X-Aws-Parameters-Secrets-Token</code> header with the function session token.</li>
+      <li>The Parameters and Secrets Lambda Extension cache TTL is 300 seconds by default for secrets and for parameters.</li>
+      <li><code>SECRETS_MANAGER_TTL</code> sets the Parameters and Secrets Lambda Extension secret cache TTL, from 0 to 300 seconds.</li>
+      <li>The Parameters and Secrets Lambda Extension cache holds 1,000 items by default.</li>
+      <li>After a rotation, a cache can return the old password until its TTL ends, and logins fail.</li>
+      <li>To fix a stale cache, lower the TTL, or request <code>versionStage=AWSCURRENT</code> again after an authentication error.</li>
+      <li>AWS recommends Secrets Manager, not Lambda environment variables, for database credentials.</li>
+      <li>Lambda environment variables have no rotation.</li>
+      <li>Lambda always encrypts environment variables at rest, by default with an AWS managed key at no charge.</li>
+      <li>A user who can view the function configuration and decrypt with its key can read the environment variables.</li>
+      <li>To hide Lambda environment variables from a user, use a customer managed key and deny that user <code>kms:Decrypt</code> on the key.</li>
+      <li><strong>Encryption helpers</strong> encrypt an environment variable on the client side, so the console and API show only ciphertext.</li>
+      <li>With encryption helpers, the function code decrypts the value, and the execution role needs <code>kms:Decrypt</code>.</li>
+      <li>Cross-account secret access needs a resource-based policy on the secret that allows the other account's role.</li>
+      <li>Cross-account secret access needs a customer managed key whose key policy allows the other account's role <code>kms:Decrypt</code>.</li>
+      <li>Cross-account secret access needs an IAM policy on the other account's role for <code>GetSecretValue</code> and <code>kms:Decrypt</code>.</li>
+      <li>The <code>aws/secretsmanager</code> key cannot work across accounts, because you cannot change an AWS managed key policy.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Lambda reads a secret on every invoke; reduce cost and latency with no SDK changes" → Parameters and Secrets Lambda Extension.</li>
+      <li>"Cross-account read fails with a KMS error; the secret uses the default key" → re-encrypt the secret with a customer managed key and update its key policy.</li>
+      <li>"Function uses an old password after rotation" → cache is stale. Shorten the TTL or refresh on an authentication error.</li>
+      <li>"Database password is in an environment variable" → move it to Secrets Manager. Users who can view the function configuration can read the variable, and Secrets Manager can rotate the password.</li>
+      <li>"Environment variable must stay encrypted until the code uses it, even in the console" → encryption helpers with a customer managed key, and decrypt in code.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li>To read a secret, a principal needs <code>secretsmanager:GetSecretValue</code>. If a customer managed key encrypts the secret, the principal also needs <code>kms:Decrypt</code> on that key.</li>
     <li>Cache secrets in the application. Each <code>GetSecretValue</code> call costs money and counts toward the request rate.</li>
     <li>Secrets Manager has client-side caching components for Java, Python, .NET, Go, and Rust. Use them in code that runs outside Lambda, or in Lambda without the extension.</li>
-    <li>The <strong>AWS Parameters and Secrets Lambda Extension</strong> is a Lambda layer. It runs a small HTTP server inside the execution environment. The function code sends an HTTP GET to <code>localhost:2773</code>. The extension returns the cached value, or calls Secrets Manager or Parameter Store when the value is not in the cache. It works with every runtime and needs no SDK code for the call.</li>
-    <li>A cache keeps a value until its TTL (time to live) ends. After a rotation, the cache can still return the old password, and logins fail until the TTL ends. Lower the cache TTL, or request <code>versionStage=AWSCURRENT</code> again after an authentication error.</li>
+    <li>The <strong>AWS Parameters and Secrets Lambda Extension</strong> is a Lambda layer. It runs a small HTTP server inside the execution environment.</li>
+    <li>The function code sends an HTTP GET to <code>localhost:2773</code>. The extension returns the cached value, or calls Secrets Manager or Parameter Store when the value is not in the cache.</li>
+    <li>The extension works with every runtime and needs no SDK code for the call.</li>
+    <li>A cache keeps a value until its TTL (time to live) ends. After a rotation, the cache can still return the old password, and logins fail until the TTL ends.</li>
+    <li>Lower the cache TTL, or request <code>versionStage=AWSCURRENT</code> again after an authentication error.</li>
   </ul>
   <h3>Parameters and Secrets Lambda Extension</h3>
   <table>
@@ -144,11 +261,14 @@
   </table>
   <h3>Lambda environment variables and KMS</h3>
   <ul>
-    <li>AWS recommends Secrets Manager, not environment variables, for database credentials. Any user who can view the function configuration and decrypt with its key can read an environment variable. Environment variables also have no rotation.</li>
+    <li>AWS recommends Secrets Manager, not environment variables, for database credentials.</li>
+    <li>Any user who can view the function configuration and decrypt with its key can read an environment variable. Environment variables also have no rotation.</li>
     <li>Lambda always encrypts environment variables at rest. By default it uses an AWS managed key, with no setup and no charge.</li>
     <li>You can choose a customer managed key for encryption at rest. Then only users with <code>kms:Decrypt</code> on that key can view or manage the variables in the console.</li>
     <li>Users who can view the function configuration and can decrypt with the key can read the values. To hide them from a user, deny <code>kms:Decrypt</code> on the key.</li>
-    <li><strong>Encryption helpers for encryption in transit</strong> are a console option. They encrypt a value on the client side with a customer managed key before Lambda receives it. Lambda then stores and shows only the ciphertext, so the plaintext does not appear in the console or in API responses. The function code must decrypt it, and the execution role needs <code>kms:Decrypt</code>.</li>
+    <li><strong>Encryption helpers for encryption in transit</strong> are a console option. They encrypt a value on the client side with a customer managed key before Lambda receives it.</li>
+    <li>Lambda then stores and shows only the ciphertext, so the plaintext does not appear in the console or in API responses.</li>
+    <li>The function code must decrypt the value, and the execution role needs <code>kms:Decrypt</code>.</li>
   </ul>
   <h3>Cross-account access (all three are necessary)</h3>
   <ol>
@@ -156,21 +276,40 @@
     <li>Encrypt the secret with a customer managed key. Add the other account's role to the key policy (<code>kms:Decrypt</code>). You cannot use <code>aws/secretsmanager</code> across accounts, because you cannot change the key policy of an AWS managed key to allow another account.</li>
     <li>Attach an IAM policy to the role in the other account. Allow <code>secretsmanager:GetSecretValue</code> on the secret and <code>kms:Decrypt</code> on the key.</li>
   </ol>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Lambda reads a secret on every invoke; reduce cost and latency with no SDK changes" → Parameters and Secrets Lambda Extension.</li>
-      <li>"Cross-account read fails with a KMS error; the secret uses the default key" → re-encrypt the secret with a customer managed key and update its key policy.</li>
-      <li>"Function uses an old password after rotation" → cache is stale. Shorten the TTL or refresh on an authentication error.</li>
-      <li>"Database password is in an environment variable" → move it to Secrets Manager, because users who can view the function configuration can read the variable, and Secrets Manager can rotate the password.</li>
-      <li>"Environment variable must stay encrypted until the code uses it, even in the console" → encryption helpers with a customer managed key, and decrypt in code.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-secrets-manager.html">Use Secrets Manager secrets in Lambda (extension settings)</a>, <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/ps-integration-lambda-extensions.html">Parameters and Secrets Lambda Extension (header requirement)</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/auth-and-access_examples_cross.html">Cross-account access to secrets</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars-encryption.html">Securing Lambda environment variables</a>, <a href="https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets.html">Get secrets (caching components)</a>. Lab: <a href="../../../module-07-secrets-config/lab-01-secrets-manager-basics/README.md">Lab 7.1 Secrets Manager basics</a>.</p>
 </section>
 
 <section id="secrets-choose">
   <h2>Choosing Secrets Manager, Parameter Store, or AppConfig</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Secrets Manager is the only one of the three services with built-in automatic rotation.</li>
+      <li>Choose <strong>Secrets Manager</strong> for database credentials that must rotate.</li>
+      <li>Choose Parameter Store <code>SecureString</code> for a static secret at the lowest cost.</li>
+      <li>A Standard Parameter Store parameter has no storage charge.</li>
+      <li>Secrets Manager charges $0.40 for each secret each month, plus API calls.</li>
+      <li>Choose Parameter Store <code>String</code> in a hierarchy for plain configuration values, with one path for each environment.</li>
+      <li>One <code>GetParametersByPath</code> call loads all parameters under a path, for example <code>/myapp/prod/</code>.</li>
+      <li>Secrets Manager versions use staging labels, Parameter Store uses numeric versions and labels, and AppConfig uses configuration versions.</li>
+      <li>Choose AppConfig for feature flags, or for configuration that must roll out slowly and roll back on an alarm.</li>
+      <li>Parameter Store and Secrets Manager give a new value to all readers at once, with no gradual rollout and no automatic rollback.</li>
+      <li>The maximum value size is 64 KB in Secrets Manager, and 4 KB (Standard) or 8 KB (Advanced) in Parameter Store.</li>
+      <li>Secrets Manager has built-in cross-Region replication, but Parameter Store does not.</li>
+      <li>Only AppConfig validates configuration before deployment, with a JSON Schema or a Lambda function.</li>
+      <li>Parameter Store can only check a value with <code>AllowedPattern</code>.</li>
+      <li>AppConfig charges for each configuration request.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Automatic rotation" or "RDS credentials" → Secrets Manager.</li>
+      <li>"MOST cost-effective place for an API key that never changes" → Parameter Store <code>SecureString</code>.</li>
+      <li>"Turn on a feature for 10 percent of users first" → AppConfig feature flag with a gradual deployment strategy.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Comparison</h3>
   <table>
     <tr><th>Need</th><th>Secrets Manager</th><th>Parameter Store</th><th>AppConfig</th></tr>
@@ -186,23 +325,56 @@
   <h3>Decision rules</h3>
   <ul>
     <li>Choose Secrets Manager for database credentials that must rotate. It is the only one of the three with built-in rotation.</li>
-    <li>Choose Parameter Store <code>SecureString</code> for a static secret at the lowest cost. A Standard parameter has no storage charge and is encrypted with KMS. Secrets Manager charges for each secret each month.</li>
-    <li>Choose Parameter Store <code>String</code> in a hierarchy for plain configuration values, with one path for each environment (for example <code>/myapp/prod/</code>). One <code>GetParametersByPath</code> call loads the whole path.</li>
-    <li>Choose AppConfig for feature flags, or for configuration that must roll out slowly and roll back on an alarm. Parameter Store and Secrets Manager give a new value to all readers at once, with no gradual rollout and no automatic rollback.</li>
+    <li>Choose Parameter Store <code>SecureString</code> for a static secret at the lowest cost.</li>
+    <li>A Standard parameter has no storage charge and is encrypted with KMS. Secrets Manager charges for each secret each month.</li>
+    <li>Choose Parameter Store <code>String</code> in a hierarchy for plain configuration values, with one path for each environment (for example <code>/myapp/prod/</code>).</li>
+    <li>One <code>GetParametersByPath</code> call loads the whole path.</li>
+    <li>Choose AppConfig for feature flags, or for configuration that must roll out slowly and roll back on an alarm.</li>
+    <li>Parameter Store and Secrets Manager give a new value to all readers at once, with no gradual rollout and no automatic rollback.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Automatic rotation" or "RDS credentials" → Secrets Manager.</li>
-      <li>"MOST cost-effective place for an API key that never changes" → Parameter Store <code>SecureString</code>.</li>
-      <li>"Turn on a feature for 10 percent of users first" → AppConfig feature flag with a gradual deployment strategy.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-policies.html">Parameter Store policies (Secrets Manager recommendation)</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-creating-deployment-strategy.html">AppConfig deployment strategies</a>. Lab: <a href="../../../module-07-secrets-config/lab-02-parameter-store/README.md">Lab 7.2 Parameter Store</a>.</p>
 </section>
 
 <section id="ssm-parameters">
   <h2>Parameter Store: types, tiers, and policies</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Parameter Store has three parameter types: <code>String</code>, <code>StringList</code> (comma-separated values), and <code>SecureString</code>.</li>
+      <li>Only <code>SecureString</code> parameters are encrypted with KMS.</li>
+      <li>A <code>SecureString</code> uses the default key <code>aws/ssm</code>, or a customer managed key.</li>
+      <li>A <code>SecureString</code> can use only a symmetric KMS key.</li>
+      <li>The Standard tier is the default and has no additional charge.</li>
+      <li>The Advanced tier charges for each parameter.</li>
+      <li>The Standard tier allows 10,000 parameters in each account and Region, and the Advanced tier allows 100,000.</li>
+      <li>The maximum parameter value size is 4 KB in the Standard tier and 8 KB in the Advanced tier.</li>
+      <li>Only <strong>Advanced</strong> tier parameters support parameter policies and sharing with other accounts.</li>
+      <li>You can upgrade a Standard parameter to Advanced.</li>
+      <li>You cannot change an Advanced parameter back to Standard.</li>
+      <li>To get a Standard parameter from an Advanced one, delete the parameter and create it again.</li>
+      <li>The <code>Expiration</code> policy deletes the parameter at a date and time.</li>
+      <li>The <code>ExpirationNotification</code> policy sends an EventBridge event before the expiration.</li>
+      <li>The <code>NoChangeNotification</code> policy sends an EventBridge event if nobody changes the parameter for a time.</li>
+      <li>A parameter can have a maximum of 10 policies.</li>
+      <li>A Standard <code>SecureString</code> uses KMS <code>Encrypt</code> directly, because 4 KB fits in the 4,096-byte <code>Encrypt</code> limit.</li>
+      <li>An Advanced <code>SecureString</code> uses envelope encryption with the AWS Encryption SDK, because 8 KB exceeds the <code>Encrypt</code> limit.</li>
+      <li>To write a Standard <code>SecureString</code>, a principal needs <code>kms:Encrypt</code>.</li>
+      <li>To write an Advanced <code>SecureString</code>, a principal needs <code>kms:GenerateDataKey</code>.</li>
+      <li>To read any <code>SecureString</code>, a principal needs <code>kms:Decrypt</code>.</li>
+      <li>Parameter Store sends the parameter ARN to KMS as the encryption context <code>PARAMETER_ARN</code>.</li>
+      <li>A <code>kms:EncryptionContext:PARAMETER_ARN</code> condition lets a role decrypt only one parameter with a shared KMS key.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Parameter must delete itself after 30 days" → Advanced tier with an <code>Expiration</code> policy.</li>
+      <li>"Value is 6 KB" → Advanced tier (Standard maximum is 4 KB).</li>
+      <li>"Error: policies are only supported on Advanced tier" → change the parameter to Advanced.</li>
+      <li>"Stop paying for an Advanced parameter" → delete it and create a Standard parameter. You cannot change an Advanced parameter back to Standard.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Parameter types</h3>
   <table>
     <tr><th>Type</th><th>Content</th><th>Encrypted with KMS</th></tr>
@@ -229,45 +401,44 @@
   </ul>
   <h3>Key facts</h3>
   <ul>
-    <li>A standard <code>SecureString</code> uses KMS <code>Encrypt</code> directly. A standard value (maximum 4 KB) fits in the 4,096-byte limit of <code>Encrypt</code>. An advanced value can be 8 KB, which is larger than that limit. An advanced <code>SecureString</code> uses envelope encryption with the AWS Encryption SDK (see "Envelope encryption" below).</li>
+    <li>A standard <code>SecureString</code> uses KMS <code>Encrypt</code> directly. A standard value (maximum 4 KB) fits in the 4,096-byte limit of <code>Encrypt</code>.</li>
+    <li>An advanced value can be 8 KB, which is larger than that limit. An advanced <code>SecureString</code> uses envelope encryption with the AWS Encryption SDK (see "Envelope encryption" below).</li>
     <li>To write a standard <code>SecureString</code>, a principal needs <code>kms:Encrypt</code>. For an advanced one, <code>kms:GenerateDataKey</code>. To read either, <code>kms:Decrypt</code>.</li>
-    <li>Parameter Store sends the encryption context <code>PARAMETER_ARN</code> (the ARN of the parameter) to KMS. Many parameters can share one KMS key. A <code>kms:EncryptionContext:PARAMETER_ARN</code> condition in an IAM policy or key policy lets a role decrypt only one parameter with that key.</li>
+    <li>Parameter Store sends the encryption context <code>PARAMETER_ARN</code> (the ARN of the parameter) to KMS. Many parameters can share one KMS key.</li>
+    <li>A <code>kms:EncryptionContext:PARAMETER_ARN</code> condition in an IAM policy or key policy lets a role decrypt only one parameter with that key.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Parameter must delete itself after 30 days" → Advanced tier with an <code>Expiration</code> policy.</li>
-      <li>"Value is 6 KB" → Advanced tier (Standard maximum is 4 KB).</li>
-      <li>"Error: policies are only supported on Advanced tier" → change the parameter to Advanced.</li>
-      <li>"Stop paying for an Advanced parameter" → delete it and create a Standard parameter, because you cannot change an Advanced parameter back to Standard.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-advanced-parameters.html">Parameter tiers</a>, <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-policies.html">Parameter policies</a>, <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/secure-string-parameter-kms-encryption.html">SecureString and KMS</a>. Lab: <a href="../../../module-07-secrets-config/lab-02-parameter-store/README.md">Lab 7.2 Parameter Store</a>.</p>
 </section>
 
 <section id="ssm-access">
   <h2>Parameter Store: hierarchies, versions, decryption, and throughput</h2>
-  <h3>Key facts</h3>
-  <ul>
-    <li>Names with forward slashes make a hierarchy, for example <code>/myapp/prod/db/host</code>. A hierarchy can have a maximum of 15 levels.</li>
-    <li><code>GetParametersByPath</code> returns all parameters under a path. Add <code>Recursive</code> to include all lower levels.</li>
-    <li><code>GetParameters</code> returns a maximum of 10 parameters by name in one call.</li>
-    <li>Use IAM policies on paths, for example <code>parameter/myapp/prod/*</code>, to separate environments. A role for the test environment then cannot read production values.</li>
-    <li><code>GetParameter</code> does not decrypt a <code>SecureString</code> by default. Without <code>WithDecryption</code>, the call returns the encrypted value as a string of ciphertext. Set <code>WithDecryption</code> to true. The caller also needs <code>kms:Decrypt</code> on the key.</li>
-    <li>Each <code>PutParameter</code> with <code>Overwrite</code> creates a new numeric version. Read an old version with <code>name:version</code>.</li>
-    <li>Labels are names for versions. Read a label with <code>name:label</code>. Move a label to roll back without code changes.</li>
-    <li><code>AllowedPattern</code> is a regular expression. Parameter Store rejects values that do not match.</li>
-  </ul>
-  <h3>Throughput (for each account and Region)</h3>
-  <table>
-    <tr><th>API</th><th>Default throughput</th><th>Higher throughput</th></tr>
-    <tr><td><code>GetParameter</code>, <code>GetParameters</code>, <code>GetParametersByPath</code></td><td>40 TPS shared by the three APIs</td><td><code>GetParameter</code> 10,000 TPS, <code>GetParameters</code> 1,000 TPS, <code>GetParametersByPath</code> 100 TPS</td></tr>
-  </table>
-  <p>TPS means transactions (API calls) per second. The limit applies to all calls from all applications in the account and Region together. For example, 40 instances that each call <code>GetParameter</code> one time each second use all of the default 40 TPS.</p>
-  <ul>
-    <li>Higher throughput is a setting for the account and Region. It is separate from the parameter tier. It has a charge for each API interaction. One interaction is one parameter in a response, so a <code>GetParameters</code> call that returns 10 parameters counts as 10 interactions.</li>
-    <li>Too many requests cause <code>ThrottlingException</code> (Rate exceeded). First cache the values, then turn on higher throughput if necessary.</li>
-  </ul>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Parameter names with forward slashes make a hierarchy. Example: <code>/myapp/prod/db/host</code>.</li>
+      <li>A parameter hierarchy can have a maximum of 15 levels.</li>
+      <li><code>GetParametersByPath</code> returns all parameters under a path.</li>
+      <li>Add <code>Recursive</code> to <code>GetParametersByPath</code> to include all lower levels.</li>
+      <li><code>GetParameters</code> returns a maximum of 10 parameters by name in one call.</li>
+      <li>To separate environments, use IAM policies on parameter paths. Example: <code>parameter/myapp/prod/*</code>.</li>
+      <li><code>GetParameter</code> does not decrypt a <code>SecureString</code> by default and returns ciphertext.</li>
+      <li>To get the plaintext of a <code>SecureString</code>, set <code>WithDecryption</code> to true and allow <code>kms:Decrypt</code> on the key.</li>
+      <li>Each <code>PutParameter</code> with <code>Overwrite</code> creates a new numeric version.</li>
+      <li>To read an old parameter version, use <code>name:version</code>.</li>
+      <li>A <strong>parameter label</strong> is a name for a version.</li>
+      <li>To read a parameter version by label, use <code>name:label</code>.</li>
+      <li>To roll back a parameter with no code change, move the label to an older version.</li>
+      <li><code>AllowedPattern</code> is a regular expression, and Parameter Store rejects values that do not match it.</li>
+      <li>By default, <code>GetParameter</code>, <code>GetParameters</code>, and <code>GetParametersByPath</code> share 40 TPS in each account and Region.</li>
+      <li>The Parameter Store TPS limit applies to all applications in the account and Region together.</li>
+      <li>Higher throughput raises <code>GetParameter</code> to 10,000 TPS, <code>GetParameters</code> to 1,000 TPS, and <code>GetParametersByPath</code> to 100 TPS.</li>
+      <li>Higher throughput is an account and Region setting, separate from the parameter tier.</li>
+      <li>Higher throughput charges for each API interaction.</li>
+      <li>One Parameter Store API interaction is one parameter in a response.</li>
+      <li>Too many Parameter Store requests cause <code>ThrottlingException</code> (Rate exceeded).</li>
+      <li>To fix Parameter Store throttling, cache the values first, then turn on higher throughput if necessary.</li>
+    </ul>
+  </div>
   <div class="exam-signals">
     <h3>Exam signals</h3>
     <ul>
@@ -277,11 +448,68 @@
       <li>"ThrottlingException when many instances start at the same time" → cache values. If that is not enough, turn on higher throughput.</li>
     </ul>
   </div>
+  <h3 class="explain">Explanation</h3>
+  <h3>Key facts</h3>
+  <ul>
+    <li>Names with forward slashes make a hierarchy, for example <code>/myapp/prod/db/host</code>. A hierarchy can have a maximum of 15 levels.</li>
+    <li><code>GetParametersByPath</code> returns all parameters under a path. Add <code>Recursive</code> to include all lower levels.</li>
+    <li><code>GetParameters</code> returns a maximum of 10 parameters by name in one call.</li>
+    <li>Use IAM policies on paths, for example <code>parameter/myapp/prod/*</code>, to separate environments. A role for the test environment then cannot read production values.</li>
+    <li><code>GetParameter</code> does not decrypt a <code>SecureString</code> by default. Without <code>WithDecryption</code>, the call returns the encrypted value as a string of ciphertext.</li>
+    <li>Set <code>WithDecryption</code> to true. The caller also needs <code>kms:Decrypt</code> on the key.</li>
+    <li>Each <code>PutParameter</code> with <code>Overwrite</code> creates a new numeric version. Read an old version with <code>name:version</code>.</li>
+    <li>Labels are names for versions. Read a label with <code>name:label</code>. Move a label to roll back without code changes.</li>
+    <li><code>AllowedPattern</code> is a regular expression. Parameter Store rejects values that do not match.</li>
+  </ul>
+  <h3>Throughput (for each account and Region)</h3>
+  <table>
+    <tr><th>API</th><th>Default throughput</th><th>Higher throughput</th></tr>
+    <tr><td><code>GetParameter</code>, <code>GetParameters</code>, <code>GetParametersByPath</code></td><td>40 TPS shared by the three APIs</td><td><code>GetParameter</code> 10,000 TPS, <code>GetParameters</code> 1,000 TPS, <code>GetParametersByPath</code> 100 TPS</td></tr>
+  </table>
+  <p>TPS means transactions (API calls) per second. The limit applies to all calls from all applications in the account and Region together.</p>
+  <p>For example, 40 instances that each call <code>GetParameter</code> one time each second use all of the default 40 TPS.</p>
+  <ul>
+    <li>Higher throughput is a setting for the account and Region. It is separate from the parameter tier.</li>
+    <li>Higher throughput has a charge for each API interaction. One interaction is one parameter in a response, so a <code>GetParameters</code> call that returns 10 parameters counts as 10 interactions.</li>
+    <li>Too many requests cause <code>ThrottlingException</code> (Rate exceeded). First cache the values, then turn on higher throughput if necessary.</li>
+  </ul>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-hierarchies.html">Parameter hierarchies</a>, <a href="https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_GetParameters.html">GetParameters (10 names)</a>, <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-throughput.html">Parameter Store throughput</a>. Lab: <a href="../../../module-07-secrets-config/lab-02-parameter-store/README.md">Lab 7.2 Parameter Store</a>.</p>
 </section>
 
 <section id="appconfig-model">
   <h2>AppConfig: resources, profiles, and retrieval</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>An AppConfig <strong>environment</strong> is a deployment target, such as "beta" or "prod", and holds the CloudWatch alarms for rollback.</li>
+      <li>A configuration profile tells AppConfig the data location, the type (feature flags or freeform), and the validators.</li>
+      <li>A deployment strategy tells AppConfig how fast to release new data and how long to watch alarms (the bake time).</li>
+      <li>An AppConfig deployment releases one configuration version to one environment with one strategy.</li>
+      <li>A feature flag profile holds on and off switches that change features with no code deployment.</li>
+      <li>Feature flags are stored in the AppConfig hosted configuration store, and AppConfig validates the flag format automatically.</li>
+      <li>A freeform profile holds any configuration data, for example JSON, YAML, or text.</li>
+      <li>Choose a freeform profile for data that is not a flag, or for data that must stay in another service.</li>
+      <li>Freeform data can be in the hosted store, S3, CodePipeline, Secrets Manager, Parameter Store, or SSM documents.</li>
+      <li>A configuration profile can have up to two validators: a JSON Schema (freeform only) or a Lambda function.</li>
+      <li>AppConfig runs validators when you call <code>StartDeployment</code>, and invalid data does not deploy.</li>
+      <li>Without an agent, call <code>StartConfigurationSession</code> one time to get a token, then call <code>GetLatestConfiguration</code>.</li>
+      <li>Each <code>GetLatestConfiguration</code> response gives a new token, and the next call must send that new token.</li>
+      <li><code>GetLatestConfiguration</code> returns an empty body when the data has not changed, so the client keeps its copy.</li>
+      <li><code>GetConfiguration</code> is the old AppConfig API and is deprecated.</li>
+      <li>The <strong>AWS AppConfig Agent Lambda extension</strong> is a layer that caches data and polls in the background.</li>
+      <li>A Lambda function reads AppConfig data from the extension at <code>localhost:2772</code>.</li>
+      <li>The AppConfig Lambda extension polls every 45 seconds by default (<code>AWS_APPCONFIG_EXTENSION_POLL_INTERVAL_SECONDS</code>).</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Read feature flags in Lambda with the least code and fewer API calls" → AppConfig Agent Lambda extension.</li>
+      <li>"Reject a configuration that does not match a schema before it reaches production" → JSON Schema validator on the profile.</li>
+      <li>"Custom validation logic" → Lambda validator. A JSON Schema checks only the structure and types of the data, but a Lambda function can run any check in code.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Resources</h3>
   <table>
     <tr><th>Resource</th><th>Purpose</th></tr>
@@ -293,41 +521,74 @@
   </table>
   <h3>Profile types and sources</h3>
   <ul>
-    <li><strong>Feature flags</strong>: on and off switches (with optional attributes) that turn features on or off with no code deployment. They are stored in the AppConfig hosted configuration store. AppConfig validates the flag format automatically.</li>
-    <li><strong>Freeform</strong>: any configuration data, for example JSON, YAML, or text. Choose it for configuration that is not a flag, or when the data must stay in another service. The data can be in the hosted store, Amazon S3, AWS CodePipeline, Secrets Manager, Parameter Store, or SSM documents.</li>
+    <li><strong>Feature flags</strong>: on and off switches (with optional attributes) that turn features on or off with no code deployment.</li>
+    <li>Feature flags are stored in the AppConfig hosted configuration store. AppConfig validates the flag format automatically.</li>
+    <li><strong>Freeform</strong>: any configuration data, for example JSON, YAML, or text. Choose it for configuration that is not a flag, or when the data must stay in another service.</li>
+    <li>Freeform data can be in the hosted store, Amazon S3, AWS CodePipeline, Secrets Manager, Parameter Store, or SSM documents.</li>
     <li>A profile can have up to two validators: a JSON Schema (freeform only) or a Lambda function.</li>
     <li>AppConfig runs validators when you call <code>StartDeployment</code>. Invalid data does not deploy.</li>
   </ul>
   <h3>Retrieval</h3>
   <ul>
-    <li>Without an agent, call <code>StartConfigurationSession</code> one time to get a token. Then call <code>GetLatestConfiguration</code> with that token. Each response gives a new token, and you must send the new token in the next call. The body is empty when the data has not changed, so the client keeps the copy that it already has.</li>
+    <li>Without an agent, call <code>StartConfigurationSession</code> one time to get a token. Then call <code>GetLatestConfiguration</code> with that token.</li>
+    <li>Each response gives a new token, and you must send the new token in the next call.</li>
+    <li>The body is empty when the data has not changed, so the client keeps the copy that it already has.</li>
     <li><code>GetConfiguration</code> is the old API and is deprecated.</li>
     <li>For Lambda, add the <strong>AWS AppConfig Agent Lambda extension</strong> as a layer. The function calls <code>localhost:2772</code>. The extension caches data and polls in the background.</li>
     <li>The extension polls every 45 seconds by default (<code>AWS_APPCONFIG_EXTENSION_POLL_INTERVAL_SECONDS</code>).</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Read feature flags in Lambda with the least code and fewer API calls" → AppConfig Agent Lambda extension.</li>
-      <li>"Reject a configuration that does not match a schema before it reaches production" → JSON Schema validator on the profile.</li>
-      <li>"Custom validation logic" → Lambda validator, because a JSON Schema checks only the structure and types of the data. A Lambda function can run any check in code.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-creating-configuration-profile.html">Configuration profiles</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-creating-configuration-and-profile-validators.html">Validators</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-integration-lambda-extensions-config.html">AppConfig Lambda extension settings</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/about-data-plane.html">Retrieving configuration data (session tokens)</a>. Lab: <a href="../../../module-07-secrets-config/lab-03-appconfig-feature-flags/README.md">Lab 7.3 AppConfig feature flags</a>.</p>
 </section>
 
 <section id="appconfig-deploy">
   <h2>AppConfig: deployment strategies and rollback</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>An AppConfig deployment strategy has a growth type, a step percentage (growth factor), a deployment time, and a bake time.</li>
+      <li><strong>Linear</strong> growth adds the same percentage of targets at each step. Example: 20, 40, 60, 80, 100 percent.</li>
+      <li>Exponential growth doubles the percentage at each step. Example: 2, 4, 8, 16 percent.</li>
+      <li>Exponential growth exposes very few targets first, then finishes quickly.</li>
+      <li>Deployment time is the total time to give the data to all targets.</li>
+      <li>AppConfig deployment time is not a timeout.</li>
+      <li><strong>Bake time</strong> is the time AppConfig watches CloudWatch alarms after the data reaches 100 percent of targets.</li>
+      <li>AppConfig rolls back if an environment alarm goes into <code>ALARM</code> or <code>INSUFFICIENT_DATA</code> during the rollout or bake time.</li>
+      <li>An alarm with missing metric data can cause an AppConfig rollback, because it goes into <code>INSUFFICIENT_DATA</code>.</li>
+      <li><code>StopDeployment</code> rolls back an AppConfig deployment that is still in progress.</li>
+      <li>Automatic rollback needs an IAM role that allows AppConfig <code>cloudwatch:DescribeAlarms</code>.</li>
+      <li>Without the <code>cloudwatch:DescribeAlarms</code> role, AppConfig cannot read alarm state and does not roll back.</li>
+      <li>AppConfig deploys only one configuration at a time to one environment.</li>
+      <li>A second deployment to the same environment waits until the first completes or you stop it.</li>
+      <li>AppConfig can deploy to different environments at the same time.</li>
+      <li><code>AppConfig.Linear20PercentEvery6Minutes</code> releases 20 percent every 6 minutes (30 minutes total), with a 30-minute bake time.</li>
+      <li><code>AppConfig.Canary10Percent20Minutes</code> is exponential, 10 percent growth, over 20 minutes, with a 10-minute bake time.</li>
+      <li><code>AppConfig.AllAtOnce</code> releases to all targets at once, with a 10-minute bake time.</li>
+      <li><code>AppConfig.Linear50PercentEvery30Seconds</code> releases half every 30 seconds (1 minute total), with a 1-minute bake time.</li>
+      <li>For production, choose <code>Linear20PercentEvery6Minutes</code> or <code>Canary10Percent20Minutes</code>, which AWS recommends.</li>
+      <li>For test environments, choose <code>AllAtOnce</code> or <code>Linear50PercentEvery30Seconds</code>, where speed matters more than safety.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Roll back a bad configuration automatically when the error rate rises" → CloudWatch alarm on the environment plus a strategy with bake time.</li>
+      <li>"Release the change at once in a test environment" → <code>AppConfig.AllAtOnce</code>.</li>
+      <li>"Gradual configuration change with no new code deployment" → AppConfig, not a Lambda alias or CodeDeploy. AppConfig changes only configuration data; a Lambda alias and CodeDeploy shift traffic between versions of code.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li>A strategy has a growth type (<strong>Linear</strong> or <strong>Exponential</strong>), a step percentage (growth factor), a deployment time, and a bake time.</li>
-    <li><strong>Linear</strong> adds the same percentage of targets at each step, for example 20, 40, 60, 80, 100 percent. <strong>Exponential</strong> doubles the percentage at each step, for example 2, 4, 8, 16 percent. Exponential exposes very few targets first, then finishes quickly.</li>
+    <li><strong>Linear</strong> adds the same percentage of targets at each step, for example 20, 40, 60, 80, 100 percent.</li>
+    <li><strong>Exponential</strong> doubles the percentage at each step, for example 2, 4, 8, 16 percent. Exponential exposes very few targets first, then finishes quickly.</li>
     <li><strong>Deployment time</strong> is the total time in which AppConfig gives the data to all targets, in steps. It is not a timeout.</li>
     <li><strong>Bake time</strong>: after the data reaches 100 percent of targets, AppConfig watches CloudWatch alarms for this time. If an alarm goes off, AppConfig rolls back.</li>
     <li>AppConfig also rolls back if an alarm goes into <code>ALARM</code> or <code>INSUFFICIENT_DATA</code> during the rollout. You add the alarms to the environment. An alarm with missing metric data can therefore cause a rollback.</li>
     <li><code>StopDeployment</code> rolls back a deployment that is still in progress.</li>
     <li>Automatic rollback needs an IAM role that lets AppConfig read the alarms (<code>cloudwatch:DescribeAlarms</code>). Without the role, AppConfig cannot read the alarm state and does not roll back.</li>
-    <li>You can deploy only one configuration at a time to an environment. A second deployment to that environment must wait until the first deployment completes or you stop it. You can deploy to different environments at the same time.</li>
+    <li>You can deploy only one configuration at a time to an environment. A second deployment to that environment must wait until the first deployment completes or you stop it.</li>
+    <li>You can deploy to different environments at the same time.</li>
   </ul>
   <h3>Predefined strategies</h3>
   <table>
@@ -337,20 +598,57 @@
     <tr><td><code>AppConfig.AllAtOnce</code></td><td>All targets at once</td><td>10 minutes</td></tr>
     <tr><td><code>AppConfig.Linear50PercentEvery30Seconds</code></td><td>Half every 30 seconds, 1 minute in total. For tests and demonstrations only.</td><td>1 minute</td></tr>
   </table>
-  <p>Choose <code>Linear20PercentEvery6Minutes</code> or <code>Canary10Percent20Minutes</code> for production, because the slow rollout and long bake time give alarms time to catch a bad change. Choose <code>AllAtOnce</code> or <code>Linear50PercentEvery30Seconds</code> for test environments, where speed matters more than safety.</p>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Roll back a bad configuration automatically when the error rate rises" → CloudWatch alarm on the environment plus a strategy with bake time.</li>
-      <li>"Release the change at once in a test environment" → <code>AppConfig.AllAtOnce</code>.</li>
-      <li>"Gradual configuration change with no new code deployment" → AppConfig, not a Lambda alias or CodeDeploy. A Lambda alias and CodeDeploy shift traffic between versions of code. AppConfig changes only the configuration data that running code reads.</li>
-    </ul>
-  </div>
+  <p>Choose <code>Linear20PercentEvery6Minutes</code> or <code>Canary10Percent20Minutes</code> for production, because the slow rollout and long bake time give alarms time to catch a bad change.</p>
+  <p>Choose <code>AllAtOnce</code> or <code>Linear50PercentEvery30Seconds</code> for test environments, where speed matters more than safety.</p>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-creating-deployment-strategy-predefined.html">Predefined deployment strategies</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-creating-deployment-strategy.html">Deployment strategy settings</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/appconfig-deploying.html">Deploying a configuration</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/setting-up-appconfig.html">Permissions for automatic rollback</a>, <a href="https://docs.aws.amazon.com/appconfig/latest/userguide/monitoring-deployments.html">Monitoring deployments for automatic rollback (ALARM, INSUFFICIENT_DATA)</a>. Lab: <a href="../../../module-07-secrets-config/lab-03-appconfig-feature-flags/README.md">Lab 7.3 AppConfig feature flags</a>.</p>
 </section>
 
 <section id="kms-keys">
   <h2>KMS key types, aliases, and multi-Region keys</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>KMS has three key types: customer managed keys, AWS managed keys (<code>aws/&lt;service&gt;</code>), and AWS owned keys.</li>
+      <li>You write and change the key policy of a <strong>customer managed key</strong>.</li>
+      <li>You can view an AWS managed key policy, but you cannot change it.</li>
+      <li>An AWS owned key is not in your account, and you cannot see its key policy.</li>
+      <li>Only a customer managed key can be used in your own code.</li>
+      <li>A customer managed key can be used from another account through its key policy.</li>
+      <li>An AWS managed key cannot be used from another account.</li>
+      <li>Customer managed key rotation is optional.</li>
+      <li>AWS managed keys rotate automatically every year.</li>
+      <li>A customer managed key has a monthly fee plus usage fees.</li>
+      <li>An AWS managed key has no monthly fee, but usage fees can apply.</li>
+      <li>An AWS owned key has no fee.</li>
+      <li>Choose a customer managed key to control the key policy, share the key, call the key from code, or set rotation.</li>
+      <li>Choose an AWS managed or AWS owned key when the service only needs to encrypt data at rest.</li>
+      <li>A symmetric key (<code>SYMMETRIC_DEFAULT</code>, AES-256-GCM) never leaves KMS unencrypted, so every encrypt and decrypt calls KMS.</li>
+      <li>Most AWS services use symmetric keys.</li>
+      <li>Choose a symmetric key unless you have a reason for an asymmetric key.</li>
+      <li>An asymmetric key (RSA, ECC) has a private key that stays in KMS and a public key that you can download.</li>
+      <li>An asymmetric key signs and verifies, or encrypts with the public key and decrypts with the private key.</li>
+      <li>Choose an asymmetric key when a party outside AWS must encrypt or verify a signature with no call to KMS.</li>
+      <li>A KMS <strong>alias</strong> is a name for a key. Example: <code>alias/orders</code>.</li>
+      <li><code>UpdateAlias</code> points an alias to a different key, and code that uses the alias does not change.</li>
+      <li>The <code>alias/aws/</code> prefix is reserved for AWS managed keys.</li>
+      <li>Multi-Region keys have the same key ID (prefix <code>mrk-</code>) and key material in each Region.</li>
+      <li>Data encrypted with a multi-Region key in one Region decrypts in another Region with no cross-Region call.</li>
+      <li>Use multi-Region keys for client-side encrypted data that moves between Regions. Examples: DynamoDB global tables, disaster recovery.</li>
+      <li>Each multi-Region key has its own key policy, grants, and aliases.</li>
+      <li>You cannot convert a single-Region key to a multi-Region key.</li>
+      <li>To move to a multi-Region key, create a new multi-Region key and encrypt the data again.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Full control of the key policy" or "share with another account" → customer managed key.</li>
+      <li>"Least operational overhead, no key management, no audit need" → AWS owned or AWS managed key. AWS creates, rotates, and controls these keys, and they have no monthly fee.</li>
+      <li>"Client-side encrypted data must decrypt in a second Region during a Regional outage" → multi-Region key.</li>
+      <li>"Change the key without changing application code" → use an alias, then <code>UpdateAlias</code>.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key types</h3>
   <table>
     <tr><th>Item</th><th>Customer managed key</th><th>AWS managed key (<code>aws/&lt;service&gt;</code>)</th><th>AWS owned key</th></tr>
@@ -361,32 +659,70 @@
     <tr><td>Rotation</td><td>Optional</td><td>Every year, automatic</td><td>Controlled by the service</td></tr>
     <tr><td>Cost</td><td>Monthly fee plus usage</td><td>No monthly fee. Usage fee can apply.</td><td>No fee</td></tr>
   </table>
-  <p>Choose a customer managed key when you must control the key policy, share the key with another account, call the key from your own code, or set the rotation. Choose an AWS managed or AWS owned key when the service only needs to encrypt your data at rest and you do not need that control.</p>
+  <p>Choose a customer managed key when you must control the key policy, share the key with another account, call the key from your own code, or set the rotation.</p>
+  <p>Choose an AWS managed or AWS owned key when the service only needs to encrypt your data at rest and you do not need that control.</p>
   <h3>Key facts</h3>
   <ul>
-    <li>Symmetric keys (<code>SYMMETRIC_DEFAULT</code>, AES-256-GCM) use one secret key that never leaves KMS unencrypted. Every encrypt and decrypt is a call to KMS. Most AWS services use them. Choose a symmetric key unless you have a reason for an asymmetric key.</li>
-    <li>Asymmetric keys (RSA, ECC) have a private key that stays in KMS and a public key that you can download. They sign and verify, or encrypt with the public key. Choose one when a party outside AWS must encrypt data or verify a signature without a call to KMS.</li>
+    <li>Symmetric keys (<code>SYMMETRIC_DEFAULT</code>, AES-256-GCM) use one secret key that never leaves KMS unencrypted. Every encrypt and decrypt is a call to KMS.</li>
+    <li>Most AWS services use symmetric keys. Choose a symmetric key unless you have a reason for an asymmetric key.</li>
+    <li>Asymmetric keys (RSA, ECC) have a private key that stays in KMS and a public key that you can download. They sign and verify, or encrypt with the public key.</li>
+    <li>Choose an asymmetric key when a party outside AWS must encrypt data or verify a signature without a call to KMS.</li>
     <li>An <strong>alias</strong> is a name for a key, for example <code>alias/orders</code>. <code>UpdateAlias</code> points the alias to a different key. Code that uses the alias does not change.</li>
     <li>The <code>alias/aws/</code> prefix is reserved for AWS managed keys.</li>
-    <li><strong>Multi-Region keys</strong> have the same key ID (prefix <code>mrk-</code>) and key material in each Region. Key material is the secret value that a key uses to encrypt. Data encrypted in one Region decrypts in another with no cross-Region call. Use them for client-side encrypted data that moves between Regions, for example in a DynamoDB global table or for disaster recovery.</li>
-    <li>Each multi-Region key has its own key policy, grants, and aliases. You cannot convert a single-Region key to a multi-Region key. To change, create a new multi-Region key and encrypt the data again with it.</li>
+    <li><strong>Multi-Region keys</strong> have the same key ID (prefix <code>mrk-</code>) and key material in each Region. Key material is the secret value that a key uses to encrypt.</li>
+    <li>Data encrypted in one Region decrypts in another with no cross-Region call.</li>
+    <li>Use multi-Region keys for client-side encrypted data that moves between Regions, for example in a DynamoDB global table or for disaster recovery.</li>
+    <li>Each multi-Region key has its own key policy, grants, and aliases.</li>
+    <li>You cannot convert a single-Region key to a multi-Region key. To change, create a new multi-Region key and encrypt the data again with it.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Full control of the key policy" or "share with another account" → customer managed key.</li>
-      <li>"Least operational overhead, no key management, no audit need" → AWS owned or AWS managed key, because AWS creates, rotates, and controls these keys, and they have no monthly fee.</li>
-      <li>"Client-side encrypted data must decrypt in a second Region during a Regional outage" → multi-Region key.</li>
-      <li>"Change the key without changing application code" → use an alias, then <code>UpdateAlias</code>.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html">KMS keys and key types</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/multi-region-keys-overview.html">Multi-Region keys</a>. Lab: <a href="../../../module-07-secrets-config/lab-04-kms-envelope-encryption/README.md">Lab 7.4 KMS envelope encryption</a>.</p>
 </section>
 
 <section id="kms-envelope">
   <h2>Envelope encryption, data keys, and encryption context</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>In <strong>envelope encryption</strong>, a data key encrypts the data locally, and the KMS key encrypts only the data key.</li>
+      <li>KMS <code>Encrypt</code> accepts a maximum of 4,096 bytes, so use it for small secrets only.</li>
+      <li>With envelope encryption, a large file needs only one KMS call, and the bulk encryption runs locally.</li>
+      <li><code>GenerateDataKey</code> returns <code>Plaintext</code> (the data key) and <code>CiphertextBlob</code> (the same data key, encrypted).</li>
+      <li>After you encrypt the data, remove the plaintext data key from memory.</li>
+      <li>Store the encrypted data key with the encrypted data.</li>
+      <li>To decrypt envelope-encrypted data, send the encrypted data key to <code>Decrypt</code>, then decrypt the data locally.</li>
+      <li><code>GenerateDataKeyWithoutPlaintext</code> returns only the encrypted data key.</li>
+      <li>Use <code>GenerateDataKeyWithoutPlaintext</code> when a different component encrypts the data later.</li>
+      <li><code>Decrypt</code> of symmetric ciphertext needs no key ID, because the ciphertext contains it.</li>
+      <li><code>ReEncrypt</code> moves ciphertext to a different KMS key inside KMS, and the plaintext never leaves KMS.</li>
+      <li>An <strong>encryption context</strong> is a set of non-secret key-value pairs that describe the data. Example: <code>{"tenant":"42"}</code>.</li>
+      <li>KMS binds the encryption context to the ciphertext as additional authenticated data, but does not encrypt the context.</li>
+      <li>Decrypt must use the same encryption context, with an exact, case-sensitive match.</li>
+      <li>A wrong or missing encryption context makes <code>Decrypt</code> fail with <code>InvalidCiphertextException</code>.</li>
+      <li>CloudTrail logs the encryption context in plaintext, so do not put secrets in the encryption context.</li>
+      <li>The <code>kms:EncryptionContext:&lt;key&gt;</code> condition allows decryption only for one tenant or one resource.</li>
+      <li>KMS cryptographic operations on symmetric keys share one request quota for each account and Region.</li>
+      <li>The KMS symmetric cryptographic quota is 100,000 requests per second in us-east-1, us-west-2, and eu-west-1.</li>
+      <li>The KMS symmetric cryptographic quota is 20,000 requests per second in us-east-2, eu-central-1, ap-northeast-1, and some other Regions.</li>
+      <li>The KMS symmetric cryptographic quota is 10,000 requests per second in all other Regions.</li>
+      <li>KMS calls that AWS services make for you, for example S3 SSE-KMS, count toward your quota.</li>
+      <li>Too many KMS calls cause <code>ThrottlingException</code>.</li>
+      <li>To fix KMS throttling, reuse data keys with data key caching, use S3 Bucket Keys, or request a quota increase.</li>
+      <li>An <strong>S3 Bucket Key</strong> lets S3 call KMS much less often and can reduce KMS request costs by up to 99 percent.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Encrypt a 5 MB file with KMS" → envelope encryption with <code>GenerateDataKey</code>, not <code>Encrypt</code>.</li>
+      <li>"Decrypt fails with InvalidCiphertextException" → wrong or missing encryption context, or the wrong ciphertext.</li>
+      <li>"ThrottlingException from KMS during S3 uploads" → S3 Bucket Keys, or a quota increase.</li>
+      <li>"A service must prepare keys now, and another service encrypts later" → <code>GenerateDataKeyWithoutPlaintext</code>. The first service never receives the plaintext data key, and the second service calls <code>Decrypt</code> to get it.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Envelope encryption steps</h3>
-  <p>Envelope encryption uses two keys. A data key encrypts the data in your application, outside KMS. The KMS key encrypts only the small data key. KMS <code>Encrypt</code> accepts a maximum of 4,096 bytes, and each call goes over the network. With a data key, a large file needs only one KMS call, and the bulk encryption runs locally.</p>
+  <p>Envelope encryption uses two keys. A data key encrypts the data in your application, outside KMS. The KMS key encrypts only the small data key.</p>
+  <p>KMS <code>Encrypt</code> accepts a maximum of 4,096 bytes, and each call goes over the network. With a data key, a large file needs only one KMS call, and the bulk encryption runs locally.</p>
   <ol>
     <li>Call <code>GenerateDataKey</code> with a symmetric KMS key. KMS returns <code>Plaintext</code> (the data key) and <code>CiphertextBlob</code> (the same data key, encrypted).</li>
     <li>Encrypt the data locally with the plaintext data key.</li>
@@ -406,7 +742,9 @@
   <h3>Encryption context</h3>
   <ul>
     <li>A set of non-secret key-value pairs that describe the data, for example <code>{"tenant":"42"}</code>. KMS uses it as additional authenticated data: it is not encrypted, but it is cryptographically bound to the ciphertext.</li>
-    <li>Decrypt must use the same context (exact, case-sensitive match). If not, KMS returns <code>InvalidCiphertextException</code>. A request that sends <code>{"tenant":"7"}</code> cannot decrypt data that was encrypted with <code>{"tenant":"42"}</code>. A ciphertext that was moved to a different record also fails to decrypt, when the context names the record.</li>
+    <li>Decrypt must use the same context (exact, case-sensitive match). If not, KMS returns <code>InvalidCiphertextException</code>.</li>
+    <li>A request that sends <code>{"tenant":"7"}</code> cannot decrypt data that was encrypted with <code>{"tenant":"42"}</code>.</li>
+    <li>A ciphertext that was moved to a different record also fails to decrypt, when the context names the record.</li>
     <li>CloudTrail logs the context in plaintext. Do not put secrets in it.</li>
     <li>Use the <code>kms:EncryptionContext:&lt;key&gt;</code> condition to allow decryption only for one tenant or one resource.</li>
   </ul>
@@ -414,23 +752,55 @@
   <ul>
     <li>Cryptographic operations on symmetric keys share one quota for each account and Region. The default depends on the Region: 100,000 requests per second in us-east-1, us-west-2, and eu-west-1; 20,000 in us-east-2, eu-central-1, ap-northeast-1, and some other Regions; 10,000 in all other Regions.</li>
     <li>Calls that AWS services make for you (for example, S3 SSE-KMS) count toward your quota. Too many calls cause <code>ThrottlingException</code>.</li>
-    <li>Fixes: reuse data keys (AWS Encryption SDK data key caching), use S3 Bucket Keys, or request a quota increase. Data key caching uses one data key for many messages, so the application calls <code>GenerateDataKey</code> less often.</li>
-    <li>Without a Bucket Key, S3 calls KMS for each request on an encrypted object. With a Bucket Key, S3 gets a short-lived bucket-level key from KMS and uses it to create data keys for new objects. S3 then calls KMS much less often. S3 Bucket Keys can reduce KMS request costs by up to 99 percent.</li>
+    <li>Fixes: reuse data keys (AWS Encryption SDK data key caching), use S3 Bucket Keys, or request a quota increase.</li>
+    <li>Data key caching uses one data key for many messages, so the application calls <code>GenerateDataKey</code> less often.</li>
+    <li>Without a Bucket Key, S3 calls KMS for each request on an encrypted object.</li>
+    <li>With a Bucket Key, S3 gets a short-lived bucket-level key from KMS and uses it to create data keys for new objects. S3 then calls KMS much less often.</li>
+    <li>S3 Bucket Keys can reduce KMS request costs by up to 99 percent.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Encrypt a 5 MB file with KMS" → envelope encryption with <code>GenerateDataKey</code>, not <code>Encrypt</code>.</li>
-      <li>"Decrypt fails with InvalidCiphertextException" → wrong or missing encryption context, or the wrong ciphertext.</li>
-      <li>"ThrottlingException from KMS during S3 uploads" → S3 Bucket Keys, or a quota increase.</li>
-      <li>"A service must prepare keys now, and another service encrypts later" → <code>GenerateDataKeyWithoutPlaintext</code>, because the first service never receives the plaintext data key. The second service calls <code>Decrypt</code> to get it.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/kms/latest/APIReference/API_Encrypt.html">Encrypt (4,096 bytes)</a>, <a href="https://docs.aws.amazon.com/kms/latest/APIReference/API_GenerateDataKeyWithoutPlaintext.html">GenerateDataKeyWithoutPlaintext</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/requests-per-second.html">KMS request quotas</a>, <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-key.html">S3 Bucket Keys</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/encrypt_context.html">Encryption context (additional authenticated data)</a>, <a href="https://docs.aws.amazon.com/encryption-sdk/latest/developer-guide/data-key-caching.html">Data key caching</a>. Lab: <a href="../../../module-07-secrets-config/lab-04-kms-envelope-encryption/README.md">Lab 7.4 KMS envelope encryption</a>.</p>
 </section>
 
 <section id="kms-lifecycle">
   <h2>Key rotation, disabling, and deletion</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Automatic rotation of a symmetric customer managed key with KMS key material is optional and off by default.</li>
+      <li><code>EnableKeyRotation</code> turns on automatic rotation of a KMS key.</li>
+      <li>The automatic rotation period is 90 to 2,560 days, default 365 days. Older study material says rotation is annual only.</li>
+      <li><code>DisableKeyRotation</code> turns off automatic rotation.</li>
+      <li>An AWS managed key rotates every year, and you cannot change the rotation.</li>
+      <li>Asymmetric, HMAC, and custom key store keys have no automatic rotation.</li>
+      <li>To rotate an asymmetric, HMAC, or custom key store key, create a new key and move the alias.</li>
+      <li>Imported key material has no automatic rotation, but supports on-demand rotation. Older study material says it cannot rotate.</li>
+      <li><strong>On-demand rotation</strong> (<code>RotateKeyOnDemand</code>) rotates the key material at once and does not change the automatic schedule.</li>
+      <li>Key rotation keeps the same key ID, key ARN, aliases, and policies, so no code changes are necessary.</li>
+      <li>KMS keeps all old key material after rotation, so old ciphertext still decrypts.</li>
+      <li>Key rotation does not re-encrypt data and does not rotate data keys.</li>
+      <li><code>DisableKey</code> stops all cryptographic use of a key at once.</li>
+      <li><code>EnableKey</code> reverses <code>DisableKey</code>.</li>
+      <li>A disabled key makes calls such as <code>Decrypt</code> fail with <code>DisabledException</code>.</li>
+      <li>Disable a key before you delete it, and set a CloudWatch alarm on attempts to use it.</li>
+      <li><code>ScheduleKeyDeletion</code> sets a waiting period of 7 to 30 days (default 30 days).</li>
+      <li>A key in the <strong>Pending deletion</strong> state cannot encrypt or decrypt.</li>
+      <li>Calls to a key in the Pending deletion state fail with <code>KMSInvalidStateException</code>.</li>
+      <li><code>CancelKeyDeletion</code> stops the deletion and leaves the key disabled.</li>
+      <li>After <code>CancelKeyDeletion</code>, call <code>EnableKey</code> to use the key again.</li>
+      <li>After a KMS key is deleted, data encrypted under the key cannot be recovered.</li>
+      <li>You can delete only customer managed keys.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Rotate key material every 180 days with least effort" → automatic rotation with <code>RotationPeriodInDays</code> = 180.</li>
+      <li>"Rotate now after a suspected exposure of the key material, keep the same key ID" → on-demand rotation.</li>
+      <li>"Rotate an asymmetric key" → create a new key and point the alias to it.</li>
+      <li>"Key was scheduled for deletion by mistake" → <code>CancelKeyDeletion</code> before the waiting period ends.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Rotation</h3>
   <table>
     <tr><th>Key</th><th>Automatic rotation</th></tr>
@@ -442,34 +812,74 @@
   <ul>
     <li><strong>On-demand rotation</strong> (<code>RotateKeyOnDemand</code>) rotates the key material at once. It does not change the automatic schedule.</li>
     <li>Rotation keeps the same key ID, key ARN, aliases, and policies. KMS keeps all old key material, so old ciphertext still decrypts. No code changes are necessary.</li>
-    <li>Rotation does not re-encrypt data and does not rotate data keys. Rotation changes only the key material that KMS uses for new encryption. Data keys that you already made, and the data they encrypt, stay the same.</li>
+    <li>Rotation does not re-encrypt data and does not rotate data keys. Rotation changes only the key material that KMS uses for new encryption.</li>
+    <li>Data keys that you already made, and the data they encrypt, stay the same.</li>
   </ul>
   <h3>Disable and delete</h3>
   <ul>
     <li><code>DisableKey</code> stops all cryptographic use at once. Calls such as <code>Decrypt</code> then fail with <code>DisabledException</code>. <code>EnableKey</code> reverses it.</li>
-    <li>Prefer disable when you are not sure, because deletion cannot be undone. Disable the key first, and set a CloudWatch alarm on attempts to use it. If nothing fails, you can then delete it.</li>
+    <li>Prefer disable when you are not sure, because deletion cannot be undone.</li>
+    <li>Disable the key first, and set a CloudWatch alarm on attempts to use it. If nothing fails, you can then delete it.</li>
     <li><code>ScheduleKeyDeletion</code> sets a waiting period of 7 to 30 days. The default is 30 days. The waiting period gives you time to find applications that still need the key.</li>
-    <li>During the waiting period, the key state is <strong>Pending deletion</strong>. The key cannot encrypt or decrypt, and calls fail with <code>KMSInvalidStateException</code>. <code>CancelKeyDeletion</code> stops the deletion. The key is then disabled, so call <code>EnableKey</code> to use it again.</li>
+    <li>During the waiting period, the key state is <strong>Pending deletion</strong>. The key cannot encrypt or decrypt, and calls fail with <code>KMSInvalidStateException</code>.</li>
+    <li><code>CancelKeyDeletion</code> stops the deletion. The key is then disabled, so call <code>EnableKey</code> to use it again.</li>
     <li>After deletion, data encrypted under the key cannot be recovered.</li>
     <li>You can delete only customer managed keys.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Rotate key material every 180 days with least effort" → automatic rotation with <code>RotationPeriodInDays</code> = 180.</li>
-      <li>"Rotate now after a suspected exposure of the key material, keep the same key ID" → on-demand rotation.</li>
-      <li>"Rotate an asymmetric key" → create a new key and point the alias to it.</li>
-      <li>"Key was scheduled for deletion by mistake" → <code>CancelKeyDeletion</code> before the waiting period ends.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/kms/latest/developerguide/rotate-keys.html">Rotate KMS keys</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/rotating-keys-enable.html">Enable automatic rotation (90 to 2,560 days)</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/deleting-keys.html">Delete a KMS key (7 to 30 days)</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/enabling-keys.html">Enable and disable keys</a>, <a href="https://docs.aws.amazon.com/kms/latest/APIReference/API_Decrypt.html">Decrypt errors (DisabledException, KMSInvalidStateException)</a>, <a href="https://docs.aws.amazon.com/kms/latest/APIReference/API_CancelKeyDeletion.html">CancelKeyDeletion (key becomes Disabled)</a>. Lab: <a href="../../../module-07-secrets-config/lab-04-kms-envelope-encryption/README.md">Lab 7.4 KMS envelope encryption</a>.</p>
 </section>
 
 <section id="kms-access">
   <h2>Key policies, IAM, grants, and cross-account access</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Every KMS key has exactly one <strong>key policy</strong>.</li>
+      <li>No principal can use a KMS key unless the key policy allows it, directly or through IAM.</li>
+      <li>For a KMS key, an IAM policy alone cannot give access, unlike most AWS resources.</li>
+      <li>The key policy statement for <code>arn:aws:iam::&lt;account&gt;:root</code> with <code>kms:*</code> lets IAM policies in that account give access.</li>
+      <li>In a key policy, <code>root</code> means the whole account, not only the root user.</li>
+      <li>The root statement does not give access to any user by itself.</li>
+      <li>Without the root statement, IAM policies that allow KMS access have no effect, but IAM deny statements still apply.</li>
+      <li>The default key policy from the API contains only the root statement.</li>
+      <li>The console default key policy adds key administrator and key user statements.</li>
+      <li>Key administrators can manage a KMS key but cannot use it for cryptographic operations.</li>
+      <li>An explicit deny in any policy wins.</li>
+      <li>A <strong>grant</strong> gives one grantee principal permission for specific operations on one KMS key.</li>
+      <li>A KMS grant can allow, but cannot deny.</li>
+      <li>Use a grant for temporary access with no change to the key policy or IAM policies.</li>
+      <li>KMS grants do not expire on their own.</li>
+      <li>Delete a KMS grant with <code>RetireGrant</code> or <code>RevokeGrant</code>.</li>
+      <li>A key administrator usually revokes a grant to take access away.</li>
+      <li>A new grant can take seconds to minutes to take effect, because KMS is eventually consistent.</li>
+      <li>To use a new grant at once, pass the grant token from <code>CreateGrant</code> in the call.</li>
+      <li>The <code>kms:GrantIsForAWSResource</code> condition lets only AWS services, for example Amazon EBS, create grants.</li>
+      <li>Put <code>kms:GrantIsForAWSResource</code> on the <code>kms:CreateGrant</code> statement in the key policy.</li>
+      <li>A KMS key can have a maximum of 50,000 grants.</li>
+      <li>The <code>kms:ViaService</code> condition allows key use only through a named service. Example: <code>s3.us-east-1.amazonaws.com</code>.</li>
+      <li>The <code>kms:CallerAccount</code> condition allows all principals of one account, with no list of each role.</li>
+      <li>The <code>kms:EncryptionContext:&lt;key&gt;</code> condition limits a principal to one tenant or one resource.</li>
+      <li>Cross-account KMS use needs the key policy in the owner account to allow the other account or role.</li>
+      <li>Cross-account KMS use also needs an IAM policy in the other account that allows the KMS actions on the key ARN.</li>
+      <li>Another account must use the key ARN or alias ARN, not the alias name.</li>
+      <li>An alias name such as <code>alias/orders</code> resolves in the caller's own account.</li>
+      <li>KMS counts cross-account requests toward the quota of the calling account.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"IAM policy allows kms:Decrypt but the call is denied" → the key policy does not allow the principal or the account root.</li>
+      <li>"Give temporary, revocable access to a key without changing the key policy" → create a grant. A grant adds permission without a policy change, and retiring or revoking it removes the permission.</li>
+      <li>"Use the key only from Amazon S3" → <code>kms:ViaService</code> condition.</li>
+      <li>"Account B cannot decrypt with the key in Account A" → check both the key policy in A and the IAM policy in B.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
-    <li>Every KMS key has exactly one key policy. No principal can use the key unless the key policy allows it, directly or through IAM. This is different from most AWS resources, where an IAM policy alone can give access.</li>
+    <li>Every KMS key has exactly one key policy. No principal can use the key unless the key policy allows it, directly or through IAM.</li>
+    <li>This is different from most AWS resources, where an IAM policy alone can give access.</li>
     <li>The statement with <code>"Principal": {"AWS": "arn:aws:iam::&lt;account&gt;:root"}</code> and <code>kms:*</code> lets IAM policies in that account give access. Here <code>root</code> means the whole account, not only the root user. The statement does not give access to any user by itself.</li>
     <li>If the key policy does not have that statement, IAM policies that allow access have no effect. IAM policies that deny access still apply.</li>
     <li>The default key policy from the API contains only the root statement. The console adds key administrator and key user statements.</li>
@@ -478,11 +888,14 @@
   </ul>
   <h3>Grants</h3>
   <ul>
-    <li>A grant gives one grantee principal permission for specific operations on one key. A grant can allow, but cannot deny. Use a grant for temporary access: you create it, use it, and delete it with no change to the key policy or IAM policies.</li>
+    <li>A grant gives one grantee principal permission for specific operations on one key. A grant can allow, but cannot deny.</li>
+    <li>Use a grant for temporary access: you create it, use it, and delete it with no change to the key policy or IAM policies.</li>
     <li>Grants do not expire on their own. Delete a grant with <code>RetireGrant</code> or <code>RevokeGrant</code>.</li>
     <li>The retiring principal is a principal that the grant names as allowed to retire it. It retires the grant when it finishes the task. A key administrator usually revokes a grant to take access away.</li>
-    <li>KMS is eventually consistent: a new grant can take a few seconds, sometimes several minutes, to be known in all of KMS. Until then, a call that uses the grant can get an access denied error. Pass the <strong>grant token</strong> from <code>CreateGrant</code> in the call to use the grant at once.</li>
-    <li>AWS services (for example, Amazon EBS) create grants to use your key for you. The condition <code>kms:GrantIsForAWSResource</code> allows this only for AWS services. Put this condition on the <code>kms:CreateGrant</code> statement in the key policy. Then an AWS service can create grants for your resources, but the principal cannot call <code>CreateGrant</code> directly to give the key to any other principal.</li>
+    <li>KMS is eventually consistent: a new grant can take a few seconds, sometimes several minutes, to be known in all of KMS. Until then, a call that uses the grant can get an access denied error.</li>
+    <li>Pass the <strong>grant token</strong> from <code>CreateGrant</code> in the call to use the grant at once.</li>
+    <li>AWS services (for example, Amazon EBS) create grants to use your key for you. The condition <code>kms:GrantIsForAWSResource</code> allows this only for AWS services.</li>
+    <li>Put this condition on the <code>kms:CreateGrant</code> statement in the key policy. Then an AWS service can create grants for your resources, but the principal cannot call <code>CreateGrant</code> directly to give the key to any other principal.</li>
     <li>Limit: 50,000 grants for each KMS key.</li>
   </ul>
   <h3>Useful condition keys</h3>
@@ -492,32 +905,70 @@
     <tr><td><code>kms:CallerAccount</code></td><td>Allows all principals of one account</td></tr>
     <tr><td><code>kms:EncryptionContext:&lt;key&gt;</code></td><td>Allows use only with a matching encryption context</td></tr>
   </table>
-  <p>Use <code>kms:ViaService</code> when principals must use the key only through one service, not with direct KMS calls. Use <code>kms:CallerAccount</code> to allow every principal in one account without a list of each role. Use <code>kms:EncryptionContext:&lt;key&gt;</code> to limit a principal to one tenant or one resource.</p>
+  <p>Use <code>kms:ViaService</code> when principals must use the key only through one service, not with direct KMS calls.</p>
+  <p>Use <code>kms:CallerAccount</code> to allow every principal in one account without a list of each role.</p>
+  <p>Use <code>kms:EncryptionContext:&lt;key&gt;</code> to limit a principal to one tenant or one resource.</p>
   <h3>Cross-account use (both are necessary)</h3>
   <ol>
     <li>In the key owner account, allow the other account (or a role in it) in the key policy.</li>
     <li>In the other account, attach an IAM policy that allows the KMS actions on the key ARN.</li>
   </ol>
-  <p>The other account must use the key ARN or alias ARN, not the alias name. An alias name such as <code>alias/orders</code> has no account in it, so KMS looks for it in the caller's own account. KMS counts cross-account requests toward the quota of the calling account.</p>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"IAM policy allows kms:Decrypt but the call is denied" → the key policy does not allow the principal or the account root.</li>
-      <li>"Give temporary, revocable access to a key without changing the key policy" → create a grant, because a grant adds permission without a policy change, and retiring or revoking it removes the permission.</li>
-      <li>"Use the key only from Amazon S3" → <code>kms:ViaService</code> condition.</li>
-      <li>"Account B cannot decrypt with the key in Account A" → check both the key policy in A and the IAM policy in B.</li>
-    </ul>
-  </div>
+  <p>The other account must use the key ARN or alias ARN, not the alias name. An alias name such as <code>alias/orders</code> has no account in it, so KMS looks for it in the caller's own account.</p>
+  <p>KMS counts cross-account requests toward the quota of the calling account.</p>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/kms/latest/developerguide/key-policy-default.html">Default key policy</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/grants.html">Grants (eventual consistency, grant tokens)</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/conditions-kms.html">KMS condition keys (kms:GrantIsForAWSResource)</a>. Lab: <a href="../../../module-07-secrets-config/lab-05-kms-key-policies-and-grants/README.md">Lab 7.5 KMS key policies and grants</a>.</p>
 </section>
 
 <section id="acm-certs">
   <h2>ACM certificates and AWS Private CA</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>ACM public certificates for integrated services, such as CloudFront, Elastic Load Balancing, and API Gateway, have no charge.</li>
+      <li>ACM manages the renewal of public certificates for integrated services.</li>
+      <li>A standard ACM public certificate cannot be exported to an EC2 instance.</li>
+      <li>ACM exportable public certificates have a charge for each certificate. Older study material says no ACM public certificate can be exported.</li>
+      <li>ACM certificates are Regional, so a resource can use only a certificate in its own Region.</li>
+      <li><strong>CloudFront</strong> reads certificates only from <code>us-east-1</code>.</li>
+      <li>API Gateway edge-optimized endpoints use CloudFront, so their certificates must be in <code>us-east-1</code>.</li>
+      <li>A Regional API or a load balancer uses an ACM certificate in its own Region.</li>
+      <li>A certificate in the wrong Region does not appear in the CloudFront or API Gateway console list.</li>
+      <li>A wildcard certificate protects one level only. <code>*.example.com</code> does not cover <code>example.com</code> or <code>a.b.example.com</code>.</li>
+      <li>ACM does not renew imported certificates.</li>
+      <li>Import a new certificate before expiry, or clients get TLS errors after the certificate expires.</li>
+      <li><strong>AWS Private CA</strong> is a managed private CA for internal TLS, mutual TLS, and devices.</li>
+      <li>Browsers do not trust AWS Private CA certificates.</li>
+      <li>AWS Private CA general-purpose mode costs $400 for each CA each month.</li>
+      <li>For <strong>DNS validation</strong> (recommended), add the CNAME record that ACM gives you.</li>
+      <li>Route 53 can add the ACM validation CNAME record with one click.</li>
+      <li>DNS validation renews automatically while the certificate is in use and the CNAME record stays in DNS.</li>
+      <li>Email validation sends email to admin@, administrator@, hostmaster@, postmaster@, and webmaster@ the domain.</li>
+      <li>With email validation, the domain owner must approve each renewal by email.</li>
+      <li>Choose email validation only when you cannot add DNS records for the domain.</li>
+      <li>ACM public certificates are valid for 198 days. Older study material says 13 months (395 days).</li>
+      <li>ACM renewal starts 45 days before expiry. Older study material says 60 days.</li>
+      <li>If ACM validation does not complete in 72 hours, the status changes to "Validation timed out".</li>
+      <li>After "Validation timed out", request the certificate again and complete validation.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Certificate for CloudFront does not appear in the list" → request it in <code>us-east-1</code>.</li>
+      <li>"Certificate renews with no manual work" → DNS validation, and keep the CNAME record.</li>
+      <li>"Cover example.com and all first-level subdomains" → <code>example.com</code> plus <code>*.example.com</code> in one certificate.</li>
+      <li>"Internal services need private certificates from a managed CA" → AWS Private CA.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li>ACM public certificates for integrated services (CloudFront, Elastic Load Balancing, API Gateway, and others) have no charge. ACM manages their renewal.</li>
-    <li>A standard ACM public certificate is for integrated AWS services only. You cannot export it to an EC2 instance. ACM also offers exportable public certificates, at a charge for each certificate. Older study material says no ACM public certificate can be exported. Exportable certificates were added in June 2025.</li>
-    <li>ACM certificates are Regional. A resource can use only a certificate in its own Region. CloudFront is a global service, and it reads certificates only from <code>us-east-1</code>. API Gateway edge-optimized endpoints use CloudFront, so they also use certificates in <code>us-east-1</code>. A Regional API or a load balancer uses a certificate in its own Region. A certificate in another Region does not appear in the certificate list in the CloudFront or API Gateway console.</li>
+    <li>A standard ACM public certificate is for integrated AWS services only. You cannot export it to an EC2 instance.</li>
+    <li>ACM also offers exportable public certificates, at a charge for each certificate. Older study material says no ACM public certificate can be exported. Exportable certificates were added in June 2025.</li>
+    <li>ACM certificates are Regional. A resource can use only a certificate in its own Region.</li>
+    <li>CloudFront is a global service, and it reads certificates only from <code>us-east-1</code>. API Gateway edge-optimized endpoints use CloudFront, so they also use certificates in <code>us-east-1</code>.</li>
+    <li>A Regional API or a load balancer uses a certificate in its own Region.</li>
+    <li>A certificate in another Region does not appear in the certificate list in the CloudFront or API Gateway console.</li>
     <li>A wildcard protects one level only. <code>*.example.com</code> covers <code>a.example.com</code>, but not <code>example.com</code> or <code>a.b.example.com</code>.</li>
     <li>ACM does not renew imported certificates. Import a new certificate before expiry. If you do not, clients get TLS errors after the certificate expires.</li>
     <li>AWS Private CA is a managed private CA for internal TLS, mutual TLS, and devices. Browsers do not trust its certificates. General-purpose mode costs $400 for each CA each month.</li>
@@ -528,17 +979,10 @@
     <tr><td>DNS (recommended)</td><td>Add the CNAME record that ACM gives you. Route 53 can add it with one click.</td><td>Automatic while the certificate is in use and the CNAME record stays in DNS</td></tr>
     <tr><td>Email</td><td>ACM sends email to admin@, administrator@, hostmaster@, postmaster@, and webmaster@ the domain</td><td>The domain owner must approve each renewal by email</td></tr>
   </table>
-  <p>DNS validation renews with no human step, because ACM checks the same CNAME record again at each renewal. Choose email validation only when you cannot add DNS records for the domain.</p>
-  <p>ACM public certificates are valid for 198 days, and renewal starts 45 days before expiry. Older study material says 13 months (395 days) and renewal from 60 days before expiry. Since February 2026 the values are 198 days and 45 days. If validation does not complete in 72 hours, the status changes to "Validation timed out". Request the certificate again and complete validation.</p>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Certificate for CloudFront does not appear in the list" → request it in <code>us-east-1</code>.</li>
-      <li>"Certificate renews with no manual work" → DNS validation, and keep the CNAME record.</li>
-      <li>"Cover example.com and all first-level subdomains" → <code>example.com</code> plus <code>*.example.com</code> in one certificate.</li>
-      <li>"Internal services need private certificates from a managed CA" → AWS Private CA.</li>
-    </ul>
-  </div>
+  <p>DNS validation renews with no human step, because ACM checks the same CNAME record again at each renewal.</p>
+  <p>Choose email validation only when you cannot add DNS records for the domain.</p>
+  <p>ACM public certificates are valid for 198 days, and renewal starts 45 days before expiry. Older study material says 13 months (395 days) and renewal from 60 days before expiry. Since February 2026 the values are 198 days and 45 days.</p>
+  <p>If validation does not complete in 72 hours, the status changes to "Validation timed out". Request the certificate again and complete validation.</p>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/acm/latest/userguide/dns-validation.html">DNS validation</a>, <a href="https://docs.aws.amazon.com/acm/latest/userguide/email-validation.html">Email validation (addresses, 198 days, 72 hours)</a>, <a href="https://docs.aws.amazon.com/acm/latest/userguide/acm-concepts.html">ACM concepts (wildcards)</a>, <a href="https://docs.aws.amazon.com/acm/latest/userguide/acm-exportable-certificates.html">Exportable public certificates</a>, <a href="https://aws.amazon.com/private-ca/pricing/">AWS Private CA pricing</a>, <a href="https://repost.aws/knowledge-center/acm-validation-time-out">Validation timed out (AWS re:Post)</a>. Lab: <a href="../../../module-07-secrets-config/lab-06-acm-and-acm-pca/README.md">Lab 7.6 ACM and ACM PCA</a>.</p>
 </section>
 
