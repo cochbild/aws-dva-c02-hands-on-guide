@@ -51,7 +51,7 @@
       <li><code>GetSecretValue</code> with no version returns the version that has <code>AWSCURRENT</code>.</li>
       <li><code>AWSPENDING</code> marks the new value during a rotation, before the rotation completes.</li>
       <li><code>AWSPREVIOUS</code> marks the last known good value, on the old version after <code>AWSCURRENT</code> moves.</li>
-      <li>A secret can have a maximum of 20 custom staging labels across all its versions.</li>
+      <li>A secret can have a maximum of 20 staging labels across all its versions.</li>
       <li>You cannot delete one secret version directly.</li>
       <li>To remove a secret version, remove all its labels with <code>UpdateSecretVersionStage</code>.</li>
       <li>Above 100 versions, Secrets Manager removes unlabeled versions of a secret, but not versions less than 24 hours old.</li>
@@ -59,7 +59,6 @@
       <li>During the recovery window, <code>GetSecretValue</code> fails with <code>InvalidRequestException</code>.</li>
       <li><code>RestoreSecret</code> cancels a scheduled deletion and keeps the same ARN.</li>
       <li><code>ForceDeleteWithoutRecovery</code> deletes a secret with no recovery window, and you cannot recover the secret.</li>
-      <li>After a forced deletion, a new secret with the same name can need a retry, because deletion runs in the background.</li>
       <li><code>ReplicateSecretToRegions</code> copies a secret to other Regions and keeps the replicas in sync with the primary.</li>
       <li>A replica secret gives low latency in its own Region and keeps working if the primary Region fails.</li>
       <li>The maximum secret value size is 65,536 bytes (64 KB).</li>
@@ -124,7 +123,6 @@
       <li>Use managed rotation when the service offers it, because you have no function to write or maintain.</li>
       <li>Secrets Manager gives rotation function templates for Amazon RDS, Aurora, Redshift, and DocumentDB.</li>
       <li>For other secrets, use the generic rotation function template.</li>
-      <li>The console can create the rotation function and its execution role for you.</li>
       <li>A rotation function has four steps in this order: <code>createSecret</code>, <code>setSecret</code>, <code>testSecret</code>, <code>finishSecret</code>.</li>
       <li><code>createSecret</code> stores the new value as a new version with <code>AWSPENDING</code>.</li>
       <li><code>setSecret</code> changes the credential in the database or service.</li>
@@ -136,7 +134,8 @@
       <li>Do not move a rotation function out of the VPC, because the function also needs a network path to the database.</li>
       <li>The single user strategy changes the password of one user, and open connections stay open.</li>
       <li>With single user rotation, logins can fail briefly between <code>setSecret</code> and <code>finishSecret</code>, so add retries.</li>
-      <li>The alternating users strategy rotates the password of a second, cloned user that <code>AWSCURRENT</code> does not use.</li>
+      <li>The alternating users strategy changes the password of the user that <code>AWSCURRENT</code> does not use, then moves <code>AWSCURRENT</code> to that user.</li>
+      <li>After an alternating users rotation, both database users stay valid.</li>
       <li>The alternating users strategy needs a separate secret with superuser credentials to clone the user.</li>
       <li>Choose single user when a few failed logins with retries are acceptable.</li>
       <li>Choose <strong>alternating users</strong> for high availability, when you can store a superuser secret.</li>
@@ -204,16 +203,15 @@
       <li>To read a secret, a principal needs <code>secretsmanager:GetSecretValue</code>.</li>
       <li>If a customer managed key encrypts a secret, the reader also needs <code>kms:Decrypt</code> on that key.</li>
       <li>Cache secrets in the application, because each <code>GetSecretValue</code> call costs money and counts toward the request rate.</li>
-      <li>Secrets Manager caching components exist for Java, Python, .NET, Go, and Rust.</li>
       <li>Use the Secrets Manager caching components outside Lambda, or in Lambda without the extension.</li>
       <li>The <strong>AWS Parameters and Secrets Lambda Extension</strong> is a Lambda layer that runs a local HTTP server with a cache.</li>
       <li>Function code sends an HTTP GET to <code>localhost:2773</code> to read a value from the Parameters and Secrets Lambda Extension.</li>
       <li>The Parameters and Secrets Lambda Extension works with every runtime and needs no SDK code for the call.</li>
-      <li>The extension secret path is <code>/secretsmanager/get?secretId=...</code>.</li>
-      <li>Each extension request needs the <code>X-Aws-Parameters-Secrets-Token</code> header with the session token of the function.</li>
-      <li>The extension cache TTL is 300 seconds by default for secrets and for parameters.</li>
-      <li><code>SECRETS_MANAGER_TTL</code> sets the extension secret cache TTL, from 0 to 300 seconds.</li>
-      <li>The extension cache holds 1,000 items by default.</li>
+      <li>The Parameters and Secrets Lambda Extension secret path is <code>/secretsmanager/get?secretId=...</code>.</li>
+      <li>Each Parameters and Secrets Lambda Extension request needs the <code>X-Aws-Parameters-Secrets-Token</code> header with the function session token.</li>
+      <li>The Parameters and Secrets Lambda Extension cache TTL is 300 seconds by default for secrets and for parameters.</li>
+      <li><code>SECRETS_MANAGER_TTL</code> sets the Parameters and Secrets Lambda Extension secret cache TTL, from 0 to 300 seconds.</li>
+      <li>The Parameters and Secrets Lambda Extension cache holds 1,000 items by default.</li>
       <li>After a rotation, a cache can return the old password until its TTL ends, and logins fail.</li>
       <li>To fix a stale cache, lower the TTL, or request <code>versionStage=AWSCURRENT</code> again after an authentication error.</li>
       <li>AWS recommends Secrets Manager, not Lambda environment variables, for database credentials.</li>
@@ -293,6 +291,7 @@
       <li>Secrets Manager charges $0.40 for each secret each month, plus API calls.</li>
       <li>Choose Parameter Store <code>String</code> in a hierarchy for plain configuration values, with one path for each environment.</li>
       <li>One <code>GetParametersByPath</code> call loads all parameters under a path, for example <code>/myapp/prod/</code>.</li>
+      <li>Secrets Manager versions use staging labels, Parameter Store uses numeric versions and labels, and AppConfig uses configuration versions.</li>
       <li>Choose AppConfig for feature flags, or for configuration that must roll out slowly and roll back on an alarm.</li>
       <li>Parameter Store and Secrets Manager give a new value to all readers at once, with no gradual rollout and no automatic rollback.</li>
       <li>The maximum value size is 64 KB in Secrets Manager, and 4 KB (Standard) or 8 KB (Advanced) in Parameter Store.</li>
@@ -482,7 +481,6 @@
   <div class="remember">
     <h3>Remember</h3>
     <ul>
-      <li>An AppConfig application is a namespace for one application. Example: "checkout-service".</li>
       <li>An AppConfig <strong>environment</strong> is a deployment target, such as "beta" or "prod", and holds the CloudWatch alarms for rollback.</li>
       <li>A configuration profile tells AppConfig the data location, the type (feature flags or freeform), and the validators.</li>
       <li>A deployment strategy tells AppConfig how fast to release new data and how long to watch alarms (the bake time).</li>
@@ -575,8 +573,7 @@
     <ul>
       <li>"Roll back a bad configuration automatically when the error rate rises" → CloudWatch alarm on the environment plus a strategy with bake time.</li>
       <li>"Release the change at once in a test environment" → <code>AppConfig.AllAtOnce</code>.</li>
-      <li>"Gradual configuration change with no new code deployment" → AppConfig, not a Lambda alias or CodeDeploy. AppConfig changes only the configuration data that running code reads.</li>
-      <li>"Lambda alias or CodeDeploy for a configuration change" → wrong choice. A Lambda alias and CodeDeploy shift traffic between versions of code.</li>
+      <li>"Gradual configuration change with no new code deployment" → AppConfig, not a Lambda alias or CodeDeploy. AppConfig changes only configuration data; a Lambda alias and CodeDeploy shift traffic between versions of code.</li>
     </ul>
   </div>
   <h3 class="explain">Explanation</h3>
@@ -629,6 +626,7 @@
       <li>Most AWS services use symmetric keys.</li>
       <li>Choose a symmetric key unless you have a reason for an asymmetric key.</li>
       <li>An asymmetric key (RSA, ECC) has a private key that stays in KMS and a public key that you can download.</li>
+      <li>An asymmetric key signs and verifies, or encrypts with the public key and decrypts with the private key.</li>
       <li>Choose an asymmetric key when a party outside AWS must encrypt or verify a signature with no call to KMS.</li>
       <li>A KMS <strong>alias</strong> is a name for a key. Example: <code>alias/orders</code>.</li>
       <li><code>UpdateAlias</code> points an alias to a different key, and code that uses the alias does not change.</li>
@@ -703,9 +701,9 @@
       <li>CloudTrail logs the encryption context in plaintext, so do not put secrets in the encryption context.</li>
       <li>The <code>kms:EncryptionContext:&lt;key&gt;</code> condition allows decryption only for one tenant or one resource.</li>
       <li>KMS cryptographic operations on symmetric keys share one request quota for each account and Region.</li>
-      <li>The KMS request quota is 100,000 per second in us-east-1, us-west-2, and eu-west-1.</li>
-      <li>The KMS request quota is 20,000 per second in us-east-2, eu-central-1, ap-northeast-1, and some other Regions.</li>
-      <li>The KMS request quota is 10,000 per second in all other Regions.</li>
+      <li>The KMS symmetric cryptographic quota is 100,000 requests per second in us-east-1, us-west-2, and eu-west-1.</li>
+      <li>The KMS symmetric cryptographic quota is 20,000 requests per second in us-east-2, eu-central-1, ap-northeast-1, and some other Regions.</li>
+      <li>The KMS symmetric cryptographic quota is 10,000 requests per second in all other Regions.</li>
       <li>KMS calls that AWS services make for you, for example S3 SSE-KMS, count toward your quota.</li>
       <li>Too many KMS calls cause <code>ThrottlingException</code>.</li>
       <li>To fix KMS throttling, reuse data keys with data key caching, use S3 Bucket Keys, or request a quota increase.</li>
@@ -768,7 +766,7 @@
   <div class="remember">
     <h3>Remember</h3>
     <ul>
-      <li>Automatic rotation of a symmetric customer managed key is optional and off by default.</li>
+      <li>Automatic rotation of a symmetric customer managed key with KMS key material is optional and off by default.</li>
       <li><code>EnableKeyRotation</code> turns on automatic rotation of a KMS key.</li>
       <li>The automatic rotation period is 90 to 2,560 days, default 365 days. Older study material says rotation is annual only.</li>
       <li><code>DisableKeyRotation</code> turns off automatic rotation.</li>
@@ -852,7 +850,6 @@
       <li>Use a grant for temporary access with no change to the key policy or IAM policies.</li>
       <li>KMS grants do not expire on their own.</li>
       <li>Delete a KMS grant with <code>RetireGrant</code> or <code>RevokeGrant</code>.</li>
-      <li>The retiring principal retires a grant when it finishes the task.</li>
       <li>A key administrator usually revokes a grant to take access away.</li>
       <li>A new grant can take seconds to minutes to take effect, because KMS is eventually consistent.</li>
       <li>To use a new grant at once, pass the grant token from <code>CreateGrant</code> in the call.</li>
