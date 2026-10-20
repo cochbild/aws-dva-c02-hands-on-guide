@@ -740,8 +740,8 @@
       <li>For a guaranteed record, write to a data store such as DynamoDB from a workflow step, or use Standard.</li>
       <li>Use a log group name that starts with <code>/aws/vendedlogs/states</code>.</li>
       <li>The CloudWatch Logs resource policy has a 5,120-character limit. Many log groups can fill the policy.</li>
-      <li>When the resource policy is near its limit, CloudWatch Logs automatically allows log groups whose names start with <code>/aws/vendedlogs/</code>.</li>
-      <li>A full resource policy blocks logging to a new log group whose name does not start with <code>/aws/vendedlogs/</code>.</li>
+      <li>When the CloudWatch Logs resource policy is near its size limit, CloudWatch Logs automatically allows log groups whose names start with <code>/aws/vendedlogs/</code>.</li>
+      <li>A full CloudWatch Logs resource policy blocks logging to a new log group whose name does not start with <code>/aws/vendedlogs/</code>.</li>
       <li>To use X-Ray, turn on tracing on the state machine.</li>
       <li>X-Ray tracing needs <code>xray:PutTraceSegments</code>, <code>xray:PutTelemetryRecords</code>, <code>xray:GetSamplingRules</code>, and <code>xray:GetSamplingTargets</code> in the execution role.</li>
       <li>X-Ray does not trace Distributed Map child executions. Use the Map Run details or CloudWatch Logs.</li>
