@@ -187,6 +187,7 @@
       <li><code>ResultPath: "$.validation"</code> keeps the input and adds the result under <code>validation</code>.</li>
       <li><code>ResultPath: null</code> discards the result. The output is the original input.</li>
       <li><code>$$</code> is the <strong>Context object</strong>: data about the execution, not the state input. Example: <code>$$.Task.Token</code>.</li>
+      <li>In a Map state, <code>$$.Map.Item.Value</code> is the current item and <code>$$.Map.Item.Index</code> is its position.</li>
       <li>The optimized <code>lambda:invoke</code> integration returns invoke metadata. The function output is in <code>Payload</code>.</li>
       <li>To pass only the Lambda function output, select <code>$.Payload</code> with <code>ResultSelector</code> or <code>OutputPath</code>.</li>
       <li><strong>Intrinsic functions</strong> do small data operations without a Lambda function. Examples: <code>States.Format</code>, <code>States.UUID</code>, <code>States.MathAdd</code>.</li>
@@ -202,7 +203,7 @@
       <li>A variable is available to all later states. State output goes only to the next state.</li>
       <li>Variables work in JSONPath and JSONata states. In JSONPath, you cannot use a variable in <code>ResultPath</code>.</li>
       <li>A value that a state assigns is available from the next state. The assigning state still sees the old value.</li>
-      <li>A variable that a Parallel branch or Map iteration assigns stops existing when that state completes.</li>
+      <li>Parallel branches and Inline Map iterations can read outer variables, but a variable that a branch assigns stops existing when that state completes.</li>
       <li>Distributed Map cannot read outer variables. Pass the value to each item with <code>ItemSelector</code>.</li>
       <li>Variable limits: 256 KiB for one variable, 256 KiB for one <code>Assign</code> field, 10 MiB for one execution.</li>
       <li>Input or output of a task, state, or execution has a hard limit of 256 KiB.</li>
@@ -270,7 +271,7 @@
   <div class="remember">
     <h3>Remember</h3>
     <ul>
-      <li>A <strong>Standard</strong> workflow runs for at most 1 year. An <strong>Express</strong> workflow runs for at most 5 minutes.</li>
+      <li>A <strong>Standard</strong> workflow runs for at most 1 year. An Express workflow runs for at most 5 minutes.</li>
       <li>Standard is exactly-once. A Standard step runs again only if you configure <code>Retry</code>.</li>
       <li>Asynchronous Express is at-least-once, so a step can run more than one time.</li>
       <li>Synchronous Express is at-most-once: a step runs one time or not at all.</li>
@@ -739,7 +740,8 @@
       <li>For a guaranteed record, write to a data store such as DynamoDB from a workflow step, or use Standard.</li>
       <li>Use a log group name that starts with <code>/aws/vendedlogs/states</code>.</li>
       <li>The CloudWatch Logs resource policy has a 5,120-character limit. Many log groups can fill the policy.</li>
-      <li>A full CloudWatch Logs resource policy stops logging to a new log group without the <code>/aws/vendedlogs/</code> prefix.</li>
+      <li>When the resource policy is near its limit, CloudWatch Logs automatically allows log groups whose names start with <code>/aws/vendedlogs/</code>.</li>
+      <li>A full resource policy blocks logging to a new log group whose name does not start with <code>/aws/vendedlogs/</code>.</li>
       <li>To use X-Ray, turn on tracing on the state machine.</li>
       <li>X-Ray tracing needs <code>xray:PutTraceSegments</code>, <code>xray:PutTelemetryRecords</code>, <code>xray:GetSamplingRules</code>, and <code>xray:GetSamplingTargets</code> in the execution role.</li>
       <li>X-Ray does not trace Distributed Map child executions. Use the Map Run details or CloudWatch Logs.</li>
@@ -815,7 +817,6 @@
       <li>SAM <code>Events</code> starts the state machine from sources such as an API or a schedule.</li>
       <li>SAM <code>AutoPublishAlias</code> publishes a version and updates the alias. <code>DeploymentPreference</code> sets a gradual deployment.</li>
       <li><code>TestState</code> runs one state definition without a create or update of a state machine.</li>
-      <li><code>TestState</code> can also take a full definition and test the state named in <code>stateName</code>.</li>
       <li>Inspection level <code>INFO</code> (default) shows the output or the error.</li>
       <li>Inspection level <code>DEBUG</code> also shows each data processing step, such as <code>afterInputPath</code> and <code>afterResultPath</code>.</li>
       <li>Inspection level <code>TRACE</code> shows the raw HTTP request and response, for HTTP Tasks only.</li>
