@@ -37,6 +37,41 @@
 
 <section id="iam-policy-types">
   <h2>Policy types</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>AWS managed policies, customer managed policies, inline policies, and resource-based policies grant permissions.</li>
+      <li>Permissions boundaries, SCPs, RCPs, and session policies only limit permissions. They never grant permissions.</li>
+      <li>AWS creates and updates an <strong>AWS managed policy</strong>. You cannot change its permissions.</li>
+      <li>You create and change a <strong>customer managed policy</strong>. A change applies to every identity that has the policy.</li>
+      <li>IAM keeps earlier versions of a customer managed policy, so you can roll back.</li>
+      <li>An <strong>inline policy</strong> has a strict one-to-one relationship with one user, group, or role.</li>
+      <li>IAM deletes an inline policy when you delete its identity.</li>
+      <li>A <strong>resource-based policy</strong> has a <code>Principal</code> element that names who gets access to the resource.</li>
+      <li>A role trust policy is a resource-based policy on the role.</li>
+      <li>A <strong>permissions boundary</strong> attaches to one IAM user or role, not to a group.</li>
+      <li>A permissions boundary sets the maximum permissions that identity-based policies can give.</li>
+      <li>An <strong>SCP</strong> sets the maximum permissions for an account or an OU in AWS Organizations.</li>
+      <li>An SCP needs an organization with all features turned on.</li>
+      <li>An SCP affects every user and role in a member account, including the member account root user.</li>
+      <li>An <strong>RCP</strong> sets the maximum permissions on resources, also for principals from outside your organization.</li>
+      <li>An SCP cannot limit principals from outside your organization. Use an RCP for them.</li>
+      <li>A <strong>session policy</strong> is passed in <code>AssumeRole</code> (or a similar API) and gives one session fewer permissions than the role.</li>
+      <li>To let developers create roles safely, allow <code>iam:CreateRole</code> only when <code>iam:PermissionsBoundary</code> equals the approved boundary ARN.</li>
+      <li>Without the <code>iam:PermissionsBoundary</code> condition, a developer can create an <code>AdministratorAccess</code> role and escalate privileges.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Same permissions on many roles, change in one place" → customer managed policy.</li>
+      <li>"Permissions must be deleted with the user" or "strict one-to-one" → inline policy. IAM deletes an inline policy together with its identity.</li>
+      <li>"Developers create roles, but the roles must never exceed X" → permissions boundary. It caps each role that has it and does not affect other administrators.</li>
+      <li>"No identity in any member account can do X, even an administrator" → SCP. An SCP limits every user and role in the account, also the root user.</li>
+      <li>"Restrict one session to fewer permissions than the role" → session policy. It applies only to the session that passes it.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Policies that grant permissions</h3>
   <table>
     <tr><th>Type</th><th>Attached to</th><th>Key points</th></tr>
@@ -59,21 +94,43 @@
     <li>A boundary is a common way to let developers create roles safely. Allow <code>iam:CreateRole</code> only with the <code>iam:PermissionsBoundary</code> condition key set to the approved boundary ARN. Without this condition, a developer can create a role with <code>AdministratorAccess</code> and use it to get more access than the developer has (privilege escalation).</li>
     <li>An SCP affects every user and role in the account, including the member account root user. A boundary affects only the user or role that has it.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Same permissions on many roles, change in one place" → customer managed policy.</li>
-      <li>"Permissions must be deleted with the user" or "strict one-to-one" → inline policy, because IAM deletes an inline policy together with its identity.</li>
-      <li>"Developers create roles, but the roles must never exceed X" → permissions boundary, because it caps each role that has it and does not affect other administrators.</li>
-      <li>"No identity in any member account can do X, even an administrator" → SCP, because an SCP limits every user and role in the account, also the root user.</li>
-      <li>"Restrict one session to fewer permissions than the role" → session policy, because it applies only to the session that passes it.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html">Managed policies and inline policies</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html">Permissions boundaries</a>, <a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html">Service control policies</a>, <a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_rcps.html">Resource control policies (supported services)</a>.</p>
 </section>
 
 <section id="iam-policy-evaluation">
   <h2>Policy evaluation logic</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>By default, AWS denies every request. This default is an <strong>implicit deny</strong>.</li>
+      <li>The root user is the exception to the implicit deny. The root user has full access by default.</li>
+      <li>An <strong>explicit deny</strong> always wins over any allow, in any policy type.</li>
+      <li>If an RCP, an SCP, a boundary, or a session policy does not allow the action, the result is Deny.</li>
+      <li>In one account, an allow in the identity-based policy or the resource-based policy is enough for most services.</li>
+      <li>A role trust policy and a KMS key policy must allow the principal. An identity-based policy alone is not enough.</li>
+      <li>A KMS key policy that names the account root ARN lets identity-based policies in that account give access to the key.</li>
+      <li>Across accounts, the identity-based policy and the resource-based policy must both allow the action.</li>
+      <li>With a boundary, a principal can do only the actions that both the identity-based policy and the boundary allow.</li>
+      <li>With an SCP and a boundary, the identity-based policy, the boundary, and the SCP must all allow the action.</li>
+      <li>A same-account resource-based policy that names a <strong>role ARN</strong> is still limited by the boundary and the session policy.</li>
+      <li>A same-account resource-based policy that names a user ARN or a role session ARN ignores an implicit deny in a boundary or session policy.</li>
+      <li>SCPs do not affect users or roles in the management account. Keep workloads out of the management account.</li>
+      <li>SCPs do not affect service-linked roles.</li>
+      <li>An SCP does not limit a user from outside the organization. Use an RCP for that case.</li>
+      <li>By default, AWS attaches the <code>FullAWSAccess</code> SCP to every OU and account, so the default SCP limits nothing.</li>
+      <li>If you remove <code>FullAWSAccess</code> and add no other allow, all actions in member accounts fail.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"User has AdministratorAccess but still gets AccessDenied" → an explicit deny somewhere, an SCP, or a boundary.</li>
+      <li>"Add an allow to fix it" when an explicit deny exists → wrong. Remove or narrow the deny.</li>
+      <li>"Identity policy allows DynamoDB, boundary allows only S3" → DynamoDB calls fail. Both policies must allow the action.</li>
+      <li>"Same-account bucket policy names the role; role has no S3 permissions; no boundary" → access works. In one account, an allow in the resource-based policy is enough.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Order of evaluation (one account)</h3>
   <ol>
     <li>By default, AWS denies every request. This is an implicit deny: no policy allows the request. The root user is the exception, because it has full access by default.</li>
@@ -101,7 +158,9 @@
     <tr><td>Role session ARN (<code>arn:aws:sts::…:assumed-role/…</code>)</td><td>No</td></tr>
     <tr><td>Any principal</td><td>An explicit deny in any policy still denies the request</td></tr>
   </table>
-  <p>Why the role ARN row differs: a request never comes from the role itself. It comes from a role session. A policy that names the role ARN gives access through the role, so the boundary and the session policy still limit the session. A policy that names the user ARN or the session ARN gives access directly to the caller.</p>
+  <p>Why the role ARN row differs: a request never comes from the role itself. It comes from a role session.</p>
+  <p>A policy that names the role ARN gives access through the role, so the boundary and the session policy still limit the session.</p>
+  <p>A policy that names the user ARN or the session ARN gives access directly to the caller.</p>
   <h3>SCP facts</h3>
   <ul>
     <li>SCPs do not affect users or roles in the management account. Keep workloads out of the management account for this reason.</li>
@@ -109,20 +168,45 @@
     <li>SCPs limit only users and roles in your member accounts. If a bucket policy allows a user from an account outside the organization, your SCP does not limit that user. Use an RCP for that case.</li>
     <li>By default, AWS attaches the <code>FullAWSAccess</code> SCP to every OU and account. It allows all actions, so the default SCP limits nothing. If you remove <code>FullAWSAccess</code> and add no other allow, all actions in member accounts fail.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"User has AdministratorAccess but still gets AccessDenied" → an explicit deny somewhere, an SCP, or a boundary.</li>
-      <li>"Add an allow to fix it" when an explicit deny exists → wrong. Remove or narrow the deny.</li>
-      <li>"Identity policy allows DynamoDB, boundary allows only S3" → DynamoDB calls fail, because both policies must allow the action.</li>
-      <li>"Same-account bucket policy names the role; role has no S3 permissions; no boundary" → access works, because in one account an allow in the resource-based policy is enough.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic_policy-eval-denyallow.html">How AWS evaluates requests to allow or deny</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html">Permissions boundaries (effective permissions)</a>, <a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html">SCP effects on permissions</a>, <a href="https://docs.aws.amazon.com/kms/latest/developerguide/key-policy-default.html">Default KMS key policy (account principal)</a>.</p>
 </section>
 
 <section id="iam-policy-elements">
   <h2>Policy elements and conditions</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Set <code>Version</code> to <code>"2012-10-17"</code>. Without it, policy variables such as <code>${aws:username}</code> are literal text.</li>
+      <li>The <code>Principal</code> element exists only in resource-based policies and trust policies.</li>
+      <li><code>NotAction</code> matches every action except the listed ones. Use it mostly with <code>Deny</code>.</li>
+      <li><code>NotAction</code> with <code>Allow</code> allows all other actions, also new ones.</li>
+      <li>S3 ARNs have no Region and no account. Example: <code>arn:aws:s3:::my-bucket/*</code>.</li>
+      <li>A <code>Condition</code> has an operator, a key, and a value.</li>
+      <li>An operator with <code>IfExists</code> also matches when the request does not include the key.</li>
+      <li>To require HTTPS, deny requests where <code>aws:SecureTransport</code> is <code>false</code>.</li>
+      <li>To require MFA in a Deny, use <code>BoolIfExists</code> on <code>aws:MultiFactorAuthPresent</code> with <code>false</code>.</li>
+      <li>Plain <code>Bool</code> on <code>aws:MultiFactorAuthPresent</code> does not deny requests made with long-term access keys, because the key is absent.</li>
+      <li><code>aws:SourceIp</code> is not present when a request comes through a VPC endpoint. Use <code>aws:VpcSourceIp</code> there.</li>
+      <li>An <code>Allow</code> with an <code>IpAddress</code> condition does not match a request through a VPC endpoint, so AWS denies it.</li>
+      <li><code>aws:PrincipalTag</code> is a tag on the caller. <code>aws:ResourceTag</code> is a tag on the resource.</li>
+      <li><code>aws:RequestTag</code> and <code>aws:TagKeys</code> are the tags that the request tries to add.</li>
+      <li>Use <code>aws:SourceArn</code> and <code>aws:SourceAccount</code> to protect against the <strong>confused deputy</strong> problem with AWS service principals.</li>
+      <li>Use <code>aws:PrincipalOrgID</code> in a resource-based policy to allow every principal in your organization without account IDs.</li>
+      <li>Use <code>aws:CalledVia</code> to allow an action only when a named service, for example CloudFormation, makes it.</li>
+      <li>Use policy variables in the resource part of an ARN and in string or ARN conditions.</li>
+      <li>A <code>${aws:username}</code> prefix in the <code>Resource</code> gives each IAM user a private S3 prefix with one policy.</li>
+      <li><code>aws:username</code> exists only for IAM users. A statement with it gives roles and Identity Center users no access.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Deny all requests that do not use HTTPS" → bucket policy Deny with <code>aws:SecureTransport</code> = <code>false</code>.</li>
+      <li>"One policy for all users, each user only their own folder" → <code>${aws:username}</code> with <code>Version 2012-10-17</code>. IAM replaces the variable with the name of the user who makes the request.</li>
+      <li>"Require MFA, also for CLI calls made with access keys" → Deny with <code>BoolIfExists</code> on <code>aws:MultiFactorAuthPresent</code> = <code>false</code>. Requests made with long-term keys do not include the key, and only <code>IfExists</code> matches them.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Elements</h3>
   <table>
     <tr><th>Element</th><th>Meaning</th></tr>
@@ -150,19 +234,42 @@
     <li>Example: <code>"Resource": "arn:aws:s3:::my-bucket/home/${aws:username}/*"</code> gives each IAM user a private prefix with one policy.</li>
     <li><code>aws:username</code> exists only for IAM users. It is not present for roles, the root user, or IAM Identity Center users. For those principals, a <code>Resource</code> with this variable matches no resource, so the statement gives them no access.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Deny all requests that do not use HTTPS" → bucket policy Deny with <code>aws:SecureTransport</code> = <code>false</code>.</li>
-      <li>"One policy for all users, each user only their own folder" → <code>${aws:username}</code> with <code>Version 2012-10-17</code>, because IAM replaces the variable with the name of the user who makes the request.</li>
-      <li>"Require MFA, also for CLI calls made with access keys" → Deny with <code>BoolIfExists</code> on <code>aws:MultiFactorAuthPresent</code> = <code>false</code>, because requests made with long-term keys do not include the key, and only <code>IfExists</code> matches them.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html">Global condition context keys</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_variables.html">Policy variables</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_notaction.html">NotAction</a>.</p>
 </section>
 
 <section id="iam-roles-trust">
   <h2>Roles and trust policies</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>A role <strong>trust policy</strong> says who can assume the role.</li>
+      <li>A role permissions policy says what the role can do.</li>
+      <li>A trust policy for a service names a service principal, for example <code>lambda.amazonaws.com</code>, with <code>sts:AssumeRole</code>.</li>
+      <li>A role has no long-term credentials. A principal that assumes the role gets temporary credentials.</li>
+      <li>A principal that assumes a role gives up its own permissions for that session.</li>
+      <li>You create a <strong>service role</strong>, and you can edit its permissions.</li>
+      <li>A <strong>service-linked role</strong> is defined and owned by the service. You can view its permissions but not edit them.</li>
+      <li>A service-linked role has the path <code>/aws-service-role/</code>. Usually only the linked service can assume it.</li>
+      <li>To delete a service-linked role, delete the related resources first.</li>
+      <li>SCPs limit service roles. SCPs do not limit service-linked roles.</li>
+      <li>To give a role to a service, the user needs <strong><code>iam:PassRole</code></strong> on that role.</li>
+      <li>Without <code>iam:PassRole</code>, the create call fails with "not authorized to perform: iam:PassRole".</li>
+      <li>Limit <code>iam:PassRole</code> with role ARNs in <code>Resource</code> and with the <code>iam:PassedToService</code> condition key.</li>
+      <li><code>iam:PassRole</code> without limits lets the user pass any role to any service.</li>
+      <li><code>iam:PassRole</code> is a permission, not an API call. CloudTrail has no <code>PassRole</code> event.</li>
+      <li>To audit a passed role, look at the CloudTrail event that created the resource, for example <code>CreateFunction</code>.</li>
+      <li>You can pass a role only to a service in the same account. A cross-account service must assume a role instead.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Not authorized to perform iam:PassRole" → add <code>iam:PassRole</code> for that role ARN to the user, not to the role. AWS checks the user who configures the service.</li>
+      <li>"Service cannot assume the role" → fix the trust policy (service principal), not the permissions policy. The trust policy controls who can assume the role.</li>
+      <li>"Change permissions of AWSServiceRoleFor…" → not possible. The service owns them.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Key facts</h3>
   <ul>
     <li>A role has two policy kinds. The <strong>trust policy</strong> says who can assume the role. The <strong>permissions policies</strong> say what the role can do.</li>
@@ -183,24 +290,63 @@
   </table>
   <h3><code>iam:PassRole</code></h3>
   <ul>
-    <li>To give a role to a service (Lambda function, EC2 instance, ECS task, CloudFormation stack), the user needs <code>iam:PassRole</code> on that role. This check stops a user from giving a powerful role to a service and then using the service to do actions that the user cannot do. Without the permission, the create call fails with "not authorized to perform: iam:PassRole".</li>
+    <li>To give a role to a service (Lambda function, EC2 instance, ECS task, CloudFormation stack), the user needs <code>iam:PassRole</code> on that role. This check stops a user from giving a powerful role to a service and then using the service to do actions that the user cannot do.</li>
+    <li>Without the permission, the create call fails with "not authorized to perform: iam:PassRole".</li>
     <li>Limit it with the <code>Resource</code> element (the role ARNs that the user can pass) and the <code>iam:PassedToService</code> condition key (the service that can receive the role, for example <code>lambda.amazonaws.com</code>). Without these limits, the user can pass any role to any service.</li>
     <li><code>PassRole</code> is a permission, not an API call. CloudTrail has no <code>PassRole</code> event. Look at the event that created the resource, for example <code>CreateFunction</code>.</li>
     <li>You can pass a role only to a service in the same account. A cross-account service must assume a role in your account instead.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Not authorized to perform iam:PassRole" → add <code>iam:PassRole</code> for that role ARN to the user, not to the role, because AWS checks the user who configures the service.</li>
-      <li>"Service cannot assume the role" → fix the trust policy (service principal), not the permissions policy, because the trust policy controls who can assume the role.</li>
-      <li>"Change permissions of AWSServiceRoleFor…" → not possible. The service owns them.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html">Pass a role to a service</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/using-service-linked-roles.html">Service-linked roles</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies-cross-account-resource-access.html">Roles give up original permissions</a>.</p>
 </section>
 
 <section id="iam-sts-assume-role">
   <h2>STS operations</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>An IAM user or a role session calls <code>AssumeRole</code>, in the same account or cross-account.</li>
+      <li><code>AssumeRole</code> supports MFA, session policies, and session tags.</li>
+      <li><code>AssumeRoleWithWebIdentity</code> exchanges an OIDC token (JWT) for credentials. The caller needs no AWS credentials.</li>
+      <li>Cognito identity pools use <code>AssumeRoleWithWebIdentity</code>.</li>
+      <li><code>AssumeRoleWithSAML</code> exchanges a SAML assertion from a known IdP for credentials. Use it for corporate federation.</li>
+      <li><code>AssumeRoleWithWebIdentity</code> and <code>AssumeRoleWithSAML</code> do not support MFA.</li>
+      <li>The main use of <code>GetSessionToken</code> is MFA for API and CLI calls.</li>
+      <li><code>GetSessionToken</code> credentials cannot call IAM APIs unless MFA was included.</li>
+      <li>You cannot pass a session policy to <code>GetSessionToken</code>.</li>
+      <li>Use <code>GetFederationToken</code> for a custom identity broker that gets AWS credentials for its users.</li>
+      <li>A <code>GetFederationToken</code> session can do only what both the IAM user policies and the session policy allow.</li>
+      <li>A <code>GetFederationToken</code> session with no session policy has no permissions.</li>
+      <li><code>GetFederationToken</code> credentials cannot call IAM APIs with the CLI or API.</li>
+      <li><code>GetCallerIdentity</code> returns the account, user ID, and ARN. It needs no permission.</li>
+      <li>An explicit deny does not block <code>GetCallerIdentity</code>.</li>
+      <li>The three <code>AssumeRole*</code> APIs allow 15 minutes to the role maximum session duration. The default is 1 hour.</li>
+      <li>A role <strong>maximum session duration</strong> is 1 hour by default and can be up to 12 hours.</li>
+      <li><code>DurationSeconds</code> for <code>AssumeRole</code> is 900 seconds to the role maximum. The default is 3,600 seconds.</li>
+      <li>For an IAM user, <code>GetSessionToken</code> and <code>GetFederationToken</code> last 15 minutes to 36 hours. The default is 12 hours.</li>
+      <li>For the root user, <code>GetSessionToken</code> and <code>GetFederationToken</code> last 15 minutes to 1 hour. The default is 1 hour.</li>
+      <li><strong>Role chaining</strong> (a role session assumes another role) has a maximum of 1 hour.</li>
+      <li>In role chaining, a <code>DurationSeconds</code> above 1 hour makes the call fail.</li>
+      <li>A session can have one inline session policy and up to 10 managed policy ARNs.</li>
+      <li>All session policies together can have up to 2,048 characters of plaintext.</li>
+      <li>A session can have up to 50 session tags. Policies read session tags as <code>aws:PrincipalTag</code>.</li>
+      <li>Temporary credentials have three parts: access key ID, secret access key, and session token.</li>
+      <li>A request without the session token fails, for example with <code>InvalidClientTokenId</code>. The error name varies by service.</li>
+      <li>For MFA with <code>AssumeRole</code> or <code>GetSessionToken</code>, pass <code>SerialNumber</code> and <code>TokenCode</code>.</li>
+      <li>Credentials from an MFA call make requests with <code>aws:MultiFactorAuthPresent</code> = <code>true</code>.</li>
+      <li>The trust policy checks the <code>ExternalId</code> parameter of <code>AssumeRole</code> with <code>sts:ExternalId</code>.</li>
+      <li><code>RoleSessionName</code> shows in the session ARN and in CloudTrail. Use it to identify who used the role.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Which identity does my code use?" → <code>aws sts get-caller-identity</code>.</li>
+      <li>"Session of 4 hours fails" → increase the role maximum session duration (up to 12 hours). <code>DurationSeconds</code> cannot exceed it, and the default is 1 hour.</li>
+      <li>"Lambda function assumes another role for 2 hours and fails" → role chaining, 1-hour maximum. The Lambda credentials are already a role session.</li>
+      <li>"IAM user with access keys must use MFA on the CLI" → <code>GetSessionToken</code> with the MFA code. The temporary credentials that it returns count as authenticated with MFA.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Comparison</h3>
   <table>
     <tr><th>API</th><th>Who calls</th><th>Duration (min | max | default)</th><th>MFA</th><th>Notes</th></tr>
@@ -222,25 +368,51 @@
   </table>
   <h3>Key facts</h3>
   <ul>
-    <li>Temporary credentials have three parts: access key ID, secret access key, and session token. The application must send all three. Without the session token, AWS cannot validate the credentials and rejects the request, for example with <code>InvalidClientTokenId</code> ("The security token included in the request is invalid"). The error name varies by service.</li>
+    <li>Temporary credentials have three parts: access key ID, secret access key, and session token. The application must send all three.</li>
+    <li>Without the session token, AWS cannot validate the credentials and rejects the request, for example with <code>InvalidClientTokenId</code> ("The security token included in the request is invalid"). The error name varies by service.</li>
     <li>For MFA with <code>AssumeRole</code> or <code>GetSessionToken</code>, pass <code>SerialNumber</code> and <code>TokenCode</code>. Requests made with the returned credentials then have <code>aws:MultiFactorAuthPresent</code> = <code>true</code>.</li>
     <li><code>ExternalId</code> is a parameter of <code>AssumeRole</code>. The trust policy checks it with <code>sts:ExternalId</code>. Third-party vendors use it to prevent the confused deputy problem (see the cross-account topic).</li>
     <li><code>RoleSessionName</code> shows in the session ARN and in CloudTrail. Use it to identify who used the role.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Which identity does my code use?" → <code>aws sts get-caller-identity</code>.</li>
-      <li>"Session of 4 hours fails" → increase the role maximum session duration (up to 12 hours), because <code>DurationSeconds</code> cannot exceed it and the default is 1 hour.</li>
-      <li>"Lambda function assumes another role for 2 hours and fails" → role chaining, 1-hour maximum, because the Lambda credentials are already a role session.</li>
-      <li>"IAM user with access keys must use MFA on the CLI" → <code>GetSessionToken</code> with the MFA code, because the temporary credentials that it returns count as authenticated with MFA.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_sts-comparison.html">Compare AWS STS credentials</a>, <a href="https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html">AssumeRole API</a>, <a href="https://docs.aws.amazon.com/IAM/latest/APIReference/API_CreateRole.html">CreateRole (MaxSessionDuration)</a>, <a href="https://docs.aws.amazon.com/STS/latest/APIReference/API_GetFederationToken.html">GetFederationToken (session policy required for permissions)</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_session-tags.html">Session tags</a>.</p>
 </section>
 
 <section id="iam-cross-account">
   <h2>Cross-account access</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Cross-account access uses one of two methods: assume a role in the other account, or a resource-based policy.</li>
+      <li>To assume a cross-account role, the role trust policy names the caller, and the caller identity policy allows <code>sts:AssumeRole</code>.</li>
+      <li>A caller that assumes a role gives up its own permissions while it uses the role.</li>
+      <li>A caller that uses a resource-based policy keeps its own permissions.</li>
+      <li>Use a role when the service has no resource-based policy, or when you need many services.</li>
+      <li>Use a resource-based policy (S3, SQS, SNS, KMS) when you must work in both accounts at the same time, for example to copy data.</li>
+      <li>Across accounts, the identity-based policy and the resource-based policy must both allow the request.</li>
+      <li>The principal <code>arn:aws:iam::111122223333:root</code> means the whole account, not only the root user.</li>
+      <li>A resource policy that names an account still needs identity policies in that account to give the access.</li>
+      <li>An account cannot give its users more than the resource policy allows.</li>
+      <li>Cross-account KMS needs a key policy that allows the other account and a caller identity policy that allows the KMS actions.</li>
+      <li>You cannot change the key policy of an AWS managed key. Share a customer managed key across accounts.</li>
+      <li>Cross-account access works only inside one <strong>partition</strong>: <code>aws</code>, <code>aws-cn</code>, or <code>aws-us-gov</code>.</li>
+      <li>In the <strong>confused deputy</strong> problem, an entity without permission makes a more-privileged entity do the action.</li>
+      <li>For a third-party vendor, the role trust policy names the vendor account and requires <code>sts:ExternalId</code>.</li>
+      <li>The vendor gives each customer a unique external ID. The external ID is not a secret.</li>
+      <li>When a resource policy allows a service principal, add <code>aws:SourceArn</code> and <code>aws:SourceAccount</code> conditions.</li>
+      <li>Without <code>aws:SourceArn</code> and <code>aws:SourceAccount</code>, another account can configure the same service to use your resource.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Read from account B and write to account A in one step" → resource-based policy in B. The caller keeps its own permissions.</li>
+      <li>"Read from account B and write to account A in one step" with an assumed role → fails. The caller loses the write access to account A.</li>
+      <li>"Cross-account role does not work, trust policy is correct" → caller identity policy lacks <code>sts:AssumeRole</code>. Across accounts, both sides must allow the call.</li>
+      <li>"SaaS vendor needs access to many customer accounts" → role with <code>sts:ExternalId</code>. The unique external ID stops one customer from using the vendor to reach another customer's account.</li>
+      <li>"Only my bucket can invoke this function through S3" → <code>aws:SourceArn</code> and <code>aws:SourceAccount</code>. They identify the bucket and account that made S3 call the function.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Two methods</h3>
   <table>
     <tr><th></th><th>Assume a role in the other account</th><th>Resource-based policy names the other account</th></tr>
@@ -259,23 +431,45 @@
   <h3>Confused deputy</h3>
   <p>The confused deputy problem: an entity that has no permission makes a more-privileged entity (the deputy) do the action for it. In AWS, the deputy is a vendor account or an AWS service that you trust.</p>
   <ul>
-    <li><strong>Third party (cross-account)</strong>: the vendor gives you a unique external ID. Your role trust policy names the vendor account and requires <code>sts:ExternalId</code>. Another customer of the vendor can learn your role ARN, but cannot control the external ID that the vendor sends, so the vendor cannot use your role for that customer. The external ID is not a secret.</li>
+    <li><strong>Third party (cross-account)</strong>: the vendor gives you a unique external ID. Your role trust policy names the vendor account and requires <code>sts:ExternalId</code>.</li>
+    <li>Another customer of the vendor can learn your role ARN, but cannot control the external ID that the vendor sends, so the vendor cannot use your role for that customer. The external ID is not a secret.</li>
     <li><strong>AWS service (cross-service)</strong>: when a resource policy allows a service principal (for example <code>s3.amazonaws.com</code> or <code>cloudtrail.amazonaws.com</code>), add <code>aws:SourceArn</code> and <code>aws:SourceAccount</code> conditions. Without them, a user in another account can configure the same service to use your resource, for example to write logs to your bucket.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Read from account B and write to account A in one step" → resource-based policy in B, because the caller keeps its own permissions. With an assumed role, it would lose the write access to account A.</li>
-      <li>"Cross-account role does not work, trust policy is correct" → caller identity policy lacks <code>sts:AssumeRole</code>, because across accounts both sides must allow the call.</li>
-      <li>"SaaS vendor needs access to many customer accounts" → role with <code>sts:ExternalId</code>, because the unique external ID stops one customer from using the vendor to reach another customer's account.</li>
-      <li>"Only my bucket can invoke this function through S3" → <code>aws:SourceArn</code> and <code>aws:SourceAccount</code>, because they identify the bucket and account that made S3 call the function.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic-cross-account.html">Cross-account policy evaluation</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies-cross-account-resource-access.html">Cross account resource access</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/confused-deputy.html">The confused deputy problem</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user_externalid.html">External IDs for third parties</a>.</p>
 </section>
 
 <section id="iam-credential-chain">
   <h2>Programmatic access and the credential provider chain</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>The SDK <strong>credential provider chain</strong> checks sources in order and stops at the first source that has credentials.</li>
+      <li>The SDK refreshes temporary credentials automatically when they expire.</li>
+      <li>Credentials that you pass in code come first in the chain.</li>
+      <li>Environment variables come second: <code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_SESSION_TOKEN</code>.</li>
+      <li>Profile settings come after environment variables: assume role, web identity, Identity Center, credentials and config files, custom process.</li>
+      <li>Container credentials (ECS task role, EKS Pod Identity) come near the end of the chain.</li>
+      <li>EC2 instance profile credentials from IMDS come last in the chain.</li>
+      <li>The SDK uses environment variables before the shared credentials file.</li>
+      <li>On Lambda, EC2, ECS, and EKS, use the role of the compute service. Do not put access keys in code or environment variables.</li>
+      <li>On a developer computer, use <code>aws configure sso</code> one time, then <code>aws sso login</code>.</li>
+      <li>For CI/CD outside AWS, for example GitHub Actions, use OIDC federation to an IAM role.</li>
+      <li>For servers outside AWS, use <strong>IAM Roles Anywhere</strong> with an X.509 certificate from your CA.</li>
+      <li>IAM user long-term access keys are the last choice. Rotate them. Never commit them.</li>
+      <li>The SDKs and the CLI sign AWS API requests for you with <strong>Signature Version 4</strong> (SigV4).</li>
+      <li>A request must reach AWS within five minutes of its time stamp.</li>
+      <li>AWS rejects a request that has a wrong signature.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Code uses old keys, the credentials file has new keys" → old keys are still in environment variables. The SDK checks environment variables before the credentials file.</li>
+      <li>"Remove hardcoded keys from an app on EC2, fewest changes" → attach an instance profile and create the client with no explicit credentials. The default chain then finds the instance profile credentials.</li>
+      <li>"Developers need CLI access with no long-term keys" → IAM Identity Center with <code>aws sso login</code>.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>How the chain works</h3>
   <ul>
     <li>The SDK checks a list of sources in order. It stops at the first source that has credentials.</li>
@@ -303,21 +497,55 @@
   <h3>Signature Version 4</h3>
   <ul>
     <li>AWS API requests are signed with Signature Version 4 (SigV4). The signature uses your credentials, so AWS can confirm who sent the request and that nobody changed it. The SDKs and the CLI sign for you.</li>
-    <li>If you sign requests yourself and the signature is wrong, AWS rejects the request. A request must also reach AWS within five minutes of its time stamp.</li>
+    <li>If you sign requests yourself and the signature is wrong, AWS rejects the request.</li>
+    <li>A request must also reach AWS within five minutes of its time stamp.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Code uses old keys, the credentials file has new keys" → old keys are still in environment variables, because the SDK checks environment variables before the credentials file.</li>
-      <li>"Remove hardcoded keys from an app on EC2, fewest changes" → attach an instance profile and create the client with no explicit credentials, because the default chain then finds the instance profile credentials.</li>
-      <li>"Developers need CLI access with no long-term keys" → IAM Identity Center with <code>aws sso login</code>.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/sdkref/latest/guide/standardized-credentials.html">Standardized credential providers</a>, <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-authentication.html">AWS CLI credential precedence</a>, <a href="https://docs.aws.amazon.com/boto3/latest/guide/credentials.html">Boto3 credential order</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html">Signature Version 4 (five-minute window)</a>, <a href="https://docs.aws.amazon.com/rolesanywhere/latest/userguide/introduction.html">IAM Roles Anywhere</a>.</p>
 </section>
 
 <section id="iam-compute-roles">
   <h2>Roles for compute</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>An EC2 <strong>instance profile</strong> is a container for exactly one role.</li>
+      <li>EC2 code gets role credentials from IMDS at <code>iam/security-credentials/<em>role-name</em></code>.</li>
+      <li>AWS makes new EC2 role credentials available at least 5 minutes before the old credentials expire.</li>
+      <li>Lambda puts the execution role credentials in the reserved variables <code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_SESSION_TOKEN</code>.</li>
+      <li>An ECS task gets task role credentials from the ECS agent at <code>169.254.170.2</code> through <code>AWS_CONTAINER_CREDENTIALS_RELATIVE_URI</code>.</li>
+      <li>An EKS pod gets credentials from the Pod Identity agent on the node through <code>AWS_CONTAINER_CREDENTIALS_FULL_URI</code>.</li>
+      <li>The Lambda <strong>execution role</strong> controls what the function can call.</li>
+      <li>The Lambda function resource-based policy controls who can invoke the function, for example <code>s3.amazonaws.com</code>.</li>
+      <li>The ECS <strong>task role</strong> controls what the application code can call.</li>
+      <li>The ECS <strong>task execution role</strong> lets the ECS agent pull ECR images, send logs, and get secrets.</li>
+      <li>An ECS task role trusts the service principal <code>ecs-tasks.amazonaws.com</code>.</li>
+      <li>IRSA needs one IAM OIDC provider and one trust policy entry for each EKS cluster.</li>
+      <li>EKS Pod Identity trusts one service principal, <code>pods.eks.amazonaws.com</code>, for all clusters and needs no OIDC provider.</li>
+      <li>Choose EKS Pod Identity when one role must work in many clusters.</li>
+      <li>To get an <strong>IMDSv2</strong> token, send a <code>PUT</code> to <code>/latest/api/token</code>.</li>
+      <li>Send the IMDSv2 token in the <code>X-aws-ec2-metadata-token</code> header.</li>
+      <li>An IMDSv2 token has a TTL of up to 6 hours (21,600 seconds).</li>
+      <li>Set IMDS token use to <code>required</code> to turn off IMDSv1 and protect against SSRF.</li>
+      <li>An SSRF bug can usually send only a simple <code>GET</code>, so IMDS returns <code>401</code> when IMDSv2 is required.</li>
+      <li>The IMDS <code>PUT</code> response hop limit is 1 by default.</li>
+      <li>AMIs that require IMDSv2, for example Amazon Linux 2023, set the hop limit to 2 at launch.</li>
+      <li>A container on an instance adds one hop, so with hop limit 1 the IMDSv2 token does not reach the container.</li>
+      <li>AWS recommends an IMDS hop limit of 2 for containers.</li>
+      <li>The role maximum session duration does not apply to EC2 role credentials. EC2 rotates them automatically.</li>
+      <li>To change EC2 permissions, edit the role policies. The change applies to all instances that use the role.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"ECS task pulls the image but the app gets AccessDenied on DynamoDB" → add the permission to the task role. The task role gives credentials to the application code.</li>
+      <li>"Task fails to pull the image from ECR" → task execution role. The ECS agent uses it to pull images before the code starts.</li>
+      <li>"S3 or EventBridge cannot invoke the function" → function resource-based policy, not the execution role. The resource-based policy controls who can invoke the function.</li>
+      <li>"Same EKS app in many clusters, no trust policy change for each cluster" → EKS Pod Identity. The role trusts one service principal for all clusters.</li>
+      <li>"Protect instance credentials from SSRF" → require IMDSv2. Every <code>GET</code> then needs a token that only a <code>PUT</code> can get, and a plain <code>GET</code> fails with <code>401</code>.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Comparison</h3>
   <table>
     <tr><th>Compute</th><th>Role</th><th>How the code gets credentials</th></tr>
@@ -330,32 +558,58 @@
   <ul>
     <li><strong>Lambda execution role</strong>: what the function can call. <strong>Function resource-based policy</strong>: who can invoke the function (for example <code>s3.amazonaws.com</code> or <code>events.amazonaws.com</code> with <code>lambda:InvokeFunction</code>).</li>
     <li><strong>ECS task role</strong>: what the application code can call. <strong>Task execution role</strong>: what the ECS agent needs to pull images from ECR, send logs to CloudWatch Logs, and get secrets for the task.</li>
-    <li><strong>IRSA</strong>: each cluster has its own OIDC provider URL. You create an IAM OIDC provider for each cluster, and the role trust policy needs an entry for each cluster. <strong>EKS Pod Identity</strong>: the role trusts one service principal, <code>pods.eks.amazonaws.com</code>, for all clusters, and needs no OIDC provider. Choose Pod Identity when one role must work in many clusters.</li>
+    <li><strong>IRSA</strong>: each cluster has its own OIDC provider URL. You create an IAM OIDC provider for each cluster, and the role trust policy needs an entry for each cluster.</li>
+    <li><strong>EKS Pod Identity</strong>: the role trusts one service principal, <code>pods.eks.amazonaws.com</code>, for all clusters, and needs no OIDC provider. Choose Pod Identity when one role must work in many clusters.</li>
   </ul>
   <h3>EC2 instance metadata</h3>
   <ul>
     <li>IMDSv2 uses a session token. Get it with a <code>PUT</code> to <code>/latest/api/token</code>, then send it in the <code>X-aws-ec2-metadata-token</code> header.</li>
     <li>Token TTL: up to 6 hours (21,600 seconds).</li>
-    <li>Set token use to <code>required</code> to turn off IMDSv1. This protects against server-side request forgery (SSRF): a bug that lets an attacker make your application send a request to a URL. An SSRF bug can usually send only a simple <code>GET</code>, so it cannot get the IMDSv2 token, and IMDS returns <code>401</code>.</li>
-    <li>The <code>PUT</code> response hop limit is 1 by default. AMIs that require IMDSv2 (<code>ImdsSupport</code> <code>v2.0</code>, for example Amazon Linux 2023) set the limit to 2 at launch. The hop limit is the number of network hops that the token response can travel. A container on the instance adds one hop, so with limit 1 the token does not reach the container. AWS recommends a hop limit of 2 for containers.</li>
+    <li>Set token use to <code>required</code> to turn off IMDSv1. This protects against server-side request forgery (SSRF): a bug that lets an attacker make your application send a request to a URL.</li>
+    <li>An SSRF bug can usually send only a simple <code>GET</code>, so it cannot get the IMDSv2 token, and IMDS returns <code>401</code>.</li>
+    <li>The <code>PUT</code> response hop limit is 1 by default. AMIs that require IMDSv2 (<code>ImdsSupport</code> <code>v2.0</code>, for example Amazon Linux 2023) set the limit to 2 at launch.</li>
+    <li>The hop limit is the number of network hops that the token response can travel. A container on the instance adds one hop, so with limit 1 the token does not reach the container. AWS recommends a hop limit of 2 for containers.</li>
     <li>EC2 role credentials are not subject to the role maximum session duration. EC2 rotates them automatically, so a change to that setting does not affect them.</li>
     <li>To change permissions, edit the role policies. The change applies to all instances that use the role.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"ECS task pulls the image but the app gets AccessDenied on DynamoDB" → add the permission to the task role, because the task role gives credentials to the application code.</li>
-      <li>"Task fails to pull the image from ECR" → task execution role, because the ECS agent uses it to pull images before the code starts.</li>
-      <li>"S3 or EventBridge cannot invoke the function" → function resource-based policy, not the execution role, because the resource-based policy controls who can invoke the function.</li>
-      <li>"Same EKS app in many clusters, no trust policy change for each cluster" → EKS Pod Identity, because the role trusts one service principal for all clusters.</li>
-      <li>"Protect instance credentials from SSRF" → require IMDSv2, because every <code>GET</code> then needs a token that only a <code>PUT</code> can get, and a plain <code>GET</code> fails with <code>401</code>.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html">IAM roles for EC2</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-security-credentials.html">Credentials from instance metadata</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html">IMDSv2</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-new-instances.html">IMDS options for new instances (AMI hop limit 2)</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instancedata-data-retrieval.html">IMDS access considerations (hop limit 2 for containers, 401 error)</a>, <a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html">ECS task IAM role</a>, <a href="https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html">EKS Pod Identity</a>, <a href="https://docs.aws.amazon.com/sdkref/latest/guide/feature-container-credentials.html">Container credential provider</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html">Lambda environment variables (reserved variables)</a>. Related sets: <a href="../m01-lambda/sheet.html#lambda-security">Lambda permissions</a>, <a href="../m08-cicd/sheet.html#ecs-iam">ECS task role and task execution role</a>.</p>
 </section>
 
 <section id="iam-federation">
   <h2>Federation</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Use <strong>IAM Identity Center</strong> for workforce users in many accounts of AWS Organizations.</li>
+      <li>AWS recommends IAM Identity Center for human users.</li>
+      <li>IAM Identity Center identity sources: SAML 2.0 IdP, AWS Managed Microsoft AD, Identity Center directory.</li>
+      <li>Use an IAM identity provider (SAML 2.0 or OIDC) with IAM roles for one standalone account, machine users, or small short-term deployments.</li>
+      <li>Use a <strong>Cognito identity pool</strong> to give users of your mobile or web app temporary AWS credentials.</li>
+      <li>SAML 2.0 uses an XML assertion and the STS API <code>AssumeRoleWithSAML</code>.</li>
+      <li>OIDC uses a JSON Web Token (JWT) and the STS API <code>AssumeRoleWithWebIdentity</code>.</li>
+      <li>A Cognito identity pool exchanges an IdP token, for example from a user pool or Google, for IAM role credentials.</li>
+      <li>The Cognito <strong>enhanced flow</strong> is <code>GetId</code>, then <code>GetCredentialsForIdentity</code>. The identity pool chooses the role.</li>
+      <li>Cognito enhanced flow credentials are valid for 1 hour.</li>
+      <li>The Cognito basic flow is <code>GetId</code>, <code>GetOpenIdToken</code>, then <code>AssumeRoleWithWebIdentity</code>. The app chooses the role.</li>
+      <li>Choose the Cognito enhanced flow for most apps. Choose the basic flow only when the app must choose the role.</li>
+      <li>A Cognito identity pool uses one role for authenticated users and one role for guests.</li>
+      <li>Give the Cognito guest (unauthenticated) role fewer permissions than the authenticated role.</li>
+      <li>Do not put long-term AWS credentials in a mobile app, a browser app, or a CI system.</li>
+      <li>A role for OIDC federation trusts the IAM OIDC provider and uses <code>sts:AssumeRoleWithWebIdentity</code>.</li>
+      <li>The <code>aud</code> claim says who the token is for. The <code>sub</code> claim says who the caller is.</li>
+      <li>A GitHub OIDC role without a <code>sub</code> condition lets a workflow in another repository assume the role.</li>
+      <li>IAM rejects a new or changed GitHub trust policy without a <code>sub</code> or <code>job_workflow_ref</code> condition.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Mobile app users sign in with Google and upload to S3" → Cognito identity pool. It gives app users temporary AWS credentials, and the app stores no keys.</li>
+      <li>"Employees use corporate AD to reach many AWS accounts" → IAM Identity Center. It manages workforce access to all accounts from one place.</li>
+      <li>"GitHub Actions deploys without stored keys" → IAM OIDC provider and a role. GitHub issues OIDC tokens that STS exchanges for temporary credentials.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Which federation to use</h3>
   <table>
     <tr><th>Users</th><th>Use</th><th>Identity sources</th></tr>
@@ -379,21 +633,45 @@
   <h3>Key facts</h3>
   <ul>
     <li>Do not put long-term AWS credentials in a mobile app, a browser app, or a CI system.</li>
-    <li>A role for OIDC federation trusts the IAM OIDC identity provider and uses <code>sts:AssumeRoleWithWebIdentity</code>. Limit it with conditions on token claims. The audience (<code>aud</code>) says who the token is for. The subject (<code>sub</code>) says who the caller is, for example one GitHub repository and branch. All GitHub workflows use the same provider, so without a <code>sub</code> condition, a workflow in another repository could assume the role. IAM rejects a new or changed GitHub trust policy that has no <code>sub</code> (or <code>job_workflow_ref</code>) condition.</li>
+    <li>A role for OIDC federation trusts the IAM OIDC identity provider and uses <code>sts:AssumeRoleWithWebIdentity</code>. Limit it with conditions on token claims.</li>
+    <li>The audience (<code>aud</code>) says who the token is for. The subject (<code>sub</code>) says who the caller is, for example one GitHub repository and branch.</li>
+    <li>All GitHub workflows use the same provider, so without a <code>sub</code> condition, a workflow in another repository could assume the role.</li>
+    <li>IAM rejects a new or changed GitHub trust policy that has no <code>sub</code> (or <code>job_workflow_ref</code>) condition.</li>
   </ul>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Mobile app users sign in with Google and upload to S3" → Cognito identity pool, because it gives app users temporary AWS credentials and the app stores no keys.</li>
-      <li>"Employees use corporate AD to reach many AWS accounts" → IAM Identity Center, because it manages workforce access to all accounts from one place.</li>
-      <li>"GitHub Actions deploys without stored keys" → IAM OIDC provider and a role, because GitHub issues OIDC tokens that STS exchanges for temporary credentials.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers.html">Identity providers and federation</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_oidc.html">OIDC federation</a>, <a href="https://docs.aws.amazon.com/cognito/latest/developerguide/authentication-flow.html">Identity pools authentication flow</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_oidc_secure-by-default.html">Identity-provider controls for shared OIDC providers</a>.</p>
 </section>
 
 <section id="iam-least-privilege">
   <h2>Least privilege and access control models</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>Access Analyzer <strong>policy generation</strong> reads up to 90 days of CloudTrail events and generates a policy with the actions used.</li>
+      <li>Access Analyzer policy generation needs a CloudTrail trail.</li>
+      <li>Access Analyzer policy generation does not include data events (for example S3 data events) or <code>iam:PassRole</code>.</li>
+      <li>Access Analyzer <strong>policy validation</strong> checks a policy against grammar and best practices.</li>
+      <li>Policy validation findings are security warnings, errors, warnings, and suggestions. Fix errors and security warnings before you deploy.</li>
+      <li>Access Analyzer <strong>custom policy checks</strong> find new access in a policy version, or critical actions that you name.</li>
+      <li>Use Access Analyzer custom policy checks in a CI/CD pipeline to stop a policy change before deployment.</li>
+      <li>The Access Analyzer external access analyzer finds resources shared outside your account or organization.</li>
+      <li>The Access Analyzer unused access analyzer finds unused roles, access keys, passwords, services, and actions.</li>
+      <li><strong>Last accessed information</strong> shows when an identity last used a service. Use it to remove unused permissions.</li>
+      <li><strong>RBAC</strong> uses one role or policy for each job function, with the resources listed.</li>
+      <li><strong>ABAC</strong> compares tags on principals and resources, for example <code>aws:ResourceTag/project</code> = <code>${aws:PrincipalTag/project}</code>.</li>
+      <li>With ABAC, a new resource or project needs only tags. With RBAC, a new resource needs a policy update.</li>
+      <li>Choose ABAC when you add projects or resources often and do not want to change policies each time.</li>
+      <li>Choose RBAC when you have a small, stable set of job functions and resources.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Generate a least-privilege policy from what the role really used" → Access Analyzer policy generation.</li>
+      <li>"Check a policy before deployment" → Access Analyzer policy validation or custom policy checks.</li>
+      <li>"Many projects, permissions must scale without policy updates" → ABAC with tags.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Tools</h3>
   <table>
     <tr><th>Tool</th><th>What it does</th></tr>
@@ -411,19 +689,39 @@
     <tr><td>New resource or project</td><td>Update the policies</td><td>Add tags. No policy change.</td></tr>
   </table>
   <p>Choose ABAC when you add projects or resources often and do not want to change policies each time. Choose RBAC when you have a small, stable set of job functions and resources.</p>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Generate a least-privilege policy from what the role really used" → Access Analyzer policy generation.</li>
-      <li>"Check a policy before deployment" → Access Analyzer policy validation or custom policy checks.</li>
-      <li>"Many projects, permissions must scale without policy updates" → ABAC with tags.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-policy-generation.html">Access Analyzer policy generation</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/what-is-access-analyzer.html">What is IAM Access Analyzer</a>.</p>
 </section>
 
 <section id="iam-troubleshooting">
   <h2>Troubleshooting access denied</h2>
+  <div class="remember">
+    <h3>Remember</h3>
+    <ul>
+      <li>An access denied message names the principal, the action, the resource, and a context that names the policy type.</li>
+      <li>The phrase <code>with an explicit deny in a <em>type</em> policy</code> means a <code>Deny</code> statement in that policy type.</li>
+      <li>The phrase <code>because no <em>type</em> policy allows</code> means an implicit deny: no allow in that policy type.</li>
+      <li>When more than one policy type denies, the error message shows only one of them.</li>
+      <li>After you fix one policy type, the next call can fail with a message that names another policy type.</li>
+      <li>Use <code>aws sts decode-authorization-message</code> to decode an encoded message, for example EC2 <code>UnauthorizedOperation</code>.</li>
+      <li>Decoding an authorization message needs the <code>sts:DecodeAuthorizationMessage</code> permission.</li>
+      <li>A decoded message shows explicit or implicit deny, the principal, the action, the resource, and the condition values.</li>
+      <li>The <strong>IAM policy simulator</strong> tests identity-based policies, boundaries, SCPs, and given resource-based policies without a real request.</li>
+      <li>The IAM policy simulator does not support RCPs.</li>
+      <li>CloudTrail records denied API calls too. A denied call has an <code>errorCode</code> such as <code>AccessDenied</code>.</li>
+      <li>Use <code>aws sts get-caller-identity</code> to confirm which principal the code really uses.</li>
+      <li>For cross-account access, check the policies in both accounts.</li>
+      <li>For SSE-KMS objects, also check the key policy and the <code>kms:Decrypt</code> permission.</li>
+    </ul>
+  </div>
+  <div class="exam-signals">
+    <h3>Exam signals</h3>
+    <ul>
+      <li>"Encoded authorization failure message" → <code>decode-authorization-message</code>.</li>
+      <li>"Error says explicit deny in a service control policy" → the organization administrator must change the SCP. IAM changes in the account do not help.</li>
+      <li>"Cross-account S3 GetObject denied, bucket policy is correct, objects use SSE-KMS" → key policy and <code>kms:Decrypt</code> permission.</li>
+    </ul>
+  </div>
+  <h3 class="explain">Explanation</h3>
   <h3>Read the error message</h3>
   <p>Most messages have the form <code>User: <em>ARN</em> is not authorized to perform: <em>action</em> on resource: <em>ARN</em> because <em>context</em></code>. The context names the policy type.</p>
   <table>
@@ -431,7 +729,8 @@
     <tr><td><code>with an explicit deny in a <em>type</em> policy</code></td><td>A <code>Deny</code> statement in that policy type. It can also show the policy ARN.</td></tr>
     <tr><td><code>because no <em>type</em> policy allows the <em>action</em> action</code></td><td>Implicit deny. No allow in that policy type.</td></tr>
   </table>
-  <p>Policy types in messages include: identity-based, resource-based, permissions boundary, session, service control, resource control, VPC endpoint, and role trust policy. If more than one type denies, the message shows only one of them. After you fix that one, the next call can fail with a message that names another policy type.</p>
+  <p>Policy types in messages include: identity-based, resource-based, permissions boundary, session, service control, resource control, VPC endpoint, and role trust policy.</p>
+  <p>If more than one type denies, the message shows only one of them. After you fix that one, the next call can fail with a message that names another policy type.</p>
   <h3>Tools</h3>
   <ul>
     <li><code>aws sts decode-authorization-message</code>: some services (for example EC2 with <code>UnauthorizedOperation</code>) return an encoded message. Decoding needs the <code>sts:DecodeAuthorizationMessage</code> permission. The result shows explicit or implicit deny, the principal, the action, the resource, and the condition values.</li>
@@ -447,14 +746,6 @@
     <li>Check for an allow in the identity policy, or in the resource policy for same-account access.</li>
     <li>For cross-account access, check both accounts. For SSE-KMS objects, also check the key policy and <code>kms:Decrypt</code>.</li>
   </ol>
-  <div class="exam-signals">
-    <h3>Exam signals</h3>
-    <ul>
-      <li>"Encoded authorization failure message" → <code>decode-authorization-message</code>.</li>
-      <li>"Error says explicit deny in a service control policy" → the organization administrator must change the SCP. IAM changes in the account do not help.</li>
-      <li>"Cross-account S3 GetObject denied, bucket policy is correct, objects use SSE-KMS" → key policy and <code>kms:Decrypt</code> permission.</li>
-    </ul>
-  </div>
   <p class="refs">References: <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/troubleshoot_access-denied.html">Troubleshoot access denied messages</a>, <a href="https://docs.aws.amazon.com/STS/latest/APIReference/API_DecodeAuthorizationMessage.html">DecodeAuthorizationMessage</a>, <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_testing-policies.html">IAM policy simulator</a>.</p>
 </section>
 
