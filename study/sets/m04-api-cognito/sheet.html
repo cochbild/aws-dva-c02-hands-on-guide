@@ -67,7 +67,6 @@
       <li>A <code>POST</code> to a closed WebSocket connection fails with <code>GoneException</code>. Remove that stored connection ID.</li>
       <li>A WebSocket connection lasts 2 hours maximum.</li>
       <li>API Gateway closes a WebSocket connection after 10 minutes with no messages (idle timeout).</li>
-      <li>A WebSocket app usually sends a heartbeat message before 10 minutes end, and reconnects when the connection closes.</li>
       <li>A WebSocket message payload has a limit of 128 KB, in frames of 32 KB maximum.</li>
       <li>Choose an <strong>edge-optimized</strong> endpoint for clients in many countries. Requests go through the nearest CloudFront edge location.</li>
       <li>API Gateway manages the CloudFront distribution of an edge-optimized API, and you cannot change its settings.</li>
@@ -254,7 +253,6 @@
       <li>To pass sensitive data to an integration, AWS recommends the output of a Lambda authorizer.</li>
       <li>A Lambda proxy event includes the stage variable values in <code>stageVariables</code>.</li>
       <li>A <strong>canary release</strong> (REST API) sends a percentage (0.0 to 100.0) of stage traffic to a new deployment.</li>
-      <li>A canary release tests a new deployment on a small part of real traffic, so errors affect only that part.</li>
       <li>A canary can override stage variables, for example to send canary traffic to a new Lambda alias.</li>
       <li>Canary requests have separate execution logs and access logs. The log group name ends with <code>/Canary</code>.</li>
       <li>After tests pass, promote the canary. The canary deployment then becomes the stage deployment.</li>
@@ -330,6 +328,7 @@
       <li><code>$util.escapeJavaScript()</code> escapes a string to stop injection from request parameters.</li>
       <li><code>$util.escapeJavaScript()</code> output has <code>\'</code>, which is not valid JSON. Replace <code>\'</code> with <code>'</code> in a JSON template.</li>
       <li><code>$util.parseJson()</code> turns a JSON string into an object.</li>
+      <li><code>$stageVariables.name</code> reads a stage variable in a mapping template. <code>$util.base64Encode()</code> and <code>$util.urlEncode()</code> encode values.</li>
       <li><code>$context.responseOverride.status</code> sets the response status code from a template, for example 201 or 404.</li>
       <li>A non-proxy Lambda integration returns 200 by default, even when the function fails.</li>
       <li>To return an error status code, add an integration response with a <strong>selection pattern</strong>.</li>
@@ -410,7 +409,7 @@
       <li>A missing or wrong API key returns 403 Forbidden.</li>
       <li>An API key can be in more than one usage plan, but only in one usage plan for each stage.</li>
       <li>With API key source <code>AUTHORIZER</code>, a Lambda authorizer returns the key in <code>usageIdentifierKey</code>.</li>
-      <li><strong>API keys are not authentication.</strong> Use IAM, Cognito, or a Lambda authorizer to control access.</li>
+      <li><strong>API keys</strong> are not authentication. Use IAM, Cognito, or a Lambda authorizer to control access.</li>
       <li>Use API keys for metering: counting requests for each customer.</li>
       <li>Do not rely on usage plans to control cost. Use AWS Budgets, and AWS WAF to manage requests.</li>
     </ul>
@@ -530,7 +529,7 @@
     <ul>
       <li><strong>IAM</strong> (<code>AWS_IAM</code>) authorization works on REST, HTTP, and WebSocket APIs.</li>
       <li>IAM authorization checks a SigV4 signature, and the caller needs <code>execute-api:Invoke</code>.</li>
-      <li>A <strong>Cognito user pool authorizer</strong> (<code>COGNITO_USER_POOLS</code>) is for REST APIs and checks a user pool ID or access token.</li>
+      <li>A <strong>Cognito user pool authorizer</strong> (<code>COGNITO_USER_POOLS</code>) is for REST APIs and checks a user pool ID token or access token.</li>
       <li>A <strong>JWT authorizer</strong> is for HTTP APIs and checks any OIDC or OAuth 2.0 JWT, including Cognito tokens.</li>
       <li>A <code>TOKEN</code> Lambda authorizer is for REST APIs and checks one token in one header.</li>
       <li>A <code>REQUEST</code> Lambda authorizer works on REST, HTTP, and WebSocket APIs.</li>
@@ -552,7 +551,7 @@
       <li>A Lambda authorizer that fails with any other error gives 500.</li>
       <li>A cached <code>REQUEST</code> authorizer returns 401 without a call when an identity source is missing, null, or empty.</li>
       <li>AWS recommends <code>REQUEST</code> authorizers over <code>TOKEN</code> authorizers.</li>
-      <li>A <code>REQUEST</code> authorizer uses several identity sources, and all of them form the cache key.</li>
+      <li>A <code>REQUEST</code> authorizer can use several identity sources, and all of them form the cache key.</li>
       <li>The Lambda authorizer cache TTL defaults to 300 seconds, with a maximum of 3,600. TTL 0 turns caching off.</li>
       <li>A cached Lambda authorizer policy applies to other methods for the same identity.</li>
       <li>With authorizer caching, return a policy that covers every method that the caller can use, or turn off caching.</li>
@@ -771,6 +770,7 @@
       <li>Last, check that <code>aud</code> (ID token) or <code>client_id</code> (access token) is your app client.</li>
       <li><code>GlobalSignOut</code> and <code>AdminUserGlobalSignOut</code> revoke all refresh, ID, and access tokens of a user.</li>
       <li><code>RevokeToken</code> revokes one refresh token and the access tokens that it issued.</li>
+      <li>Cognito APIs reject revoked tokens.</li>
       <li>A service that checks only the signature and expiry accepts revoked tokens until they expire.</li>
       <li>Keep access token validity short, because revoked tokens stay valid for signature-only checks.</li>
       <li><strong>Refresh token rotation</strong> issues a new refresh token at each refresh and does not extend the original validity.</li>
@@ -793,7 +793,7 @@
       <li>Use the authorization code grant with PKCE for web, single-page, and mobile apps where users sign in.</li>
       <li>PKCE makes a stolen authorization code useless.</li>
       <li>The implicit grant is an older flow that returns tokens in the redirect URL. Use authorization code with PKCE instead.</li>
-      <li>Use the client credentials grant for machine-to-machine calls. It returns an access token with custom scopes and no ID token.</li>
+      <li>Use the client credentials grant for machine-to-machine calls. An app client with a secret gets an access token with custom scopes and no ID token.</li>
       <li>The pre sign-up trigger accepts or denies sign-up and can auto-confirm users.</li>
       <li>The post confirmation trigger sends a welcome message or writes the user to a database.</li>
       <li>The pre authentication trigger accepts or denies a sign-in.</li>
@@ -804,7 +804,7 @@
       <li>The define, create, and verify auth challenge triggers build a custom authentication flow.</li>
       <li>Cognito invokes Lambda triggers synchronously, except custom sender triggers.</li>
       <li>A Cognito Lambda trigger must respond within 5 seconds, and you cannot change this limit.</li>
-      <li>A Cognito trigger that fails or returns an error makes the sign-up or sign-in fail.</li>
+      <li>A Cognito trigger that returns an error, or fails on every attempt, makes the sign-up or sign-in fail.</li>
     </ul>
   </div>
   <div class="exam-signals">
@@ -980,7 +980,6 @@
     <ul>
       <li>Requests with the same CloudFront <strong>cache key</strong> get the same cached object.</li>
       <li>Each value added to the cache key splits the cache into more entries and lowers the cache hit ratio.</li>
-      <li>Fewer values in the cache key give a higher cache hit ratio.</li>
       <li>A <strong>cache policy</strong> sets the cache key (headers, cookies, query strings) and the minimum, maximum, and default TTLs.</li>
       <li>An <strong>origin request policy</strong> sends extra values to the origin without adding them to the cache key.</li>
       <li>Values in the cache key always go to the origin.</li>
