@@ -46,6 +46,7 @@
       <li>The Init phase starts the extensions, starts the runtime, and runs the static code outside the handler.</li>
       <li>Code outside the handler runs one time for each execution environment, not one time for each invocation.</li>
       <li>Create SDK clients and database connections outside the handler, so that warm invocations use them again.</li>
+      <li>SDK clients or connections created inside the handler make every invocation wait, and the database can run out of connections.</li>
       <li>One execution environment processes one request at a time. A concurrent request gets a different environment.</li>
       <li>A <strong>warm start</strong> uses a frozen environment again, so the Init phase does not run.</li>
       <li>A <strong>cold start</strong> creates a new environment and runs Init first, which adds latency to that request.</li>
@@ -209,6 +210,7 @@
       <li>Set the async retry settings on the function, a version, or an alias.</li>
       <li>The async queue can deliver the same event more than one time, even when no error occurs.</li>
       <li>Make async code <strong>idempotent</strong>: two runs of the same event give the same result as one run.</li>
+      <li>Idempotency example: write with a DynamoDB condition on the event ID, so a second write does nothing.</li>
       <li>AWS CLI version 2 needs <code>--cli-binary-format raw-in-base64-out</code> to send a raw JSON payload.</li>
       <li>An unqualified function ARN (no version or alias) invokes <code>$LATEST</code>.</li>
     </ul>
@@ -319,7 +321,7 @@
       <li>For an SQS batch size over 10, set <code>MaximumBatchingWindowInSeconds</code> to at least 1 second.</li>
       <li>SQS hides a received message for the <strong>visibility timeout</strong>. A message that Lambda does not delete becomes visible again.</li>
       <li>Set the SQS visibility timeout to at least 6 times the function timeout, plus the batch window.</li>
-      <li>The function timeout cannot be more than the queue visibility timeout. Lambda returns an error when you create the mapping.</li>
+      <li>The function timeout cannot be more than the queue visibility timeout. Lambda returns an error when you create or update the mapping.</li>
       <li>By default, one failed message makes the whole SQS batch visible again, so successful messages run again.</li>
       <li>To return only failed messages, set <code>FunctionResponseTypes</code> to <code>ReportBatchItemFailures</code>.</li>
       <li>A partial batch response returns each failed message ID as an <code>itemIdentifier</code> in <code>batchItemFailures</code>.</li>
@@ -346,7 +348,9 @@
       <li>SQS and SNS failure records for a stream contain only metadata. S3 failure records also contain the payload.</li>
       <li>With an SQS or SNS failure destination, read the failed records from the stream before the retention period ends.</li>
       <li>A <strong>tumbling window</strong> (<code>TumblingWindowInSeconds</code>, up to 900 seconds) keeps state between invocations in a fixed time period.</li>
-      <li>Tumbling window state is up to 1 MB for each shard. <code>isFinalInvokeForWindow</code> marks the last invocation.</li>
+      <li>Tumbling window state is up to 1 MB for each shard.</li>
+      <li><code>isFinalInvokeForWindow</code> marks the last invocation of a tumbling window, where the function writes the result.</li>
+      <li>Use a tumbling window to count or sum stream data with no external database.</li>
       <li>An <code>IteratorAge</code> metric that keeps going up means that the function falls behind the stream.</li>
       <li>Without enhanced fan-out, consumers share the shard read throughput, and Lambda polls each shard once each second.</li>
       <li>Kinesis <strong>enhanced fan-out</strong> gives a dedicated read connection to each shard and pushes the records, at extra cost.</li>
@@ -438,9 +442,10 @@
       <li><strong>Provisioned concurrency</strong> keeps pre-initialized environments, so requests have no cold start.</li>
       <li>Provisioned concurrency has an extra charge, also when the environments are idle.</li>
       <li>Set provisioned concurrency on a published version or an alias, not on <code>$LATEST</code>.</li>
-      <li>Requests over the provisioned concurrency spill over to on-demand concurrency, with cold starts.</li>
+      <li>Requests over the provisioned concurrency spill over to on-demand concurrency with cold starts, unless reserved concurrency caps the function.</li>
       <li>Choose reserved concurrency to cap a function or to keep capacity for it.</li>
-      <li>Choose provisioned concurrency to remove cold-start latency. One function can use reserved and provisioned concurrency together.</li>
+      <li>Choose provisioned concurrency to remove cold-start latency.</li>
+      <li>One function can use reserved and provisioned concurrency together.</li>
       <li>Lambda always keeps 100 units of unreserved concurrency. With the 1,000 limit, you can reserve up to 900.</li>
       <li>Reserved concurrency of 0 stops all invocations of a function, like an off switch.</li>
       <li>Provisioned concurrency cannot be more than reserved concurrency on the same function.</li>
@@ -522,7 +527,7 @@
       <li>A <strong>weighted alias</strong> points to at most two versions, with a weight for the additional version.</li>
       <li>Use a weighted alias for a canary release: send a small share of traffic to the new code first.</li>
       <li>Both versions of a weighted alias must be published and must have the same execution role and DLQ configuration.</li>
-      <li>To find which version ran, check the <code>START</code> log line, the <code>ExecutedVersion</code> dimension, or <code>x-amz-executed-version</code>.</li>
+      <li>To find which version ran, check the <code>START</code> log line, the <code>ExecutedVersion</code> dimension, or the synchronous response header <code>x-amz-executed-version</code>.</li>
       <li><code>AutoPublishAlias</code> publishes a new version when code changes and points the alias to it.</li>
       <li><code>DeploymentPreference</code> in AWS SAM uses CodeDeploy to shift alias traffic.</li>
       <li>Canary types are <code>Canary10Percent5Minutes</code> and the 10, 15, and 30 minute variants.</li>
@@ -612,7 +617,6 @@
       <li>Shareable test events are available to other users in the account.</li>
       <li><code>sam sync</code> sends code-only changes with the Lambda API and skips the CloudFormation deployment.</li>
       <li>Use <code>sam sync</code> only for development stacks, because the stack then no longer matches the deployed code.</li>
-      <li><code>sam logs</code> gets function logs.</li>
     </ul>
   </div>
   <div class="exam-signals">
@@ -680,7 +684,7 @@
       <li>An event source mapping reads the source with the execution role. Example: <code>AWSLambdaSQSQueueExecutionRole</code>.</li>
       <li>Lambda always encrypts environment variables at rest, by default with an AWS managed key at no charge.</li>
       <li>A customer managed KMS key controls key rotation and key access. Users need <code>kms:Decrypt</code> to see the values.</li>
-      <li>Users with <code>kms:Decrypt</code> access still see plaintext environment variable values in the console.</li>
+      <li>With a customer managed key alone, users with <code>kms:Decrypt</code> see the plaintext environment variable values in the console.</li>
       <li><strong>Encryption helpers</strong> encrypt values on the client side, so the console shows only the encrypted text.</li>
       <li>With encryption helpers, the function code calls KMS <code>Decrypt</code>, and the execution role needs <code>kms:Decrypt</code>.</li>
       <li>Store database credentials and API keys in AWS Secrets Manager, not in environment variables.</li>
@@ -691,7 +695,7 @@
       <li>Attach a function URL to <code>$LATEST</code> or to an alias. You cannot attach it to a numbered version.</li>
       <li>With <code>AuthType</code> <code>AWS_IAM</code>, callers sign with SigV4 and need <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code>.</li>
       <li>With <code>AuthType</code> <code>NONE</code>, the resource-based policy must still allow <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code> for <code>"*"</code>.</li>
-      <li>A function URL with <code>AuthType</code> <code>NONE</code> returns 403 Forbidden if the policy does not allow <code>lambda:InvokeFunctionUrl</code> and <code>lambda:InvokeFunction</code>.</li>
+      <li>Without the two function URL policy statements, callers get 403 Forbidden, also with <code>AuthType</code> <code>NONE</code>.</li>
       <li>The console and AWS SAM add the function URL policy statements. With the CLI or CloudFormation, you add the statements.</li>
       <li>Configure CORS on the function URL, so that browser code from another domain can call it.</li>
       <li>A function URL is reachable only from the public internet. You cannot make a private function URL in a VPC.</li>
@@ -822,7 +826,6 @@
       <li>System log levels, for lines such as <code>START</code> and <code>REPORT</code>, are DEBUG, INFO, and WARN.</li>
       <li>A log level set in the function code overrides the console or API setting.</li>
       <li>Use a custom log group when several functions must write to one log group.</li>
-      <li>Use CloudWatch Logs Insights to query logs.</li>
       <li>Built-in metrics: <code>Invocations</code>, <code>Errors</code>, <code>Throttles</code>, <code>Duration</code>, <code>ConcurrentExecutions</code>, <code>IteratorAge</code>, <code>DeadLetterErrors</code>, <code>DestinationDeliveryFailures</code>.</li>
       <li>For custom metrics, write logs in <strong>embedded metric format</strong> (EMF). CloudWatch extracts the metrics from the logs.</li>
       <li>With embedded metric format, the code does not call <code>PutMetricData</code> and does not wait for an API call.</li>
